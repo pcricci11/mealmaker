@@ -9,10 +9,7 @@ export const penalizeSameCuisine: ScoreModifier = (recipe, _ctx, currentPlan) =>
   if (currentPlan.length === 0) return { delta: 0 };
   const prev = currentPlan[currentPlan.length - 1];
   if (prev.recipe.cuisine === recipe.cuisine) {
-    return {
-      delta: SAME_CUISINE_PENALTY,
-      reason: { type: "info", code: "SAME_CUISINE", message: `Same cuisine as ${prev.day}` },
-    };
+    return { delta: SAME_CUISINE_PENALTY, reason: "SAME_CUISINE" };
   }
   return { delta: 0 };
 };
@@ -23,10 +20,7 @@ export const penalizeSameProtein: ScoreModifier = (recipe, _ctx, currentPlan) =>
   const recent = currentPlan.slice(-2);
   const match = recent.find((s) => s.recipe.protein_type === recipe.protein_type);
   if (match) {
-    return {
-      delta: SAME_PROTEIN_PENALTY,
-      reason: { type: "info", code: "SAME_PROTEIN", message: `Same protein as ${match.day}` },
-    };
+    return { delta: SAME_PROTEIN_PENALTY, reason: "SAME_PROTEIN" };
   }
   return { delta: 0 };
 };
@@ -34,10 +28,7 @@ export const penalizeSameProtein: ScoreModifier = (recipe, _ctx, currentPlan) =>
 /** Penalize recipes already used this week. */
 export const penalizeRepeat: ScoreModifier = (recipe, _ctx, currentPlan) => {
   if (currentPlan.some((s) => s.recipe.id === recipe.id)) {
-    return {
-      delta: REPEAT_RECIPE_PENALTY,
-      reason: { type: "info", code: "REPEAT_RECIPE", message: "Already used this week" },
-    };
+    return { delta: REPEAT_RECIPE_PENALTY, reason: "REPEAT_RECIPE" };
   }
   return { delta: 0 };
 };

@@ -13,14 +13,16 @@ export function createRng(seed: number): () => number {
 }
 
 /**
- * Derive a deterministic seed from familyId + weekStart.
+ * Derive a deterministic seed from familyId + weekStart + variant.
  * weekStart must be a Monday in YYYY-MM-DD format.
  */
-export function deriveSeed(familyId: number, weekStart: string): number {
+export function deriveSeed(familyId: number, weekStart: string, variant: number = 0): number {
   let hash = familyId * 2654435761; // Knuth multiplicative hash
   for (let i = 0; i < weekStart.length; i++) {
     hash = ((hash << 5) - hash + weekStart.charCodeAt(i)) | 0;
   }
+  // Mix variant into the hash
+  hash = (hash ^ (variant * 1597334677)) | 0;
   return hash;
 }
 

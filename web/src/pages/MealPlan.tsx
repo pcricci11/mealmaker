@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Family, MealPlan as MealPlanType, MealPlanItem, DayOfWeek } from "@shared/types";
-import { getFamilies, generateMealPlan, getMealPlan } from "../api";
+import type { Family, MealPlan as MealPlanType, MealPlanItem, DayOfWeek, ReasonCodeValue } from "@shared/types";
+import { getFamilies, generateMealPlan, swapMealPlanItem } from "../api";
 
 const DAY_LABELS: Record<DayOfWeek, string> = {
   monday: "Monday",
@@ -28,6 +28,41 @@ const CUISINE_COLORS: Record<string, string> = {
   ethiopian: "bg-teal-100 text-teal-700",
 };
 
+const REASON_STYLES: Record<string, string> = {
+  FAVORITE: "bg-green-100 text-green-700",
+  VEG_DAY: "bg-green-100 text-green-700",
+  SEASONAL_BOOST: "bg-green-100 text-green-700",
+  GOOD_LEFTOVERS: "bg-green-100 text-green-700",
+  LEFTOVERS_LUNCH: "bg-amber-100 text-amber-700",
+  DISLIKED: "bg-red-100 text-red-700",
+  SAME_CUISINE: "bg-red-100 text-red-700",
+  SAME_PROTEIN: "bg-red-100 text-red-700",
+  REPEAT_RECIPE: "bg-red-100 text-red-700",
+  FREQUENCY_CAP: "bg-red-100 text-red-700",
+  OUT_OF_SEASON: "bg-gray-100 text-gray-500",
+  LOW_LEFTOVERS: "bg-gray-100 text-gray-500",
+  LOCKED: "bg-emerald-100 text-emerald-700",
+};
+
+function reasonLabel(code: ReasonCodeValue): string {
+  const labels: Record<string, string> = {
+    FAVORITE: "Favorite",
+    VEG_DAY: "Veg Day",
+    SEASONAL_BOOST: "In Season",
+    GOOD_LEFTOVERS: "Great Leftovers",
+    LEFTOVERS_LUNCH: "Lunch Leftovers",
+    DISLIKED: "Disliked",
+    SAME_CUISINE: "Same Cuisine",
+    SAME_PROTEIN: "Same Protein",
+    REPEAT_RECIPE: "Repeat",
+    FREQUENCY_CAP: "Freq Cap",
+    OUT_OF_SEASON: "Off Season",
+    LOW_LEFTOVERS: "Low Leftovers",
+    LOCKED: "Locked",
+  };
+  return labels[code] || code.toLowerCase().replace(/_/g, " ");
+}
+
 export default function MealPlan() {
   const navigate = useNavigate();
   const [family, setFamily] = useState<Family | null>(null);
@@ -35,6 +70,7 @@ export default function MealPlan() {
   const [locks, setLocks] = useState<Record<string, number>>({});
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [variant, setVariant] = useState(0);
 
   useEffect(() => {
     getFamilies().then((families) => {
@@ -49,8 +85,14 @@ export default function MealPlan() {
     setGenerating(true);
     setError(null);
     try {
-      const result = await generateMealPlan(family.id, Object.keys(locks).length > 0 ? locks : undefined);
+      const nextVariant = plan ? variant + 1 : 0;
+      const result = await generateMealPlan(
+        family.id,
+        Object.keys(locks).length > 0 ? locks : undefined,
+        nextVariant,
+      );
       setPlan(result);
+      setVariant(nextVariant);
       localStorage.setItem("lastPlanId", String(result.id));
       // Preserve locks
       const newLocks: Record<string, number> = {};
@@ -80,18 +122,11 @@ export default function MealPlan() {
   };
 
   const swapMeal = async (day: DayOfWeek) => {
-    if (!family || !plan) return;
-    // Generate with all current meals locked EXCEPT this day
-    const swapLocks: Record<string, number> = {};
-    for (const item of plan.items) {
-      if (item.day !== day) {
-        swapLocks[item.day] = item.recipe_id;
-      }
-    }
+    if (!plan) return;
     setGenerating(true);
     setError(null);
     try {
-      const result = await generateMealPlan(family.id, swapLocks);
+      const result = await swapMealPlanItem(plan.id, day);
       setPlan(result);
       localStorage.setItem("lastPlanId", String(result.id));
     } catch (err: any) {
@@ -167,7 +202,7 @@ export default function MealPlan() {
 
                   {/* Meal details */}
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-gray-900">{r.name}</div>
+                    <div className="font-semibold text-gray-900">{r.title}</div>
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${cuisineClass}`}>
                         {r.cuisine.replace("_", " ")}
@@ -181,9 +216,24 @@ export default function MealPlan() {
                         {r.cook_minutes} min
                       </span>
                     </div>
-                    {item.lunch_leftover_label && (
+
+                    {/* Reason code pills */}
+                    {item.reasons && item.reasons.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {item.reasons.map((code, i) => (
+                          <span
+                            key={`${code}-${i}`}
+                            className={`text-xs px-1.5 py-0.5 rounded ${REASON_STYLES[code] || "bg-gray-100 text-gray-500"}`}
+                          >
+                            {reasonLabel(code)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {item.leftovers_for_lunch && (
                       <div className="text-xs text-amber-600 mt-1">
-                        {item.lunch_leftover_label}
+                        {item.lunch_leftover_label || "Leftovers for lunch tomorrow"}
                       </div>
                     )}
                   </div>

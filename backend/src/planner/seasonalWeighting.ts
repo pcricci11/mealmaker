@@ -22,14 +22,8 @@ export const scoreSeasonality: ScoreModifier = (recipe) => {
   const season = getCurrentSeason();
 
   if (recipe.seasonal_tags.includes(season)) {
-    return {
-      delta: SEASONAL_BOOST,
-      reason: { type: "included", code: "SEASONAL_BOOST", message: `In season (${season})` },
-    };
+    return { delta: SEASONAL_BOOST, reason: "SEASONAL_BOOST" };
   }
 
-  return {
-    delta: OUT_OF_SEASON_PENALTY,
-    reason: { type: "info", code: "OUT_OF_SEASON", message: `Out of season (current: ${season})` },
-  };
+  return { delta: OUT_OF_SEASON_PENALTY, reason: "OUT_OF_SEASON" };
 };

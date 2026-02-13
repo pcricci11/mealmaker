@@ -118,13 +118,15 @@ export interface MealPlanItem {
   lunch_leftover_label: string | null;
   leftover_lunch_recipe_id: number | null;
   notes: string | null;
-  reasons?: ReasonCode[];
+  reasons?: ReasonCodeValue[];
+  leftovers_for_lunch?: boolean;
 }
 
 export interface MealPlan {
   id: number;
   family_id: number;
   week_start: string | null;
+  variant?: number;
   created_at: string;
   settings_snapshot: any | null;
   items: MealPlanItem[];
@@ -136,27 +138,26 @@ export interface PlanSettings {
   seed?: number;
   season_boost?: boolean;
   frequency_cap?: boolean;
+  variant?: number;
 }
 
 export interface GeneratePlanRequest {
   family_id: number;
   week_start?: string;              // YYYY-MM-DD; normalized to Monday
+  variant?: number;
   locks?: Partial<Record<DayOfWeek, number>>;
   settings?: PlanSettings;
 }
 
 export interface GeneratePlanResponse extends MealPlan {
   alreadyExisted?: boolean;
-  reasons: Record<DayOfWeek, ReasonCode[]>;
+}
+
+export interface SwapMealRequest {
+  day: DayOfWeek;
 }
 
 // ── Reason Codes ──
-
-export interface ReasonCode {
-  type: "included" | "excluded" | "info";
-  code: ReasonCodeValue;
-  message: string;
-}
 
 export type ReasonCodeValue =
   | "ALLERGEN_MATCH"
@@ -178,7 +179,7 @@ export type ReasonCodeValue =
   | "GOOD_LEFTOVERS"
   | "LOW_LEFTOVERS"
   | "VEG_DAY"
-  | "LEFTOVER_DAY"
+  | "LEFTOVERS_LUNCH"
   | "LOCKED";
 
 // ── Grocery List ──

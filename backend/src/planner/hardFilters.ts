@@ -50,42 +50,27 @@ export function applyHardFilters(
     // Allergen check — always hard
     const matchedAllergen = recipeAllergens.find((a) => allAllergies.has(a));
     if (matchedAllergen) {
-      excluded.push({
-        recipe: r,
-        reason: { type: "excluded", code: "ALLERGEN_MATCH", message: `Contains ${matchedAllergen}` },
-      });
+      excluded.push({ recipe: r, reason: "ALLERGEN_MATCH" });
       continue;
     }
 
     // Family dietary flags — always hard
     if (family.gluten_free && recipeAllergens.includes("gluten")) {
-      excluded.push({
-        recipe: r,
-        reason: { type: "excluded", code: "GLUTEN_FREE", message: "Requires gluten-free" },
-      });
+      excluded.push({ recipe: r, reason: "GLUTEN_FREE" });
       continue;
     }
     if (family.dairy_free && recipeAllergens.includes("dairy")) {
-      excluded.push({
-        recipe: r,
-        reason: { type: "excluded", code: "DAIRY_FREE", message: "Requires dairy-free" },
-      });
+      excluded.push({ recipe: r, reason: "DAIRY_FREE" });
       continue;
     }
     if (family.nut_free && recipeAllergens.includes("nuts")) {
-      excluded.push({
-        recipe: r,
-        reason: { type: "excluded", code: "NUT_FREE", message: "Requires nut-free" },
-      });
+      excluded.push({ recipe: r, reason: "NUT_FREE" });
       continue;
     }
 
     // Picky kid mode — always hard
     if (family.picky_kid_mode && !r.kid_friendly) {
-      excluded.push({
-        recipe: r,
-        reason: { type: "excluded", code: "NOT_KID_FRIENDLY", message: "Picky kid mode on" },
-      });
+      excluded.push({ recipe: r, reason: "NOT_KID_FRIENDLY" });
       continue;
     }
 
@@ -94,18 +79,12 @@ export function applyHardFilters(
       if (strictestStyle === "vegan") {
         // Vegan: must be vegetarian AND no dairy/eggs allergens
         if (!r.vegetarian || recipeAllergens.includes("dairy") || recipeAllergens.includes("eggs")) {
-          excluded.push({
-            recipe: r,
-            reason: { type: "excluded", code: "VEGAN_HOUSEHOLD", message: "Household requires vegan" },
-          });
+          excluded.push({ recipe: r, reason: "VEGAN_HOUSEHOLD" });
           continue;
         }
       } else if (strictestStyle === "vegetarian") {
         if (!r.vegetarian) {
-          excluded.push({
-            recipe: r,
-            reason: { type: "excluded", code: "VEGETARIAN_HOUSEHOLD", message: "Household requires vegetarian" },
-          });
+          excluded.push({ recipe: r, reason: "VEGETARIAN_HOUSEHOLD" });
           continue;
         }
       }
@@ -129,14 +108,7 @@ export function filterByCookTime(
     if (r.cook_minutes <= maxMinutes) {
       passed.push(r);
     } else {
-      excluded.push({
-        recipe: r,
-        reason: {
-          type: "excluded",
-          code: "COOK_TIME",
-          message: `${r.cook_minutes}min > ${maxMinutes}min limit`,
-        },
-      });
+      excluded.push({ recipe: r, reason: "COOK_TIME" });
     }
   }
 

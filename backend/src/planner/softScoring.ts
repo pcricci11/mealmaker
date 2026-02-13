@@ -13,10 +13,7 @@ export const scoreFavorites: ScoreModifier = (recipe, context) => {
   ).length;
 
   if (count > 0) {
-    return {
-      delta: FAVORITE_BOOST * count,
-      reason: { type: "included", code: "FAVORITE", message: `Favorited by ${count} member(s)` },
-    };
+    return { delta: FAVORITE_BOOST * count, reason: "FAVORITE" };
   }
   return { delta: 0 };
 };
@@ -30,10 +27,7 @@ export const scoreDislikes: ScoreModifier = (recipe, context) => {
   ).length;
 
   if (count > 0) {
-    return {
-      delta: DISLIKE_PENALTY * count,
-      reason: { type: "excluded", code: "DISLIKED", message: `Disliked by ${count} member(s)` },
-    };
+    return { delta: DISLIKE_PENALTY * count, reason: "DISLIKED" };
   }
   return { delta: 0 };
 };
@@ -60,10 +54,7 @@ export const scoreDietaryMismatch: ScoreModifier = (recipe, context) => {
   }
 
   if (penalty < 0) {
-    return {
-      delta: penalty,
-      reason: { type: "info", code: "DISLIKED", message: "Conflicts with member dietary style" },
-    };
+    return { delta: penalty, reason: "DISLIKED" };
   }
   return { delta: 0 };
 };

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import db from "../db";
+import { validateFamily } from "../validation";
 import type { Family, FamilyInput } from "../../../shared/types";
 
 const router = Router();
@@ -37,6 +38,11 @@ router.get("/:id", (req: Request, res: Response) => {
 
 // POST /api/families
 router.post("/", (req: Request, res: Response) => {
+  const validation = validateFamily(req.body);
+  if (!validation.isValid) {
+    return res.status(400).json({ error: "Validation failed", details: validation.errors });
+  }
+
   const f: FamilyInput = req.body;
   const result = db.prepare(`
     INSERT INTO families (name, allergies, vegetarian_ratio, gluten_free, dairy_free, nut_free,
@@ -61,10 +67,15 @@ router.post("/", (req: Request, res: Response) => {
 
 // PUT /api/families/:id
 router.put("/:id", (req: Request, res: Response) => {
-  const f: FamilyInput = req.body;
   const existing = db.prepare("SELECT * FROM families WHERE id = ?").get(req.params.id);
   if (!existing) return res.status(404).json({ error: "Family not found" });
 
+  const validation = validateFamily(req.body);
+  if (!validation.isValid) {
+    return res.status(400).json({ error: "Validation failed", details: validation.errors });
+  }
+
+  const f: FamilyInput = req.body;
   db.prepare(`
     UPDATE families SET name=?, allergies=?, vegetarian_ratio=?, gluten_free=?, dairy_free=?, nut_free=?,
       max_cook_minutes_weekday=?, max_cook_minutes_weekend=?, leftovers_nights_per_week=?, picky_kid_mode=?, planning_mode=?

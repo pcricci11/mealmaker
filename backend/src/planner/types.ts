@@ -1,4 +1,4 @@
-import type { Recipe, Family, FamilyMember, DayOfWeek, ReasonCode } from "../../../shared/types";
+import type { Recipe, Family, FamilyMember, DayOfWeek, ReasonCodeValue } from "../../../shared/types";
 
 export interface PlannerContext {
   family: Family;
@@ -13,7 +13,7 @@ export interface PlannerContext {
 export interface ScoredRecipe {
   recipe: Recipe;
   score: number;
-  reasons: ReasonCode[];
+  reasons: ReasonCodeValue[];
 }
 
 export interface PlanSlot {
@@ -22,12 +22,12 @@ export interface PlanSlot {
   locked: boolean;
   lunch_leftover_label: string | null;
   leftover_lunch_recipe_id: number | null;
-  reasons: ReasonCode[];
+  reasons: ReasonCodeValue[];
 }
 
 export interface FilterResult {
   passed: Recipe[];
-  excluded: Array<{ recipe: Recipe; reason: ReasonCode }>;
+  excluded: Array<{ recipe: Recipe; reason: ReasonCodeValue }>;
 }
 
 export type ScoreModifier = (
@@ -35,4 +35,4 @@ export type ScoreModifier = (
   context: PlannerContext,
   currentPlan: PlanSlot[],
   day: DayOfWeek,
-) => { delta: number; reason?: ReasonCode };
+) => { delta: number; reason?: ReasonCodeValue };

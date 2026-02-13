@@ -1,4 +1,4 @@
-import type { DayOfWeek, Recipe, ReasonCode } from "../../../shared/types";
+import type { DayOfWeek, ReasonCodeValue } from "../../../shared/types";
 import { VALID_DAYS } from "../../../shared/types";
 import type { PlannerContext, PlanSlot, ScoreModifier, ScoredRecipe } from "./types";
 import { createRng, seededShuffle } from "./seededRandom";
@@ -47,7 +47,7 @@ export function generatePlan(ctx: PlannerContext): PlanSlot[] {
           locked: true,
           lunch_leftover_label: null,
           leftover_lunch_recipe_id: null,
-          reasons: [{ type: "info", code: "LOCKED", message: "Locked by user" }],
+          reasons: ["LOCKED"],
         });
         continue;
       }
@@ -103,7 +103,7 @@ export function generatePlan(ctx: PlannerContext): PlanSlot[] {
  * (within TOP_CANDIDATE_THRESHOLD of the best score) via seeded shuffle.
  */
 function selectBestCandidate(
-  pool: Recipe[],
+  pool: ReturnType<typeof applyHardFilters>["passed"],
   day: DayOfWeek,
   ctx: PlannerContext,
   currentPlan: PlanSlot[],
@@ -115,16 +115,16 @@ function selectBestCandidate(
 
   const scored: ScoredRecipe[] = pool.map((recipe) => {
     let score = 0;
-    const reasons: ReasonCode[] = [];
+    const reasons: ReasonCodeValue[] = [];
 
     // Veg day preference
     if (isVegDay) {
       if (recipe.vegetarian) {
         score += 30;
-        reasons.push({ type: "included", code: "VEG_DAY", message: "Vegetarian day" });
+        reasons.push("VEG_DAY");
       } else {
         score -= 30;
-        reasons.push({ type: "info", code: "VEG_DAY", message: "Non-veg on vegetarian day" });
+        reasons.push("VEG_DAY");
       }
     }
 
@@ -167,8 +167,8 @@ function buildSlot(
   }
 
   const reasons = [...pick.reasons];
-  if (leftoverDays.has(day)) {
-    reasons.push({ type: "info", code: "LEFTOVER_DAY", message: "Designated leftover day" });
+  if (leftoverDays.has(day) && pick.recipe.leftovers_score >= 3) {
+    reasons.push("LEFTOVERS_LUNCH");
   }
 
   return {

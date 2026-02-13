@@ -43,15 +43,9 @@ export function createLeftoversScorer(leftoverDays: Set<DayOfWeek>): ScoreModifi
     if (!leftoverDays.has(day)) return { delta: 0 };
 
     if (recipe.leftovers_score >= 3) {
-      return {
-        delta: recipe.leftovers_score * 5,
-        reason: { type: "included", code: "GOOD_LEFTOVERS", message: `Leftovers score ${recipe.leftovers_score}/5` },
-      };
+      return { delta: recipe.leftovers_score * 5, reason: "GOOD_LEFTOVERS" };
     }
 
-    return {
-      delta: -10,
-      reason: { type: "info", code: "LOW_LEFTOVERS", message: "Low leftovers score on leftover day" },
-    };
+    return { delta: -10, reason: "LOW_LEFTOVERS" };
   };
 }

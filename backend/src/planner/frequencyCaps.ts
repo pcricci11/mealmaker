@@ -12,14 +12,7 @@ export const enforceFrequencyCap: ScoreModifier = (recipe, context) => {
   const count = context.recentRecipeHistory.filter((id) => id === recipe.id).length;
 
   if (count >= recipe.frequency_cap_per_month) {
-    return {
-      delta: FREQUENCY_CAP_PENALTY,
-      reason: {
-        type: "excluded",
-        code: "FREQUENCY_CAP",
-        message: `Used ${count}x in last 30 days (cap: ${recipe.frequency_cap_per_month})`,
-      },
-    };
+    return { delta: FREQUENCY_CAP_PENALTY, reason: "FREQUENCY_CAP" };
   }
 
   return { delta: 0 };

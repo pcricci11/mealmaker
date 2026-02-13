@@ -17,6 +17,7 @@ export default function App() {
           <nav className="flex gap-2">
             <NavLink to="/profile" className={navCls}>Profile</NavLink>
             <NavLink to="/plan" className={navCls}>Meal Plan</NavLink>
+            <NavLink to="/recipes" className={navCls}>Recipes</NavLink>
             <NavLink to="/grocery" className={navCls}>Grocery List</NavLink>
           </nav>
         </div>
