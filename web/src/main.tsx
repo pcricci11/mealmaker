@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import App from "./App";
+import MyFamily from "./pages/MyFamily";
 import FamilyProfile from "./pages/FamilyProfile";
 import MealPlan from "./pages/MealPlan";
 import Recipes from "./pages/Recipes";
@@ -13,7 +14,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />}>
-          <Route index element={<Navigate to="/profile" replace />} />
+          <Route index element={<Navigate to="/family" replace />} />
+          <Route path="family" element={<MyFamily />} />
           <Route path="profile" element={<FamilyProfile />} />
           <Route path="plan" element={<MealPlan />} />
           <Route path="recipes" element={<Recipes />} />

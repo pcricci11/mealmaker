@@ -53,6 +53,7 @@ export interface Family {
   leftovers_nights_per_week: number; // 0–4
   picky_kid_mode: boolean;
   planning_mode: PlanningMode;
+  serving_multiplier?: ServingMultiplier;
   created_at?: string;
   members?: FamilyMember[];
 }
@@ -194,6 +195,44 @@ export type FrequencyPreference =
   | "rarely";
 
 export type ServingMultiplier = "normal" | "hearty" | "extra_large";
+
+// ── V3 Aliases ──
+
+// FamilyMember already includes no_spicy; V3 alias for compatibility
+export type FamilyMemberV3 = FamilyMember;
+export type FamilyMemberInputV3 = FamilyMemberInput;
+
+// ── Family Favorites ──
+
+export interface FamilyFavoriteChef {
+  id: number;
+  family_id: number;
+  name: string;
+  created_at?: string;
+}
+
+export interface FamilyFavoriteMeal {
+  id: number;
+  family_id: number;
+  name: string;
+  recipe_url?: string | null;
+  difficulty?: Difficulty | null;
+  total_time_minutes?: number | null;
+  frequency_preference?: FrequencyPreference | null;
+  notes?: string | null;
+  created_at?: string;
+}
+
+export interface FamilyFavoriteSide {
+  id: number;
+  family_id: number;
+  name: string;
+  recipe_url?: string | null;
+  category?: string | null;
+  pairs_well_with?: string[] | null;
+  notes?: string | null;
+  created_at?: string;
+}
 
 // ── Grocery List ──
 

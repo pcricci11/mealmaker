@@ -27,6 +27,7 @@ const defaultMember: FamilyMemberInput = {
   allergies: [],
   dislikes: [],
   favorites: [],
+  no_spicy: false,
 };
 
 export default function FamilyProfile() {
@@ -106,6 +107,7 @@ export default function FamilyProfile() {
       allergies: [...m.allergies],
       dislikes: [...m.dislikes],
       favorites: [...m.favorites],
+      no_spicy: m.no_spicy,
     });
     setEditingMemberId(m.id);
   };

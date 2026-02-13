@@ -20,5 +20,6 @@
     },
     "baseUrl": "."
   },
-  "include": ["src", "../shared"]
+  "include": ["src", "../shared"],
+  "exclude": ["../shared/types-v3.ts"]
 }

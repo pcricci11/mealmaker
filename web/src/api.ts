@@ -1,7 +1,9 @@
 import type {
   Family, FamilyInput, FamilyMember, FamilyMemberInput,
+  FamilyMemberV3, FamilyMemberInputV3,
+  FamilyFavoriteChef, FamilyFavoriteMeal, FamilyFavoriteSide,
   Recipe, RecipeInput, MealPlan, GroceryList, DayOfWeek,
-  GeneratePlanResponse,
+  GeneratePlanResponse, ServingMultiplier,
 } from "@shared/types";
 
 const BASE = "/api";
@@ -33,7 +35,7 @@ export async function createFamily(data: FamilyInput): Promise<Family> {
   );
 }
 
-export async function updateFamily(id: number, data: FamilyInput): Promise<Family> {
+export async function updateFamily(id: number, data: Partial<FamilyInput> & { serving_multiplier?: ServingMultiplier }): Promise<Family> {
   return json(
     await fetch(`${BASE}/families/${id}`, {
       method: "PUT",
@@ -43,14 +45,24 @@ export async function updateFamily(id: number, data: FamilyInput): Promise<Famil
   );
 }
 
-// ── Family Members ──
+// ── Family Members (v3: /api/members?family_id=) ──
 export async function getMembers(familyId: number): Promise<FamilyMember[]> {
-  return json(await fetch(`${BASE}/families/${familyId}/members`));
+  return json(await fetch(`${BASE}/members?family_id=${familyId}`));
 }
+export const getFamilyMembers = getMembers;
 
 export async function createMember(familyId: number, data: FamilyMemberInput): Promise<FamilyMember> {
   return json(
-    await fetch(`${BASE}/families/${familyId}/members`, {
+    await fetch(`${BASE}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...data, family_id: familyId }),
+    }),
+  );
+}
+export async function createFamilyMember(data: FamilyMemberInputV3): Promise<FamilyMemberV3> {
+  return json(
+    await fetch(`${BASE}/members`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -60,7 +72,16 @@ export async function createMember(familyId: number, data: FamilyMemberInput): P
 
 export async function updateMember(familyId: number, memberId: number, data: FamilyMemberInput): Promise<FamilyMember> {
   return json(
-    await fetch(`${BASE}/families/${familyId}/members/${memberId}`, {
+    await fetch(`${BASE}/members/${memberId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }),
+  );
+}
+export async function updateFamilyMember(id: number, data: Partial<FamilyMemberV3>): Promise<FamilyMemberV3> {
+  return json(
+    await fetch(`${BASE}/members/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -69,9 +90,14 @@ export async function updateMember(familyId: number, memberId: number, data: Fam
 }
 
 export async function deleteMember(familyId: number, memberId: number): Promise<void> {
-  const res = await fetch(`${BASE}/families/${familyId}/members/${memberId}`, {
-    method: "DELETE",
-  });
+  const res = await fetch(`${BASE}/members/${memberId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(body.error || res.statusText);
+  }
+}
+export async function deleteFamilyMember(id: number): Promise<void> {
+  const res = await fetch(`${BASE}/members/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(body.error || res.statusText);
@@ -125,4 +151,84 @@ export async function swapMealPlanItem(planId: number, day: DayOfWeek): Promise<
 // ── Grocery List ──
 export async function getGroceryList(planId: number): Promise<GroceryList> {
   return json(await fetch(`${BASE}/meal-plans/${planId}/grocery-list`));
+}
+
+// ── Favorite Chefs ──
+export async function getFavoriteChefs(familyId: number): Promise<FamilyFavoriteChef[]> {
+  return json(await fetch(`${BASE}/favorites/chefs?family_id=${familyId}`));
+}
+
+export async function createFavoriteChef(familyId: number, name: string): Promise<FamilyFavoriteChef> {
+  return json(
+    await fetch(`${BASE}/favorites/chefs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ family_id: familyId, name }),
+    }),
+  );
+}
+
+export async function deleteFavoriteChef(id: number): Promise<void> {
+  const res = await fetch(`${BASE}/favorites/chefs/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete favorite chef");
+}
+
+// ── Favorite Meals ──
+export async function getFavoriteMeals(familyId: number): Promise<FamilyFavoriteMeal[]> {
+  return json(await fetch(`${BASE}/favorites/meals?family_id=${familyId}`));
+}
+
+export async function createFavoriteMeal(familyId: number, data: Partial<FamilyFavoriteMeal>): Promise<FamilyFavoriteMeal> {
+  return json(
+    await fetch(`${BASE}/favorites/meals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...data, family_id: familyId }),
+    }),
+  );
+}
+
+export async function updateFavoriteMeal(id: number, data: Partial<FamilyFavoriteMeal>): Promise<FamilyFavoriteMeal> {
+  return json(
+    await fetch(`${BASE}/favorites/meals/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }),
+  );
+}
+
+export async function deleteFavoriteMeal(id: number): Promise<void> {
+  const res = await fetch(`${BASE}/favorites/meals/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete favorite meal");
+}
+
+// ── Favorite Sides ──
+export async function getFavoriteSides(familyId: number): Promise<FamilyFavoriteSide[]> {
+  return json(await fetch(`${BASE}/favorites/sides?family_id=${familyId}`));
+}
+
+export async function createFavoriteSide(familyId: number, data: Partial<FamilyFavoriteSide>): Promise<FamilyFavoriteSide> {
+  return json(
+    await fetch(`${BASE}/favorites/sides`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...data, family_id: familyId }),
+    }),
+  );
+}
+
+export async function updateFavoriteSide(id: number, data: Partial<FamilyFavoriteSide>): Promise<FamilyFavoriteSide> {
+  return json(
+    await fetch(`${BASE}/favorites/sides/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }),
+  );
+}
+
+export async function deleteFavoriteSide(id: number): Promise<void> {
+  const res = await fetch(`${BASE}/favorites/sides/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete favorite side");
 }
