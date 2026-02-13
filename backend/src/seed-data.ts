@@ -1,4 +1,4 @@
-import type { RecipeInput, Ingredient } from "../../shared/types";
+import type { RecipeInput, Ingredient, Difficulty } from "../../shared/types";
 
 function ing(name: string, quantity: number, unit: string, category: Ingredient["category"]): Ingredient {
   return { name, quantity, unit, category };
@@ -7,7 +7,7 @@ function ing(name: string, quantity: number, unit: string, category: Ingredient[
 export const SEED_RECIPES: RecipeInput[] = [
   // ── AMERICAN ──
   {
-    name: "Classic Cheeseburgers",
+    title: "Classic Cheeseburgers",
     cuisine: "american",
     vegetarian: false,
     protein_type: "beef",
@@ -15,6 +15,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten", "dairy"],
     kid_friendly: true,
     makes_leftovers: false,
+    leftovers_score: 0,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["summer"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("ground beef", 1.5, "lb", "protein"),
       ing("burger buns", 4, "count", "grains"),
@@ -26,7 +33,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["quick", "grilling"],
   },
   {
-    name: "BBQ Pulled Pork",
+    title: "BBQ Pulled Pork",
     cuisine: "american",
     vegetarian: false,
     protein_type: "pork",
@@ -34,6 +41,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 5,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["summer"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("pork shoulder", 3, "lb", "protein"),
       ing("bbq sauce", 1, "cup", "pantry"),
@@ -44,7 +58,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["slow-cook", "crowd-pleaser"],
   },
   {
-    name: "Mac and Cheese",
+    title: "Mac and Cheese",
     cuisine: "american",
     vegetarian: true,
     protein_type: null,
@@ -52,6 +66,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten", "dairy"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["fall", "winter"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("elbow macaroni", 1, "lb", "grains"),
       ing("cheddar cheese", 2, "cups", "dairy"),
@@ -62,7 +83,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["comfort-food"],
   },
   {
-    name: "Grilled Chicken Salad",
+    title: "Grilled Chicken Salad",
     cuisine: "american",
     vegetarian: false,
     protein_type: "chicken",
@@ -70,6 +91,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: [],
     kid_friendly: false,
     makes_leftovers: false,
+    leftovers_score: 1,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["spring", "summer"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("chicken breast", 1.5, "lb", "protein"),
       ing("mixed greens", 6, "cups", "produce"),
@@ -83,7 +111,7 @@ export const SEED_RECIPES: RecipeInput[] = [
 
   // ── ITALIAN ──
   {
-    name: "Spaghetti Bolognese",
+    title: "Spaghetti Bolognese",
     cuisine: "italian",
     vegetarian: false,
     protein_type: "beef",
@@ -91,6 +119,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 5,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["fall", "winter"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("ground beef", 1, "lb", "protein"),
       ing("spaghetti", 1, "lb", "grains"),
@@ -103,7 +138,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["classic", "comfort-food"],
   },
   {
-    name: "Margherita Pizza",
+    title: "Margherita Pizza",
     cuisine: "italian",
     vegetarian: true,
     protein_type: null,
@@ -111,6 +146,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten", "dairy"],
     kid_friendly: true,
     makes_leftovers: false,
+    leftovers_score: 1,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("pizza dough", 1, "lb", "grains"),
       ing("mozzarella", 8, "oz", "dairy"),
@@ -121,7 +163,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["classic"],
   },
   {
-    name: "Chicken Parmesan",
+    title: "Chicken Parmesan",
     cuisine: "italian",
     vegetarian: false,
     protein_type: "chicken",
@@ -129,6 +171,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten", "dairy"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("chicken breast", 1.5, "lb", "protein"),
       ing("breadcrumbs", 1, "cup", "pantry"),
@@ -140,7 +189,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["comfort-food"],
   },
   {
-    name: "Pasta Primavera",
+    title: "Pasta Primavera",
     cuisine: "italian",
     vegetarian: true,
     protein_type: null,
@@ -148,6 +197,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten"],
     kid_friendly: false,
     makes_leftovers: false,
+    leftovers_score: 1,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["spring", "summer"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("penne pasta", 1, "lb", "grains"),
       ing("zucchini", 2, "count", "produce"),
@@ -161,7 +217,7 @@ export const SEED_RECIPES: RecipeInput[] = [
 
   // ── MEXICAN ──
   {
-    name: "Chicken Tacos",
+    title: "Chicken Tacos",
     cuisine: "mexican",
     vegetarian: false,
     protein_type: "chicken",
@@ -169,6 +225,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: [],
     kid_friendly: true,
     makes_leftovers: false,
+    leftovers_score: 1,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("chicken thighs", 1.5, "lb", "protein"),
       ing("corn tortillas", 12, "count", "grains"),
@@ -182,7 +245,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["quick", "crowd-pleaser"],
   },
   {
-    name: "Beef Burrito Bowls",
+    title: "Beef Burrito Bowls",
     cuisine: "mexican",
     vegetarian: false,
     protein_type: "beef",
@@ -190,6 +253,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: [],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("ground beef", 1, "lb", "protein"),
       ing("rice", 1.5, "cups", "grains"),
@@ -202,7 +272,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["bowl"],
   },
   {
-    name: "Black Bean Enchiladas",
+    title: "Black Bean Enchiladas",
     cuisine: "mexican",
     vegetarian: true,
     protein_type: null,
@@ -210,6 +280,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["dairy"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("black beans", 30, "oz", "pantry"),
       ing("corn tortillas", 12, "count", "grains"),
@@ -221,7 +298,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["comfort-food"],
   },
   {
-    name: "Veggie Quesadillas",
+    title: "Veggie Quesadillas",
     cuisine: "mexican",
     vegetarian: true,
     protein_type: null,
@@ -229,6 +306,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten", "dairy"],
     kid_friendly: true,
     makes_leftovers: false,
+    leftovers_score: 0,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("flour tortillas", 8, "count", "grains"),
       ing("cheddar cheese", 2, "cups", "dairy"),
@@ -241,7 +325,7 @@ export const SEED_RECIPES: RecipeInput[] = [
 
   // ── INDIAN ──
   {
-    name: "Chicken Tikka Masala",
+    title: "Chicken Tikka Masala",
     cuisine: "indian",
     vegetarian: false,
     protein_type: "chicken",
@@ -249,6 +333,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["dairy"],
     kid_friendly: false,
     makes_leftovers: true,
+    leftovers_score: 5,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["fall", "winter"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("chicken thighs", 2, "lb", "protein"),
       ing("yogurt", 1, "cup", "dairy"),
@@ -264,7 +355,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["flavorful", "crowd-pleaser"],
   },
   {
-    name: "Chana Masala",
+    title: "Chana Masala",
     cuisine: "indian",
     vegetarian: true,
     protein_type: null,
@@ -272,6 +363,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: [],
     kid_friendly: false,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("chickpeas", 30, "oz", "pantry"),
       ing("crushed tomatoes", 14, "oz", "pantry"),
@@ -285,7 +383,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["healthy", "vegan"],
   },
   {
-    name: "Palak Paneer",
+    title: "Palak Paneer",
     cuisine: "indian",
     vegetarian: true,
     protein_type: null,
@@ -293,6 +391,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["dairy"],
     kid_friendly: false,
     makes_leftovers: false,
+    leftovers_score: 2,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("paneer", 14, "oz", "dairy"),
       ing("spinach", 1, "lb", "produce"),
@@ -306,7 +411,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["classic"],
   },
   {
-    name: "Dal Tadka",
+    title: "Dal Tadka",
     cuisine: "indian",
     vegetarian: true,
     protein_type: null,
@@ -314,6 +419,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: [],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["fall", "winter"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("red lentils", 1.5, "cups", "pantry"),
       ing("onion", 1, "count", "produce"),
@@ -328,7 +440,7 @@ export const SEED_RECIPES: RecipeInput[] = [
 
   // ── CHINESE ──
   {
-    name: "Chicken Stir-Fry",
+    title: "Chicken Stir-Fry",
     cuisine: "chinese",
     vegetarian: false,
     protein_type: "chicken",
@@ -336,6 +448,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["soy"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 3,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("chicken breast", 1.5, "lb", "protein"),
       ing("broccoli", 2, "cups", "produce"),
@@ -349,7 +468,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["quick", "healthy"],
   },
   {
-    name: "Beef and Broccoli",
+    title: "Beef and Broccoli",
     cuisine: "chinese",
     vegetarian: false,
     protein_type: "beef",
@@ -357,6 +476,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["soy"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 3,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("flank steak", 1.5, "lb", "protein"),
       ing("broccoli", 3, "cups", "produce"),
@@ -369,7 +495,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["classic", "quick"],
   },
   {
-    name: "Vegetable Fried Rice",
+    title: "Vegetable Fried Rice",
     cuisine: "chinese",
     vegetarian: true,
     protein_type: null,
@@ -377,6 +503,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["soy"],
     kid_friendly: true,
     makes_leftovers: false,
+    leftovers_score: 1,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("rice", 3, "cups", "grains"),
       ing("eggs", 3, "count", "dairy"),
@@ -389,7 +522,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["quick", "kid-favorite"],
   },
   {
-    name: "Kung Pao Tofu",
+    title: "Kung Pao Tofu",
     cuisine: "chinese",
     vegetarian: true,
     protein_type: null,
@@ -397,6 +530,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["soy", "nuts"],
     kid_friendly: false,
     makes_leftovers: false,
+    leftovers_score: 1,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("firm tofu", 14, "oz", "protein"),
       ing("peanuts", 0.5, "cup", "pantry"),
@@ -411,7 +551,7 @@ export const SEED_RECIPES: RecipeInput[] = [
 
   // ── JAPANESE ──
   {
-    name: "Teriyaki Salmon",
+    title: "Teriyaki Salmon",
     cuisine: "japanese",
     vegetarian: false,
     protein_type: "fish",
@@ -419,6 +559,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["soy", "fish"],
     kid_friendly: true,
     makes_leftovers: false,
+    leftovers_score: 1,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("salmon fillets", 1.5, "lb", "protein"),
       ing("soy sauce", 3, "tbsp", "pantry"),
@@ -430,7 +577,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["healthy", "quick"],
   },
   {
-    name: "Chicken Katsu Curry",
+    title: "Chicken Katsu Curry",
     cuisine: "japanese",
     vegetarian: false,
     protein_type: "chicken",
@@ -438,6 +585,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["fall", "winter"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("chicken breast", 1.5, "lb", "protein"),
       ing("panko breadcrumbs", 1, "cup", "pantry"),
@@ -450,7 +604,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["comfort-food", "crowd-pleaser"],
   },
   {
-    name: "Vegetable Ramen",
+    title: "Vegetable Ramen",
     cuisine: "japanese",
     vegetarian: true,
     protein_type: null,
@@ -458,6 +612,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten", "soy"],
     kid_friendly: true,
     makes_leftovers: false,
+    leftovers_score: 0,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["fall", "winter"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("ramen noodles", 4, "packs", "grains"),
       ing("miso paste", 3, "tbsp", "pantry"),
@@ -472,7 +633,7 @@ export const SEED_RECIPES: RecipeInput[] = [
 
   // ── THAI ──
   {
-    name: "Pad Thai",
+    title: "Pad Thai",
     cuisine: "thai",
     vegetarian: false,
     protein_type: "shrimp",
@@ -480,6 +641,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["shellfish", "nuts", "soy"],
     kid_friendly: false,
     makes_leftovers: false,
+    leftovers_score: 0,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("shrimp", 1, "lb", "protein"),
       ing("rice noodles", 8, "oz", "grains"),
@@ -493,7 +661,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["classic"],
   },
   {
-    name: "Green Curry with Chicken",
+    title: "Green Curry with Chicken",
     cuisine: "thai",
     vegetarian: false,
     protein_type: "chicken",
@@ -501,6 +669,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["fish"],
     kid_friendly: false,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("chicken thighs", 1.5, "lb", "protein"),
       ing("green curry paste", 3, "tbsp", "pantry"),
@@ -513,7 +688,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["spicy", "flavorful"],
   },
   {
-    name: "Vegetable Pad See Ew",
+    title: "Vegetable Pad See Ew",
     cuisine: "thai",
     vegetarian: true,
     protein_type: null,
@@ -521,6 +696,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["soy", "gluten"],
     kid_friendly: true,
     makes_leftovers: false,
+    leftovers_score: 0,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("wide rice noodles", 1, "lb", "grains"),
       ing("broccoli", 2, "cups", "produce"),
@@ -534,7 +716,7 @@ export const SEED_RECIPES: RecipeInput[] = [
 
   // ── MEDITERRANEAN ──
   {
-    name: "Greek Chicken Bowl",
+    title: "Greek Chicken Bowl",
     cuisine: "mediterranean",
     vegetarian: false,
     protein_type: "chicken",
@@ -542,6 +724,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["dairy"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["spring", "summer"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("chicken thighs", 1.5, "lb", "protein"),
       ing("rice", 1.5, "cups", "grains"),
@@ -556,7 +745,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["healthy", "bowl"],
   },
   {
-    name: "Falafel Wraps",
+    title: "Falafel Wraps",
     cuisine: "mediterranean",
     vegetarian: true,
     protein_type: null,
@@ -564,6 +753,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten"],
     kid_friendly: false,
     makes_leftovers: true,
+    leftovers_score: 3,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("chickpeas", 30, "oz", "pantry"),
       ing("pita bread", 6, "count", "grains"),
@@ -577,7 +773,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["vegan-adaptable"],
   },
   {
-    name: "Shakshuka",
+    title: "Shakshuka",
     cuisine: "mediterranean",
     vegetarian: true,
     protein_type: null,
@@ -585,6 +781,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: [],
     kid_friendly: true,
     makes_leftovers: false,
+    leftovers_score: 0,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("eggs", 6, "count", "dairy"),
       ing("crushed tomatoes", 28, "oz", "pantry"),
@@ -600,7 +803,7 @@ export const SEED_RECIPES: RecipeInput[] = [
 
   // ── KOREAN ──
   {
-    name: "Bibimbap",
+    title: "Bibimbap",
     cuisine: "korean",
     vegetarian: false,
     protein_type: "beef",
@@ -608,6 +811,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["soy"],
     kid_friendly: false,
     makes_leftovers: false,
+    leftovers_score: 1,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("ground beef", 1, "lb", "protein"),
       ing("rice", 2, "cups", "grains"),
@@ -622,7 +832,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["bowl", "colorful"],
   },
   {
-    name: "Korean BBQ Pork",
+    title: "Korean BBQ Pork",
     cuisine: "korean",
     vegetarian: false,
     protein_type: "pork",
@@ -630,6 +840,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["soy"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["summer"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("pork belly", 1.5, "lb", "protein"),
       ing("soy sauce", 3, "tbsp", "pantry"),
@@ -643,7 +860,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["grilling", "crowd-pleaser"],
   },
   {
-    name: "Japchae",
+    title: "Japchae",
     cuisine: "korean",
     vegetarian: true,
     protein_type: null,
@@ -651,6 +868,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["soy"],
     kid_friendly: true,
     makes_leftovers: false,
+    leftovers_score: 1,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("sweet potato noodles", 8, "oz", "grains"),
       ing("spinach", 4, "cups", "produce"),
@@ -665,7 +889,7 @@ export const SEED_RECIPES: RecipeInput[] = [
 
   // ── FRENCH ──
   {
-    name: "Chicken Provençal",
+    title: "Chicken Provencal",
     cuisine: "french",
     vegetarian: false,
     protein_type: "chicken",
@@ -673,6 +897,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: [],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["summer", "fall"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("chicken thighs", 2, "lb", "protein"),
       ing("crushed tomatoes", 14, "oz", "pantry"),
@@ -686,7 +917,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["classic", "one-pot"],
   },
   {
-    name: "Ratatouille",
+    title: "Ratatouille",
     cuisine: "french",
     vegetarian: true,
     protein_type: null,
@@ -694,6 +925,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: [],
     kid_friendly: false,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["summer"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("eggplant", 1, "count", "produce"),
       ing("zucchini", 2, "count", "produce"),
@@ -707,7 +945,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["healthy", "vegan"],
   },
   {
-    name: "Quiche Lorraine",
+    title: "Quiche Lorraine",
     cuisine: "french",
     vegetarian: false,
     protein_type: "pork",
@@ -715,6 +953,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten", "dairy"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 3,
+    difficulty: "hard",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["spring"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("pie crust", 1, "count", "grains"),
       ing("bacon", 8, "slices", "protein"),
@@ -728,7 +973,7 @@ export const SEED_RECIPES: RecipeInput[] = [
 
   // ── MIDDLE EASTERN ──
   {
-    name: "Chicken Shawarma",
+    title: "Chicken Shawarma",
     cuisine: "middle_eastern",
     vegetarian: false,
     protein_type: "chicken",
@@ -736,6 +981,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["dairy"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("chicken thighs", 2, "lb", "protein"),
       ing("pita bread", 6, "count", "grains"),
@@ -749,7 +1001,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["crowd-pleaser", "flavorful"],
   },
   {
-    name: "Lentil Soup",
+    title: "Lentil Soup",
     cuisine: "middle_eastern",
     vegetarian: true,
     protein_type: null,
@@ -757,6 +1009,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: [],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 5,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["fall", "winter"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("red lentils", 1.5, "cups", "pantry"),
       ing("onion", 1, "count", "produce"),
@@ -772,7 +1031,7 @@ export const SEED_RECIPES: RecipeInput[] = [
 
   // ── ETHIOPIAN ──
   {
-    name: "Misir Wot",
+    title: "Misir Wot",
     cuisine: "ethiopian",
     vegetarian: true,
     protein_type: null,
@@ -780,6 +1039,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: [],
     kid_friendly: false,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["fall", "winter"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("red lentils", 1.5, "cups", "pantry"),
       ing("onion", 3, "count", "produce"),
@@ -794,7 +1060,7 @@ export const SEED_RECIPES: RecipeInput[] = [
 
   // ── MORE VARIETY ──
   {
-    name: "Fish Tacos",
+    title: "Fish Tacos",
     cuisine: "mexican",
     vegetarian: false,
     protein_type: "fish",
@@ -802,6 +1068,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["fish"],
     kid_friendly: true,
     makes_leftovers: false,
+    leftovers_score: 0,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["summer"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("white fish fillets", 1.5, "lb", "protein"),
       ing("corn tortillas", 12, "count", "grains"),
@@ -814,7 +1087,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["quick", "crowd-pleaser"],
   },
   {
-    name: "Pesto Pasta",
+    title: "Pesto Pasta",
     cuisine: "italian",
     vegetarian: true,
     protein_type: null,
@@ -822,6 +1095,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten", "dairy", "nuts"],
     kid_friendly: true,
     makes_leftovers: false,
+    leftovers_score: 1,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["summer"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("penne pasta", 1, "lb", "grains"),
       ing("basil pesto", 0.5, "cup", "pantry"),
@@ -832,7 +1112,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["quick", "kid-favorite"],
   },
   {
-    name: "Miso Glazed Cod",
+    title: "Miso Glazed Cod",
     cuisine: "japanese",
     vegetarian: false,
     protein_type: "fish",
@@ -840,6 +1120,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["soy", "fish"],
     kid_friendly: false,
     makes_leftovers: false,
+    leftovers_score: 0,
+    difficulty: "medium",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["winter"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("cod fillets", 1.5, "lb", "protein"),
       ing("white miso paste", 3, "tbsp", "pantry"),
@@ -851,7 +1138,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["healthy", "elegant"],
   },
   {
-    name: "Mushroom Risotto",
+    title: "Mushroom Risotto",
     cuisine: "italian",
     vegetarian: true,
     protein_type: null,
@@ -859,6 +1146,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["dairy"],
     kid_friendly: false,
     makes_leftovers: true,
+    leftovers_score: 3,
+    difficulty: "hard",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: ["fall", "winter"],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("arborio rice", 1.5, "cups", "grains"),
       ing("mushrooms", 12, "oz", "produce"),
@@ -872,7 +1166,7 @@ export const SEED_RECIPES: RecipeInput[] = [
     tags: ["elegant", "comfort-food"],
   },
   {
-    name: "Turkey Meatballs",
+    title: "Turkey Meatballs",
     cuisine: "american",
     vegetarian: false,
     protein_type: "turkey",
@@ -880,6 +1174,13 @@ export const SEED_RECIPES: RecipeInput[] = [
     allergens: ["gluten"],
     kid_friendly: true,
     makes_leftovers: true,
+    leftovers_score: 4,
+    difficulty: "easy",
+    source_type: "seeded",
+    source_name: null,
+    source_url: null,
+    seasonal_tags: [],
+    frequency_cap_per_month: null,
     ingredients: [
       ing("ground turkey", 1.5, "lb", "protein"),
       ing("breadcrumbs", 0.5, "cup", "pantry"),
