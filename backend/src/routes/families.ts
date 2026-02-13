@@ -17,6 +17,7 @@ function rowToFamily(row: any): Family {
     max_cook_minutes_weekend: row.max_cook_minutes_weekend,
     leftovers_nights_per_week: row.leftovers_nights_per_week,
     picky_kid_mode: !!row.picky_kid_mode,
+    planning_mode: row.planning_mode || "strictest_household",
     created_at: row.created_at,
   };
 }
@@ -39,8 +40,8 @@ router.post("/", (req: Request, res: Response) => {
   const f: FamilyInput = req.body;
   const result = db.prepare(`
     INSERT INTO families (name, allergies, vegetarian_ratio, gluten_free, dairy_free, nut_free,
-      max_cook_minutes_weekday, max_cook_minutes_weekend, leftovers_nights_per_week, picky_kid_mode)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      max_cook_minutes_weekday, max_cook_minutes_weekend, leftovers_nights_per_week, picky_kid_mode, planning_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     f.name,
     JSON.stringify(f.allergies || []),
@@ -52,6 +53,7 @@ router.post("/", (req: Request, res: Response) => {
     f.max_cook_minutes_weekend || 90,
     f.leftovers_nights_per_week || 1,
     f.picky_kid_mode ? 1 : 0,
+    f.planning_mode || "strictest_household",
   );
   const created = db.prepare("SELECT * FROM families WHERE id = ?").get(result.lastInsertRowid);
   res.status(201).json(rowToFamily(created));
@@ -65,7 +67,7 @@ router.put("/:id", (req: Request, res: Response) => {
 
   db.prepare(`
     UPDATE families SET name=?, allergies=?, vegetarian_ratio=?, gluten_free=?, dairy_free=?, nut_free=?,
-      max_cook_minutes_weekday=?, max_cook_minutes_weekend=?, leftovers_nights_per_week=?, picky_kid_mode=?
+      max_cook_minutes_weekday=?, max_cook_minutes_weekend=?, leftovers_nights_per_week=?, picky_kid_mode=?, planning_mode=?
     WHERE id=?
   `).run(
     f.name,
@@ -78,6 +80,7 @@ router.put("/:id", (req: Request, res: Response) => {
     f.max_cook_minutes_weekend || 90,
     f.leftovers_nights_per_week || 1,
     f.picky_kid_mode ? 1 : 0,
+    f.planning_mode || "strictest_household",
     req.params.id,
   );
   const updated = db.prepare("SELECT * FROM families WHERE id = ?").get(req.params.id);

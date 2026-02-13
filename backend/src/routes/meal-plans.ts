@@ -1,8 +1,9 @@
 import { Router, Request, Response } from "express";
 import db from "../db";
 import { rowToRecipe } from "../helpers";
-import { generatePlan } from "../planner";
-import type { Family, DayOfWeek, GeneratePlanRequest, GroceryItem, Ingredient, GroceryCategory } from "../../../shared/types";
+import { generatePlan, normalizeToMonday, deriveSeed } from "../planner/index";
+import type { PlannerContext } from "../planner/types";
+import type { Family, FamilyMember, DayOfWeek, GeneratePlanRequest, GroceryItem, Ingredient, GroceryCategory } from "../../../shared/types";
 
 const router = Router();
 
@@ -19,23 +20,61 @@ function rowToFamily(row: any): Family {
     max_cook_minutes_weekend: row.max_cook_minutes_weekend,
     leftovers_nights_per_week: row.leftovers_nights_per_week,
     picky_kid_mode: !!row.picky_kid_mode,
+    planning_mode: row.planning_mode || "strictest_household",
+    created_at: row.created_at,
+  };
+}
+
+function rowToMember(row: any): FamilyMember {
+  return {
+    id: row.id,
+    family_id: row.family_id,
+    name: row.name,
+    dietary_style: row.dietary_style || "omnivore",
+    allergies: JSON.parse(row.allergies || "[]"),
+    dislikes: JSON.parse(row.dislikes || "[]"),
+    favorites: JSON.parse(row.favorites || "[]"),
     created_at: row.created_at,
   };
 }
 
 // POST /api/meal-plans/generate
 router.post("/generate", (req: Request, res: Response) => {
-  const { family_id, locks } = req.body as GeneratePlanRequest;
+  const { family_id, locks, week_start } = req.body as GeneratePlanRequest;
 
   const familyRow = db.prepare("SELECT * FROM families WHERE id = ?").get(family_id);
   if (!familyRow) return res.status(404).json({ error: "Family not found" });
   const family = rowToFamily(familyRow);
 
+  const memberRows = db.prepare("SELECT * FROM family_members WHERE family_id = ?").all(family_id);
+  const members = memberRows.map(rowToMember);
+
   const recipeRows = db.prepare("SELECT * FROM recipes").all();
   const allRecipes = recipeRows.map(rowToRecipe);
 
+  // Normalize week_start to Monday
+  const normalizedWeek = week_start ? normalizeToMonday(week_start) : normalizeToMonday(new Date().toISOString().slice(0, 10));
+
+  // Get recent recipe history (trailing 30 days)
+  const recentRows = db.prepare(`
+    SELECT mpi.recipe_id FROM meal_plan_items mpi
+    JOIN meal_plans mp ON mp.id = mpi.meal_plan_id
+    WHERE mp.family_id = ? AND mp.created_at >= datetime('now', '-30 days')
+  `).all(family_id) as { recipe_id: number }[];
+  const recentRecipeHistory = recentRows.map((r) => r.recipe_id);
+
+  const ctx: PlannerContext = {
+    family,
+    members,
+    allRecipes,
+    locks: locks || {},
+    weekStart: normalizedWeek,
+    seed: deriveSeed(family.id, normalizedWeek),
+    recentRecipeHistory,
+  };
+
   try {
-    const planSlots = generatePlan(family, allRecipes, locks || {});
+    const planSlots = generatePlan(ctx);
 
     // Save to DB
     const planResult = db.prepare("INSERT INTO meal_plans (family_id) VALUES (?)").run(family_id);
