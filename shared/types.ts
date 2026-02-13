@@ -69,6 +69,7 @@ export interface FamilyMember {
   allergies: string[];
   dislikes: string[];
   favorites: string[];
+  no_spicy: boolean;
   created_at?: string;
 }
 
@@ -181,6 +182,18 @@ export type ReasonCodeValue =
   | "VEG_DAY"
   | "LEFTOVERS_LUNCH"
   | "LOCKED";
+
+// ── Frequency & Serving ──
+
+export type FrequencyPreference =
+  | "always"
+  | "weekly"
+  | "twice_month"
+  | "monthly"
+  | "bimonthly"
+  | "rarely";
+
+export type ServingMultiplier = "normal" | "hearty" | "extra_large";
 
 // ── Grocery List ──
 

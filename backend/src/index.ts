@@ -5,6 +5,9 @@ import familiesRouter from "./routes/families";
 import membersRouter from "./routes/members";
 import recipesRouter from "./routes/recipes";
 import mealPlansRouter from "./routes/meal-plans";
+import favoritesRouter from "./routes/favorites";
+import cookingScheduleRouter from "./routes/cooking-schedule";
+import sidesRouter from "./routes/sides";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -17,9 +20,12 @@ initDb();
 
 // Routes
 app.use("/api/families", familiesRouter);
-app.use("/api/families/:familyId/members", membersRouter);
+app.use("/api/members", membersRouter);
 app.use("/api/recipes", recipesRouter);
 app.use("/api/meal-plans", mealPlansRouter);
+app.use("/api/favorites", favoritesRouter);
+app.use("/api/cooking-schedule", cookingScheduleRouter);
+app.use("/api/sides", sidesRouter);
 
 // Health check
 app.get("/api/health", (_req, res) => {

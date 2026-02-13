@@ -36,6 +36,7 @@ function rowToMember(row: any): FamilyMember {
     allergies: JSON.parse(row.allergies || "[]"),
     dislikes: JSON.parse(row.dislikes || "[]"),
     favorites: JSON.parse(row.favorites || "[]"),
+    no_spicy: !!row.no_spicy,
     created_at: row.created_at,
   };
 }

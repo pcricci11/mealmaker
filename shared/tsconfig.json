@@ -9,5 +9,6 @@
     "outDir": "./dist",
     "rootDir": "."
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts"],
+  "exclude": ["./types-v3.ts"]
 }
