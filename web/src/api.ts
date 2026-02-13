@@ -2,6 +2,7 @@ import type {
   Family, FamilyInput, FamilyMember, FamilyMemberInput,
   FamilyMemberV3, FamilyMemberInputV3,
   FamilyFavoriteChef, FamilyFavoriteMeal, FamilyFavoriteSide,
+  WeeklyCookingSchedule, WeeklyLunchNeed, GeneratePlanRequestV3,
   Recipe, RecipeInput, MealPlan, GroceryList, DayOfWeek,
   GeneratePlanResponse, ServingMultiplier,
 } from "@shared/types";
@@ -231,4 +232,43 @@ export async function updateFavoriteSide(id: number, data: Partial<FamilyFavorit
 export async function deleteFavoriteSide(id: number): Promise<void> {
   const res = await fetch(`${BASE}/favorites/sides/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete favorite side");
+}
+
+// ── Cooking Schedule ──
+export async function getCookingSchedule(familyId: number, weekStart: string): Promise<WeeklyCookingSchedule[]> {
+  return json(await fetch(`${BASE}/cooking-schedule?family_id=${familyId}&week_start=${weekStart}`));
+}
+
+export async function saveCookingSchedule(familyId: number, weekStart: string, schedule: WeeklyCookingSchedule[]): Promise<void> {
+  const res = await fetch(`${BASE}/cooking-schedule`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ family_id: familyId, week_start: weekStart, schedule }),
+  });
+  if (!res.ok) throw new Error("Failed to save cooking schedule");
+}
+
+// ── Lunch Planning ──
+export async function getLunchNeeds(familyId: number, weekStart: string): Promise<WeeklyLunchNeed[]> {
+  return json(await fetch(`${BASE}/cooking-schedule/lunch?family_id=${familyId}&week_start=${weekStart}`));
+}
+
+export async function saveLunchNeeds(familyId: number, weekStart: string, lunchNeeds: WeeklyLunchNeed[]): Promise<void> {
+  const res = await fetch(`${BASE}/cooking-schedule/lunch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ family_id: familyId, week_start: weekStart, lunch_needs: lunchNeeds }),
+  });
+  if (!res.ok) throw new Error("Failed to save lunch needs");
+}
+
+// ── V3 Plan Generation ──
+export async function generateMealPlanV3(request: GeneratePlanRequestV3): Promise<MealPlan> {
+  return json(
+    await fetch(`${BASE}/meal-plans/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    }),
+  );
 }

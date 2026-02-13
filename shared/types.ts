@@ -234,6 +234,59 @@ export interface FamilyFavoriteSide {
   created_at?: string;
 }
 
+// ── Cooking Schedule ──
+
+export const VALID_MEAL_MODES = ["one_main", "customize_mains"] as const;
+export type MealMode = (typeof VALID_MEAL_MODES)[number];
+
+export interface CookingDayMainAssignment {
+  id: number;
+  schedule_id: number;
+  main_number: number;
+  member_ids: number[];
+}
+
+export interface WeeklyCookingSchedule {
+  id: number;
+  family_id: number;
+  week_start: string;
+  day: DayOfWeek;
+  is_cooking: boolean;
+  meal_mode?: MealMode | null;
+  num_mains?: number | null;
+  created_at?: string;
+  updated_at?: string;
+  main_assignments?: CookingDayMainAssignment[];
+}
+
+// ── Lunch Planning ──
+
+export interface WeeklyLunchNeed {
+  id: number;
+  family_id: number;
+  week_start: string;
+  member_id: number;
+  day: "monday" | "tuesday" | "wednesday" | "thursday" | "friday";
+  needs_lunch: boolean;
+  leftovers_ok: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// ── V3 Plan Generation ──
+
+export interface GeneratePlanRequestV3 {
+  family_id: number;
+  week_start: string;
+  cooking_schedule: Omit<WeeklyCookingSchedule, "id" | "created_at" | "updated_at" | "main_assignments">[];
+  lunch_needs: Omit<WeeklyLunchNeed, "id" | "created_at" | "updated_at">[];
+  max_cook_minutes_weekday: number;
+  max_cook_minutes_weekend: number;
+  vegetarian_ratio: number;
+  locks?: Partial<Record<DayOfWeek, number>>;
+  settings?: PlanSettings;
+}
+
 // ── Grocery List ──
 
 export interface GroceryItem {

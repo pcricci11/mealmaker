@@ -16,7 +16,7 @@ export default function App() {
           <h1 className="text-xl font-bold text-emerald-700">MealMaker</h1>
           <nav className="flex gap-2">
             <NavLink to="/family" className={navCls}>My Family</NavLink>
-            <NavLink to="/profile" className={navCls}>Settings</NavLink>
+            <NavLink to="/this-week" className={navCls}>This Week</NavLink>
             <NavLink to="/plan" className={navCls}>Meal Plan</NavLink>
             <NavLink to="/recipes" className={navCls}>Recipes</NavLink>
             <NavLink to="/grocery" className={navCls}>Grocery List</NavLink>
