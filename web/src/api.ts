@@ -265,7 +265,7 @@ export async function saveLunchNeeds(familyId: number, weekStart: string, lunchN
 // ── V3 Plan Generation ──
 export async function generateMealPlanV3(request: GeneratePlanRequestV3): Promise<MealPlan> {
   return json(
-    await fetch(`${BASE}/meal-plans/generate`, {
+    await fetch(`${BASE}/meal-plans/generate-v3`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(request),
