@@ -124,6 +124,17 @@ export interface MealPlanItem {
   leftovers_for_lunch?: boolean;
 }
 
+export type MealType = "main" | "side" | "lunch";
+
+export interface MealPlanItemV3 extends MealPlanItem {
+  meal_type: MealType;
+  main_number: number | null;
+  assigned_member_ids: number[] | null;
+  parent_meal_item_id: number | null;
+  is_custom: boolean;
+  recipe_name: string | null;
+}
+
 export interface MealPlan {
   id: number;
   family_id: number;
@@ -131,7 +142,7 @@ export interface MealPlan {
   variant?: number;
   created_at: string;
   settings_snapshot: any | null;
-  items: MealPlanItem[];
+  items: MealPlanItemV3[];
 }
 
 // ── Plan Generation ──

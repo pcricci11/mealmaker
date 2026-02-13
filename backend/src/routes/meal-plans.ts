@@ -55,24 +55,33 @@ function buildItemResponse(row: any) {
     notes: row.notes || null,
     reasons,
     leftovers_for_lunch: reasons.includes("LEFTOVERS_LUNCH"),
-    recipe: rowToRecipe({ ...row, id: row.r_id }),
+    // V3 fields
+    meal_type: row.meal_type || "main",
+    main_number: row.main_number || null,
+    assigned_member_ids: row.assigned_member_ids ? JSON.parse(row.assigned_member_ids) : null,
+    parent_meal_item_id: row.parent_meal_item_id || null,
+    is_custom: !!row.is_custom,
+    recipe_name: row.name || null,
+    recipe: row.r_id ? rowToRecipe({ ...row, id: row.r_id }) : null,
   };
 }
 
 const ITEMS_QUERY = `
   SELECT mpi.id as item_id, mpi.meal_plan_id, mpi.day, mpi.recipe_id, mpi.locked,
          mpi.lunch_leftover_label, mpi.leftover_lunch_recipe_id, mpi.notes, mpi.reasons_json,
+         mpi.meal_type, mpi.main_number, mpi.assigned_member_ids,
+         mpi.parent_meal_item_id, mpi.is_custom,
          r.id as r_id, r.name, r.cuisine, r.vegetarian, r.protein_type,
          r.cook_minutes, r.allergens, r.kid_friendly, r.makes_leftovers, r.ingredients, r.tags,
          r.source_type, r.source_name, r.source_url, r.difficulty, r.leftovers_score,
          r.seasonal_tags, r.frequency_cap_per_month
   FROM meal_plan_items mpi
-  JOIN recipes r ON r.id = mpi.recipe_id
+  LEFT JOIN recipes r ON r.id = mpi.recipe_id
   WHERE mpi.meal_plan_id = ?
   ORDER BY CASE mpi.day
     WHEN 'monday' THEN 1 WHEN 'tuesday' THEN 2 WHEN 'wednesday' THEN 3
     WHEN 'thursday' THEN 4 WHEN 'friday' THEN 5 WHEN 'saturday' THEN 6 WHEN 'sunday' THEN 7
-  END
+  END, mpi.meal_type, mpi.main_number
 `;
 
 // POST /api/meal-plans/generate

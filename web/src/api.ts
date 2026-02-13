@@ -149,6 +149,49 @@ export async function swapMealPlanItem(planId: number, day: DayOfWeek): Promise<
   );
 }
 
+// ── Sides Operations ──
+export async function getSidesLibrary(filters?: { category?: string; weight?: string }): Promise<any[]> {
+  let url = `${BASE}/sides/library`;
+  if (filters) {
+    const params = new URLSearchParams();
+    if (filters.category) params.append("category", filters.category);
+    if (filters.weight) params.append("weight", filters.weight);
+    if (params.toString()) url += `?${params.toString()}`;
+  }
+  return json(await fetch(url));
+}
+
+export async function getSideSuggestions(mainRecipeId: number, excludeIds?: number[]): Promise<any[]> {
+  return json(
+    await fetch(`${BASE}/sides/suggest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ main_recipe_id: mainRecipeId, exclude_ids: excludeIds || [] }),
+    }),
+  );
+}
+
+export async function swapSide(mealItemId: number, newSideId: number): Promise<void> {
+  const res = await fetch(`${BASE}/sides/swap/${mealItemId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ new_side_id: newSideId }),
+  });
+  if (!res.ok) throw new Error("Failed to swap side");
+}
+
+export async function addSide(mainMealItemId: number, sideId?: number, customName?: string): Promise<void> {
+  const body: any = {};
+  if (sideId) body.side_id = sideId;
+  if (customName) body.custom_name = customName;
+  const res = await fetch(`${BASE}/sides/add/${mainMealItemId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("Failed to add side");
+}
+
 // ── Grocery List ──
 export async function getGroceryList(planId: number): Promise<GroceryList> {
   return json(await fetch(`${BASE}/meal-plans/${planId}/grocery-list`));
