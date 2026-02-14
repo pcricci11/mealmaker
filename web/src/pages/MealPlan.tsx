@@ -33,7 +33,7 @@ const DAY_ORDER = [
 export default function MealPlan() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const planId = searchParams.get("id");
+  const planId = searchParams.get("id") || localStorage.getItem('lastMealPlanId');
 
   const [family, setFamily] = useState<Family | null>(null);
   const [members, setMembers] = useState<FamilyMemberV3[]>([]);
@@ -47,6 +47,10 @@ export default function MealPlan() {
 
   useEffect(() => {
     loadData();
+    // Save plan ID to localStorage when available
+    if (planId) {
+      localStorage.setItem('lastMealPlanId', planId);
+    }
   }, [planId]);
 
   const loadData = async () => {

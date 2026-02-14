@@ -6,7 +6,7 @@ import MyFamily from "./pages/MyFamily";
 import ThisWeek from "./pages/ThisWeek";
 import FamilyProfile from "./pages/FamilyProfile";
 import MealPlan from "./pages/MealPlan";
-import Recipes from "./pages/Recipes";
+import History from "./pages/History";
 import GroceryList from "./pages/GroceryList";
 import "./index.css";
 
@@ -20,7 +20,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="this-week" element={<ThisWeek />} />
           <Route path="profile" element={<FamilyProfile />} />
           <Route path="plan" element={<MealPlan />} />
-          <Route path="recipes" element={<Recipes />} />
+          <Route path="history" element={<History />} />
           <Route path="grocery" element={<GroceryList />} />
         </Route>
       </Routes>

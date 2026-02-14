@@ -35,6 +35,7 @@ export default function CookingScheduleSection({
   const [expandedDay, setExpandedDay] = useState<DayOfWeek | null>(null);
 
   const toggleCooking = (day: DayOfWeek) => {
+    console.log('toggleCooking called for:', day, 'current schedule:', schedule);
     const updated = schedule.map((item) =>
       item.day === day
         ? { ...item, is_cooking: !item.is_cooking }
@@ -141,7 +142,10 @@ export default function CookingScheduleSection({
                   <input
                     type="checkbox"
                     checked={isCooking}
-                    onChange={() => toggleCooking(day)}
+                    onChange={(e) => {
+                      console.log('Checkbox clicked!', day, 'current:', isCooking);
+                      toggleCooking(day);
+                    }}
                     className="w-5 h-5 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
                   />
                   <span className="font-medium text-gray-900">

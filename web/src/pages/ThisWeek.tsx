@@ -46,7 +46,9 @@ export default function ThisWeek() {
   const navigate = useNavigate();
   const [family, setFamily] = useState<Family | null>(null);
   const [members, setMembers] = useState<FamilyMemberV3[]>([]);
-  const [weekStart, setWeekStart] = useState(getMonday(new Date()));
+  const [weekStart, setWeekStart] = useState(
+    localStorage.getItem('selectedWeekStart') || getMonday(new Date())
+  );
   
   // Cooking schedule state
   const [cookingSchedule, setCookingSchedule] = useState<WeeklyCookingSchedule[]>([]);
@@ -80,22 +82,51 @@ export default function ThisWeek() {
         setMembers(membersData);
 
         // Load existing cooking schedule for this week
-        try {
-          const schedule = await getCookingSchedule(fam.id, weekStart);
+        const schedule = await getCookingSchedule(fam.id, weekStart).catch(() => []);
+        console.log('Loaded schedule from API:', schedule);
+
+        if (schedule.length === 0) {
+          console.log('No schedule data, initializing...');
+          initializeEmptySchedule(fam.id);
+        } else {
           setCookingSchedule(schedule);
-        } catch (err) {
-          // No existing schedule, initialize empty
-          initializeEmptySchedule();
         }
 
-        // Load existing lunch needs for this week
-        try {
-          const lunch = await getLunchNeeds(fam.id, weekStart);
-          setLunchNeeds(lunch);
-        } catch (err) {
-          // No existing lunch needs, initialize empty
-          initializeEmptyLunchNeeds(membersData);
-        }
+        // Always initialize a complete lunch grid
+        const lunch = await getLunchNeeds(fam.id, weekStart).catch(() => []);
+        console.log('Loaded lunch needs from API:', lunch);
+
+        // Create a complete grid for all members and days
+        const completeNeeds: WeeklyLunchNeed[] = [];
+        const weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
+        membersData.forEach((member) => {
+          weekdays.forEach((day) => {
+            // Find existing record or create new
+            const existing = lunch.find(
+              (n: any) => n.member_id === member.id && n.day === day
+            );
+
+            if (existing) {
+              completeNeeds.push(existing);
+            } else {
+              completeNeeds.push({
+                id: 0,
+                family_id: fam.id,
+                week_start: weekStart,
+                member_id: member.id,
+                day,
+                needs_lunch: false,
+                leftovers_ok: false,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              } as any);
+            }
+          });
+        });
+
+        console.log('Complete lunch grid:', completeNeeds);
+        setLunchNeeds(completeNeeds as any);
 
         // Set defaults from family if available
         if (fam.max_cook_minutes_weekday) {
@@ -115,22 +146,25 @@ export default function ThisWeek() {
     }
   };
 
-  const initializeEmptySchedule = () => {
+  const initializeEmptySchedule = (familyId: number) => {
     // Default: cooking every weekday, not on weekends, all "one_main"
     const schedule: WeeklyCookingSchedule[] = DAYS.map((day) => ({
       id: 0,
-      family_id: family?.id || 0,
+      family_id: familyId,
       week_start: weekStart,
       day,
       is_cooking: ["monday", "tuesday", "wednesday", "thursday", "friday"].includes(day),
       meal_mode: "one_main",
       num_mains: undefined,
       main_assignments: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }));
     setCookingSchedule(schedule as any);
+    console.log('Initialized empty schedule:', schedule);
   };
 
-  const initializeEmptyLunchNeeds = (membersData: FamilyMemberV3[]) => {
+  const initializeEmptyLunchNeeds = (membersData: FamilyMemberV3[], familyId: number) => {
     const needs: WeeklyLunchNeed[] = [];
     const weekdays: ("monday" | "tuesday" | "wednesday" | "thursday" | "friday")[] = [
       "monday",
@@ -144,12 +178,14 @@ export default function ThisWeek() {
       weekdays.forEach((day) => {
         needs.push({
           id: 0,
-          family_id: family?.id || 0,
+          family_id: familyId,
           week_start: weekStart,
           member_id: member.id,
           day,
           needs_lunch: false,
           leftovers_ok: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         });
       });
     });
@@ -162,6 +198,8 @@ export default function ThisWeek() {
 
     setSaving(true);
     try {
+      console.log('Saving cookingSchedule:', cookingSchedule);
+      console.log('Saving lunchNeeds:', lunchNeeds);
       await saveCookingSchedule(family.id, weekStart, cookingSchedule as any);
       await saveLunchNeeds(family.id, weekStart, lunchNeeds as any);
       alert("Week settings saved!");
@@ -263,7 +301,13 @@ export default function ThisWeek() {
         <input
           type="date"
           value={weekStart}
-          onChange={(e) => setWeekStart(e.target.value)}
+          onChange={(e) => {
+            const newWeek = e.target.value;
+            console.log('Week changed to:', newWeek);
+            setWeekStart(newWeek);
+            localStorage.setItem('selectedWeekStart', newWeek);
+            console.log('Saved to localStorage:', localStorage.getItem('selectedWeekStart'));
+          }}
           className="px-3 py-2 border border-gray-300 rounded-lg"
         />
       </div>

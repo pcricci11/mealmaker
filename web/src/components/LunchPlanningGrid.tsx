@@ -33,6 +33,8 @@ export default function LunchPlanningGrid({ members, lunchNeeds, onChange }: Pro
   };
 
   const toggleNeedsLunch = (memberId: number, day: string) => {
+    console.log('Toggling lunch for member:', memberId, 'day:', day);
+    console.log('Current lunchNeeds:', lunchNeeds);
     const updated = lunchNeeds.map((need) => {
       if (need.member_id === memberId && need.day === day) {
         return {

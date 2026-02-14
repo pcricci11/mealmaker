@@ -141,38 +141,6 @@ export default function MyFamily() {
         </p>
       </div>
 
-      {/* Serving Multiplier */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold mb-3">Portion Size</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          How much does your family typically eat compared to recipe serving sizes?
-        </p>
-        <div className="flex gap-3">
-          {(["normal", "hearty", "extra_large"] as ServingMultiplier[]).map((size) => (
-            <button
-              key={size}
-              onClick={() => handleServingMultiplierChange(size)}
-              className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
-                servingMultiplier === size
-                  ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              <div className="font-medium">
-                {size === "normal" && "Normal (1×)"}
-                {size === "hearty" && "Hearty (1.5×)"}
-                {size === "extra_large" && "Extra Large (2×)"}
-              </div>
-              <div className="text-xs mt-1 opacity-75">
-                {size === "normal" && "Standard portions"}
-                {size === "hearty" && "Bigger appetites"}
-                {size === "extra_large" && "Very hungry family"}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Family Members */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
@@ -217,6 +185,38 @@ export default function MyFamily() {
         sides={sides}
         onUpdate={loadData}
       />
+
+      {/* Serving Multiplier */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold mb-3">Portion Size</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          How much does your family typically eat compared to recipe serving sizes?
+        </p>
+        <div className="flex gap-3">
+          {(["normal", "hearty", "extra_large"] as ServingMultiplier[]).map((size) => (
+            <button
+              key={size}
+              onClick={() => handleServingMultiplierChange(size)}
+              className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
+                servingMultiplier === size
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <div className="font-medium">
+                {size === "normal" && "Normal (1×)"}
+                {size === "hearty" && "Hearty (1.5×)"}
+                {size === "extra_large" && "Extra Large (2×)"}
+              </div>
+              <div className="text-xs mt-1 opacity-75">
+                {size === "normal" && "Standard portions"}
+                {size === "hearty" && "Bigger appetites"}
+                {size === "extra_large" && "Very hungry family"}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Member Modal */}
       {showMemberModal && (

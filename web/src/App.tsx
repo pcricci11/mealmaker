@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from "react-router-dom";
+import { Outlet, NavLink, useLocation, useSearchParams } from "react-router-dom";
 
 function navCls({ isActive }: { isActive: boolean }) {
   return `px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -9,6 +9,10 @@ function navCls({ isActive }: { isActive: boolean }) {
 }
 
 export default function App() {
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const currentPlanId = searchParams.get('id');
+
   return (
     <div className="min-h-screen">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
@@ -17,8 +21,13 @@ export default function App() {
           <nav className="flex gap-2">
             <NavLink to="/family" className={navCls}>My Family</NavLink>
             <NavLink to="/this-week" className={navCls}>This Week</NavLink>
-            <NavLink to="/plan" className={navCls}>Meal Plan</NavLink>
-            <NavLink to="/recipes" className={navCls}>Recipes</NavLink>
+            <NavLink
+              to={currentPlanId ? `/plan?id=${currentPlanId}` : "/plan"}
+              className={navCls}
+            >
+              Meal Plan
+            </NavLink>
+            <NavLink to="/history" className={navCls}>History</NavLink>
             <NavLink to="/grocery" className={navCls}>Grocery List</NavLink>
           </nav>
         </div>

@@ -315,3 +315,30 @@ export async function generateMealPlanV3(request: GeneratePlanRequestV3): Promis
     }),
   );
 }
+
+export async function getMealPlanHistory(familyId?: number): Promise<any[]> {
+  let url = `${BASE}/meal-plans/history`;
+  if (familyId) {
+    url += `?family_id=${familyId}`;
+  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch meal plan history");
+  return res.json();
+}
+
+export async function markMealAsLoved(mealItemId: number): Promise<void> {
+  const res = await fetch(`${BASE}/meal-plans/items/${mealItemId}/love`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error("Failed to mark meal as loved");
+}
+
+export async function copyMealToThisWeek(mealItemId: number, targetDay: string, targetWeekStart: string): Promise<void> {
+  const res = await fetch(`${BASE}/meal-plans/items/${mealItemId}/copy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target_day: targetDay, target_week_start: targetWeekStart }),
+  });
+  if (!res.ok) throw new Error("Failed to copy meal");
+}
