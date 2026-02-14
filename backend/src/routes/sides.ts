@@ -147,7 +147,7 @@ router.post("/suggest", (req, res) => {
     params.push(`%"${cuisineToMatch}"%`);
   }
 
-  query += ` ORDER BY RANDOM() LIMIT 5`;
+  query += ` ORDER BY RANDOM() LIMIT 2`;
 
   const suggestions = db
     .prepare(query)

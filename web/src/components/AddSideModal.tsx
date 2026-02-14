@@ -63,16 +63,28 @@ export default function AddSideModal({
     }
   };
 
-  const handleAddFromLibrary = (sideId: number) => {
-    onAdd(sideId, undefined);
+  const handleAddFromLibrary = async (sideId: number) => {
+    console.log('Attempting to add side:', sideId, undefined);
+    try {
+      await onAdd(sideId, undefined);
+      console.log('Add successful!');
+    } catch (error) {
+      console.error('Add failed:', error);
+    }
   };
 
-  const handleAddCustom = () => {
+  const handleAddCustom = async () => {
     if (!customName.trim()) {
       alert("Please enter a side name");
       return;
     }
-    onAdd(undefined, customName.trim());
+    console.log('Attempting to add side:', undefined, customName.trim());
+    try {
+      await onAdd(undefined, customName.trim());
+      console.log('Add successful!');
+    } catch (error) {
+      console.error('Add failed:', error);
+    }
   };
 
   return (

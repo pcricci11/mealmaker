@@ -79,10 +79,13 @@ export default function SwapMainModal({
   };
 
   const handleSelect = async (recipeId: number) => {
+    console.log('Attempting to swap to recipe:', recipeId);
     setSwapping(true);
     try {
       await onSwap(recipeId);
-    } catch {
+      console.log('Swap successful!');
+    } catch (error) {
+      console.error('Swap failed:', error);
       setSwapping(false);
     }
   };
