@@ -159,6 +159,25 @@ export async function swapMainRecipe(mealItemId: number, newRecipeId: number): P
   );
 }
 
+// ── Smart Setup ──
+export async function smartSetup(familyId: number, text: string): Promise<{
+  cooking_days: Record<string, { is_cooking: boolean; meal_mode: string }>;
+  lunch_needs: Record<number, string[]>;
+  preferences: {
+    max_cook_minutes_weekday?: number;
+    max_cook_minutes_weekend?: number;
+    vegetarian_ratio?: number;
+  };
+}> {
+  return json(
+    await fetch(`${BASE}/smart-setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ family_id: familyId, text }),
+    }),
+  );
+}
+
 // ── Sides Operations ──
 export async function getSidesLibrary(filters?: { category?: string; weight?: string }): Promise<any[]> {
   let url = `${BASE}/sides/library`;
@@ -351,4 +370,27 @@ export async function copyMealToThisWeek(mealItemId: number, targetDay: string, 
     body: JSON.stringify({ target_day: targetDay, target_week_start: targetWeekStart }),
   });
   if (!res.ok) throw new Error("Failed to copy meal");
+}
+
+// ── Conversational Plan ──
+export interface ConversationParseResult {
+  cooking_days: Record<string, { is_cooking: boolean; meal_mode: string }>;
+  specific_meals: Array<{ day: string; description: string }>;
+  dietary_preferences: {
+    vegetarian_ratio: number;
+    allergies: string[];
+    cuisine_preferences: string[];
+  };
+  lunch_needs: Record<number, string[]>;
+  cook_time_limits: { weekday: number; weekend: number };
+}
+
+export async function generateFromConversation(text: string): Promise<ConversationParseResult> {
+  return json(
+    await fetch(`${BASE}/plan/generate-from-conversation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    }),
+  );
 }

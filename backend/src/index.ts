@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
 import { initDb } from "./db";
@@ -9,6 +12,8 @@ import mealPlansV3Router from "./routes/meal-plans-v3";
 import favoritesRouter from "./routes/favorites";
 import cookingScheduleRouter from "./routes/cooking-schedule";
 import sidesRouter from "./routes/sides";
+import smartSetupRouter from "./routes/smart-setup";
+import conversationalPlannerRouter from "./routes/conversational-planner";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -28,6 +33,8 @@ app.use("/api/meal-plans", mealPlansRouter);
 app.use("/api/favorites", favoritesRouter);
 app.use("/api/cooking-schedule", cookingScheduleRouter);
 app.use("/api/sides", sidesRouter);
+app.use("/api/smart-setup", smartSetupRouter);
+app.use("/api/plan", conversationalPlannerRouter);
 
 // Health check
 app.get("/api/health", (_req, res) => {
