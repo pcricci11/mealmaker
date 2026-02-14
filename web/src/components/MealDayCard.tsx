@@ -107,24 +107,13 @@ export default function MealDayCard({
               <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 relative">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
-                    <div className="font-semibold text-lg text-gray-900 flex items-center gap-2">
-                      <span>
-                        {main.recipe_name || "Unknown Recipe"}
-                        {main.main_number && (
-                          <span className="ml-2 text-sm text-gray-500">
-                            (Main {main.main_number})
-                          </span>
-                        )}
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSwapMain(main.id);
-                        }}
-                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        Swap
-                      </button>
+                    <div className="font-semibold text-lg text-gray-900">
+                      {main.recipe_name || "Unknown Recipe"}
+                      {main.main_number && (
+                        <span className="ml-2 text-sm text-gray-500">
+                          (Main {main.main_number})
+                        </span>
+                      )}
                     </div>
                     {main.assigned_member_ids && (
                       <div className="text-sm text-gray-600 mt-1">
@@ -132,20 +121,38 @@ export default function MealDayCard({
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      console.log('Heart clicked! Meal ID:', main.id);
-                      setLovedMeals(prev => new Set(prev).add(main.id));
-                      onLoveMeal(main.id);
-                    }}
-                    className="ml-2 text-lg hover:scale-110 transition-transform cursor-pointer z-10 pointer-events-auto"
-                    title="Love this meal"
-                    type="button"
-                  >
-                    {lovedMeals.has(main.id) ? '❤️' : '♡'}
-                  </button>
+                  <div className="flex items-center gap-2 ml-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSwapMain(main.id);
+                      }}
+                      className="text-xl hover:scale-110 transition-transform cursor-pointer"
+                      title="Swap this meal"
+                      type="button"
+                    >
+                      🔄
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const newLoved = new Set(lovedMeals);
+                        if (newLoved.has(main.id)) {
+                          newLoved.delete(main.id);
+                        } else {
+                          newLoved.add(main.id);
+                          onLoveMeal(main.id);
+                        }
+                        setLovedMeals(newLoved);
+                      }}
+                      className="text-xl hover:scale-110 transition-transform cursor-pointer"
+                      title="Love this meal"
+                      type="button"
+                    >
+                      {lovedMeals.has(main.id) ? '❤️' : '♡'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
