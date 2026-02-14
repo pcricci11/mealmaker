@@ -1,6 +1,7 @@
 // components/MealDayCard.tsx
 // Display card for a single day with mains, lunches, and sides
 
+import { useState } from "react";
 import type { MealPlanItemV3, FamilyMemberV3, DayOfWeek } from "@shared/types";
 import SideCard from "./SideCard";
 
@@ -12,6 +13,7 @@ interface Props {
   members: FamilyMemberV3[];
   onSwapSide: (mealItemId: number, mainRecipeId: number) => void;
   onAddSide: (mainMealItemId: number) => void;
+  onLoveMeal: (mealItemId: number) => void;
 }
 
 const DAY_LABELS: Record<string, string> = {
@@ -47,7 +49,9 @@ export default function MealDayCard({
   members,
   onSwapSide,
   onAddSide,
+  onLoveMeal,
 }: Props) {
+  const [lovedMeals, setLovedMeals] = useState<Set<number>>(new Set());
   const isWeekend = day === "saturday" || day === "sunday";
 
   const getMembersForMain = (main: MealPlanItemV3) => {
@@ -98,7 +102,7 @@ export default function MealDayCard({
           return (
             <div key={main.id} className="space-y-3">
               {/* Main Meal */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 relative">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
                     <div className="font-semibold text-lg text-gray-900">
@@ -115,6 +119,20 @@ export default function MealDayCard({
                       </div>
                     )}
                   </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      console.log('Heart clicked! Meal ID:', main.id);
+                      setLovedMeals(prev => new Set(prev).add(main.id));
+                      onLoveMeal(main.id);
+                    }}
+                    className="ml-2 text-lg hover:scale-110 transition-transform cursor-pointer z-10 pointer-events-auto"
+                    title="Love this meal"
+                    type="button"
+                  >
+                    {lovedMeals.has(main.id) ? '❤️' : '♡'}
+                  </button>
                 </div>
 
                 <div className="flex flex-wrap gap-2">

@@ -34,6 +34,8 @@ export default function MyFamily() {
   const [servingMultiplier, setServingMultiplier] = useState<ServingMultiplier>("normal");
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [editingMember, setEditingMember] = useState<FamilyMemberV3 | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [familyName, setFamilyName] = useState(family?.name || "");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export default function MyFamily() {
       if (families.length > 0) {
         const fam = families[0];
         setFamily(fam);
+        setFamilyName(fam.name);
         setServingMultiplier(fam.serving_multiplier || "normal");
 
         // Load all family data
@@ -103,6 +106,14 @@ export default function MyFamily() {
     }
   };
 
+  const handleSaveName = async () => {
+    console.log('Saving name:', familyName);
+    if (!family) return;
+    await updateFamily(family.id, { name: familyName });
+    await loadData();
+    setEditingName(false);
+  };
+
   const handleServingMultiplierChange = async (multiplier: ServingMultiplier) => {
     if (!family) return;
 
@@ -135,7 +146,51 @@ export default function MyFamily() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">{family.name}</h2>
+        {editingName ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={familyName}
+              onChange={(e) => setFamilyName(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === "Enter") {
+                  handleSaveName();
+                } else if (e.key === "Escape") {
+                  setFamilyName(family.name);
+                  setEditingName(false);
+                }
+              }}
+              autoFocus
+              className="text-2xl font-bold text-gray-900 border-b-2 border-emerald-500 outline-none bg-transparent"
+            />
+            <button
+              onClick={handleSaveName}
+              className="text-emerald-600 hover:text-emerald-700 font-medium text-sm"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => {
+                setFamilyName(family.name);
+                setEditingName(false);
+              }}
+              className="text-gray-400 hover:text-gray-600 text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-bold text-gray-900">{family.name}</h2>
+            <button
+              onClick={() => setEditingName(true)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+              title="Edit family name"
+            >
+              ✏️
+            </button>
+          </div>
+        )}
         <p className="text-sm text-gray-500 mt-1">
           Manage your family members and food preferences
         </p>

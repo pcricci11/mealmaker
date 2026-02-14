@@ -15,6 +15,7 @@ import {
   getFamilyMembers,
   swapSide,
   addSide,
+  markMealAsLoved,
 } from "../api";
 import MealDayCard from "../components/MealDayCard";
 import SwapSideModal from "../components/SwapSideModal";
@@ -98,6 +99,14 @@ export default function MealPlan() {
     } catch (error) {
       console.error("Error adding side:", error);
       alert("Failed to add side");
+    }
+  };
+
+  const handleLoveMeal = async (mealItemId: number) => {
+    try {
+      await markMealAsLoved(mealItemId);
+    } catch (error) {
+      console.error("Error loving meal:", error);
     }
   };
 
@@ -190,6 +199,7 @@ export default function MealPlan() {
                 setSwapSideModal({ mealItemId, mainRecipeId })
               }
               onAddSide={(mainMealItemId) => setAddSideModal(mainMealItemId)}
+              onLoveMeal={handleLoveMeal}
             />
           );
         })}

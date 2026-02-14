@@ -81,6 +81,14 @@ router.put("/:id", (req: Request, res: Response) => {
     return res.json(rowToFamily(updated));
   }
 
+  // If this is just a name update, skip full validation
+  if (updates.name !== undefined && Object.keys(updates).length === 1) {
+    db.prepare("UPDATE families SET name = ? WHERE id = ?")
+      .run(updates.name, req.params.id);
+    const updated = db.prepare("SELECT * FROM families WHERE id = ?").get(req.params.id);
+    return res.json(rowToFamily(updated));
+  }
+
   const validation = validateFamily(updates);
   if (!validation.isValid) {
     return res.status(400).json({ error: "Validation failed", details: validation.errors });
@@ -104,7 +112,7 @@ router.put("/:id", (req: Request, res: Response) => {
     f.leftovers_nights_per_week || 1,
     f.picky_kid_mode ? 1 : 0,
     f.planning_mode || "strictest_household",
-    f.serving_multiplier || null,
+    f.serving_multiplier || "normal",
     req.params.id,
   );
   const updated = db.prepare("SELECT * FROM families WHERE id = ?").get(req.params.id);
