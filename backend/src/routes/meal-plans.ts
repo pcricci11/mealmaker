@@ -313,6 +313,35 @@ router.post("/:id/swap", (req: Request, res: Response) => {
   }
 });
 
+// POST /api/meal-plans/items/:itemId/swap-recipe
+router.post("/items/:itemId/swap-recipe", (req: Request, res: Response) => {
+  const { recipe_id } = req.body;
+  if (!recipe_id) {
+    return res.status(400).json({ error: "recipe_id is required" });
+  }
+
+  const item = db.prepare("SELECT * FROM meal_plan_items WHERE id = ?").get(req.params.itemId) as any;
+  if (!item) return res.status(404).json({ error: "Meal plan item not found" });
+
+  const recipe = db.prepare("SELECT * FROM recipes WHERE id = ?").get(recipe_id) as any;
+  if (!recipe) return res.status(404).json({ error: "Recipe not found" });
+
+  db.prepare("UPDATE meal_plan_items SET recipe_id = ? WHERE id = ?").run(recipe_id, req.params.itemId);
+
+  // Return the full updated plan
+  const plan = db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(item.meal_plan_id) as any;
+  const items = db.prepare(ITEMS_QUERY).all(item.meal_plan_id);
+  res.json({
+    id: plan.id,
+    family_id: plan.family_id,
+    week_start: plan.week_start,
+    variant: plan.variant,
+    created_at: plan.created_at,
+    settings_snapshot: plan.settings_snapshot ? JSON.parse(plan.settings_snapshot) : null,
+    items: items.map(buildItemResponse),
+  });
+});
+
 // GET /api/meal-plans/:id/grocery-list
 router.get("/:id/grocery-list", (req: Request, res: Response) => {
   const plan = db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(req.params.id);

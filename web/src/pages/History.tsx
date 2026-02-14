@@ -81,7 +81,7 @@ export default function History() {
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <h3 className="font-semibold text-lg text-gray-900">
-                  Week of {formatWeekRange(plan.week_start)}
+                  Week of {plan.week_start ? formatWeekRange(plan.week_start) : "Unknown"}
                 </h3>
                 <p className="text-sm text-gray-500 mt-1">
                   Created {new Date(plan.created_at).toLocaleDateString('en-US', { 

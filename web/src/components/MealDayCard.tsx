@@ -14,6 +14,7 @@ interface Props {
   onSwapSide: (mealItemId: number, mainRecipeId: number) => void;
   onAddSide: (mainMealItemId: number) => void;
   onLoveMeal: (mealItemId: number) => void;
+  onSwapMain: (mealItemId: number) => void;
 }
 
 const DAY_LABELS: Record<string, string> = {
@@ -50,6 +51,7 @@ export default function MealDayCard({
   onSwapSide,
   onAddSide,
   onLoveMeal,
+  onSwapMain,
 }: Props) {
   const [lovedMeals, setLovedMeals] = useState<Set<number>>(new Set());
   const isWeekend = day === "saturday" || day === "sunday";
@@ -105,13 +107,24 @@ export default function MealDayCard({
               <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 relative">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
-                    <div className="font-semibold text-lg text-gray-900">
-                      {main.recipe_name || "Unknown Recipe"}
-                      {main.main_number && (
-                        <span className="ml-2 text-sm text-gray-500">
-                          (Main {main.main_number})
-                        </span>
-                      )}
+                    <div className="font-semibold text-lg text-gray-900 flex items-center gap-2">
+                      <span>
+                        {main.recipe_name || "Unknown Recipe"}
+                        {main.main_number && (
+                          <span className="ml-2 text-sm text-gray-500">
+                            (Main {main.main_number})
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSwapMain(main.id);
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        Swap
+                      </button>
                     </div>
                     {main.assigned_member_ids && (
                       <div className="text-sm text-gray-600 mt-1">

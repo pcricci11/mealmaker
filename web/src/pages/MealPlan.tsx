@@ -3,23 +3,26 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import type { 
-  Family, 
-  MealPlan, 
+import type {
+  Family,
+  MealPlan,
   MealPlanItemV3,
   FamilyMemberV3,
+  DayOfWeek,
 } from "@shared/types";
-import { 
-  getFamilies, 
-  getMealPlan, 
+import {
+  getFamilies,
+  getMealPlan,
   getFamilyMembers,
   swapSide,
   addSide,
   markMealAsLoved,
+  swapMainRecipe,
 } from "../api";
 import MealDayCard from "../components/MealDayCard";
 import SwapSideModal from "../components/SwapSideModal";
 import AddSideModal from "../components/AddSideModal";
+import SwapMainModal from "../components/SwapMainModal";
 
 const DAY_ORDER = [
   "monday",
@@ -45,6 +48,10 @@ export default function MealPlan() {
     mainRecipeId: number;
   } | null>(null);
   const [addSideModal, setAddSideModal] = useState<number | null>(null); // mainMealItemId
+  const [swapMainModal, setSwapMainModal] = useState<{
+    mealItemId: number;
+    day: DayOfWeek;
+  } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -107,6 +114,18 @@ export default function MealPlan() {
       await markMealAsLoved(mealItemId);
     } catch (error) {
       console.error("Error loving meal:", error);
+    }
+  };
+
+  const handleSwapMain = async (newRecipeId: number) => {
+    if (!swapMainModal) return;
+    try {
+      const updatedPlan = await swapMainRecipe(swapMainModal.mealItemId, newRecipeId);
+      setPlan(updatedPlan);
+      setSwapMainModal(null);
+    } catch (error) {
+      console.error("Error swapping main:", error);
+      alert("Failed to swap main");
     }
   };
 
@@ -200,6 +219,9 @@ export default function MealPlan() {
               }
               onAddSide={(mainMealItemId) => setAddSideModal(mainMealItemId)}
               onLoveMeal={handleLoveMeal}
+              onSwapMain={(mealItemId) =>
+                setSwapMainModal({ mealItemId, day: day as DayOfWeek })
+              }
             />
           );
         })}
@@ -230,6 +252,15 @@ export default function MealPlan() {
           mainMealItemId={addSideModal}
           onAdd={handleAddSide}
           onClose={() => setAddSideModal(null)}
+        />
+      )}
+
+      {swapMainModal && (
+        <SwapMainModal
+          mealItemId={swapMainModal.mealItemId}
+          day={swapMainModal.day}
+          onSwap={handleSwapMain}
+          onClose={() => setSwapMainModal(null)}
         />
       )}
     </div>

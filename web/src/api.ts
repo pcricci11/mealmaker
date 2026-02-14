@@ -149,6 +149,16 @@ export async function swapMealPlanItem(planId: number, day: DayOfWeek): Promise<
   );
 }
 
+export async function swapMainRecipe(mealItemId: number, newRecipeId: number): Promise<MealPlan> {
+  return json(
+    await fetch(`${BASE}/meal-plans/items/${mealItemId}/swap-recipe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipe_id: newRecipeId }),
+    }),
+  );
+}
+
 // ── Sides Operations ──
 export async function getSidesLibrary(filters?: { category?: string; weight?: string }): Promise<any[]> {
   let url = `${BASE}/sides/library`;
