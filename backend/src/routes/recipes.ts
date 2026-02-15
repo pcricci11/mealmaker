@@ -68,10 +68,18 @@ Rules:
     }
     if (!lastText) return [];
 
-    const cleaned = lastText
+    // Strip markdown fences, then try to extract a JSON array from the text
+    let cleaned = lastText
       .replace(/^```(?:json)?\s*\n?/, "")
       .replace(/\n?```\s*$/, "")
       .trim();
+
+    // If the text isn't pure JSON, try to extract the JSON array from it
+    const arrayStart = cleaned.indexOf("[");
+    const arrayEnd = cleaned.lastIndexOf("]");
+    if (arrayStart === -1 || arrayEnd === -1) return [];
+    cleaned = cleaned.slice(arrayStart, arrayEnd + 1);
+
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) return [];
 
