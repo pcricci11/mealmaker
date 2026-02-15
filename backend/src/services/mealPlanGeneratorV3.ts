@@ -134,44 +134,44 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
       if (specificDescription) {
         // Try to find a recipe matching the specific request
         const keywordMatches = findRecipesByKeyword(specificDescription, allRecipes);
+        console.log(`[mealPlanGeneratorV3] Keyword "${specificDescription}" matched ${keywordMatches.length} recipes:`, keywordMatches.map(m => `${m.recipe.name} (score=${m.score})`));
 
-        // Apply hard filters (allergies, dietary, cook time) to keyword matches
-        for (const { recipe: candidate } of keywordMatches) {
-          if (usedRecipeIds.has(candidate.id)) continue;
-          if (candidate.cook_minutes > maxCookTime) continue;
+        // For explicit user requests, only enforce allergy constraints (safety),
+        // not dietary style preferences — the user made a conscious choice.
+        for (const { recipe: candidate, score } of keywordMatches) {
+          if (usedRecipeIds.has(candidate.id)) {
+            console.log(`[mealPlanGeneratorV3]   Skipping "${candidate.name}": already used`);
+            continue;
+          }
+          if (candidate.cook_minutes > maxCookTime) {
+            console.log(`[mealPlanGeneratorV3]   Skipping "${candidate.name}": cook time ${candidate.cook_minutes}min > ${maxCookTime}min limit`);
+            continue;
+          }
 
           let compatible = true;
+          let rejectReason = "";
           for (const member of members) {
-            if (member.dietary_style === "vegan" && !candidate.tags.includes("vegan")) {
-              compatible = false;
-              break;
-            }
-            if (member.dietary_style === "vegetarian" && !candidate.vegetarian) {
-              compatible = false;
-              break;
-            }
             for (const allergy of member.allergies) {
               if (candidate.allergens.includes(allergy)) {
                 compatible = false;
+                rejectReason = `${member.name} has ${allergy} allergy`;
                 break;
               }
             }
             if (!compatible) break;
-            if (member.no_spicy && candidate.tags.includes("spicy")) {
-              compatible = false;
-              break;
-            }
           }
 
           if (compatible) {
             recipe = candidate;
-            console.log(`[mealPlanGeneratorV3] Matched specific request "${specificDescription}" on ${day} → ${candidate.name}`);
+            console.log(`[mealPlanGeneratorV3] Matched specific request "${specificDescription}" on ${day} → ${candidate.name} (score=${score})`);
             break;
+          } else {
+            console.log(`[mealPlanGeneratorV3]   Skipping "${candidate.name}": ${rejectReason}`);
           }
         }
 
         if (!recipe) {
-          console.log(`[mealPlanGeneratorV3] No match for "${specificDescription}" on ${day}, falling back to normal selection`);
+          console.log(`[mealPlanGeneratorV3] No compatible match for "${specificDescription}" on ${day}, falling back to normal selection`);
         }
       }
 
