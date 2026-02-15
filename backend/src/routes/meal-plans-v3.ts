@@ -153,30 +153,47 @@ router.get("/history", async (req, res) => {
   }
 });
 
-// Mark a meal item as "loved"
+// Toggle a meal item as "loved" (persists to family_favorite_meals)
 router.post("/items/:id/love", async (req, res) => {
   try {
     const itemId = parseInt(req.params.id);
 
-    // Get the recipe_id from the meal item
+    // Get recipe name and family_id via meal_plan_items → recipes / meal_plans
     const item: any = db
-      .prepare("SELECT recipe_id FROM meal_plan_items WHERE id = ?")
+      .prepare(
+        `SELECT mpi.recipe_id, r.name as recipe_name, mp.family_id
+         FROM meal_plan_items mpi
+         JOIN recipes r ON r.id = mpi.recipe_id
+         JOIN meal_plans mp ON mp.id = mpi.meal_plan_id
+         WHERE mpi.id = ?`
+      )
       .get(itemId);
 
-    if (!item || !item.recipe_id) {
+    if (!item || !item.recipe_name) {
       return res.status(404).json({ error: "Meal item not found or has no recipe" });
     }
 
-    // For now, we'll just log it
-    // In Phase 8, we'll actually use this to boost recipe scores
-    console.log(`Recipe ${item.recipe_id} was loved!`);
+    // Check if already favorited
+    const existing: any = db
+      .prepare(
+        "SELECT id FROM family_favorite_meals WHERE family_id = ? AND name = ?"
+      )
+      .get(item.family_id, item.recipe_name);
 
-    // TODO: Store this in a "loved_recipes" table or update recipe metadata
-    // For now, just return success
-    res.json({ message: "Meal marked as loved", recipe_id: item.recipe_id });
+    if (existing) {
+      // Already loved → unlove (toggle off)
+      db.prepare("DELETE FROM family_favorite_meals WHERE id = ?").run(existing.id);
+      res.json({ loved: false, recipe_id: item.recipe_id, name: item.recipe_name });
+    } else {
+      // Not loved → love (toggle on)
+      const result = db
+        .prepare("INSERT INTO family_favorite_meals (family_id, name) VALUES (?, ?)")
+        .run(item.family_id, item.recipe_name);
+      res.json({ loved: true, id: result.lastInsertRowid, recipe_id: item.recipe_id, name: item.recipe_name });
+    }
   } catch (error) {
-    console.error("Mark as loved error:", error);
-    res.status(500).json({ error: "Failed to mark meal as loved" });
+    console.error("Toggle love error:", error);
+    res.status(500).json({ error: "Failed to toggle love" });
   }
 });
 

@@ -7,7 +7,7 @@ import type {
   GeneratePlanResponse, ServingMultiplier,
 } from "@shared/types";
 
-const BASE = "/api";
+const BASE = "http://localhost:3001/api";
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -355,12 +355,13 @@ export async function getMealPlanHistory(familyId?: number): Promise<any[]> {
   return res.json();
 }
 
-export async function markMealAsLoved(mealItemId: number): Promise<void> {
+export async function markMealAsLoved(mealItemId: number): Promise<{ loved: boolean }> {
   const res = await fetch(`${BASE}/meal-plans/items/${mealItemId}/love`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
   });
-  if (!res.ok) throw new Error("Failed to mark meal as loved");
+  if (!res.ok) throw new Error("Failed to toggle love");
+  return res.json();
 }
 
 export async function copyMealToThisWeek(mealItemId: number, targetDay: string, targetWeekStart: string): Promise<void> {

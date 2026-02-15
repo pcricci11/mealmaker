@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { generateFromConversation, generateMealPlanV3, getFamilies, markMealAsLoved } from "../api";
 import type { DayOfWeek } from "@shared/types";
 
@@ -35,7 +35,8 @@ const DAYS = [
 
 export default function Plan() {
   const navigate = useNavigate();
-  const [input, setInput] = useState("");
+  const location = useLocation();
+  const [input, setInput] = useState((location.state as any)?.prefill || "");
   const [plan, setPlan] = useState<GeneratedPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,10 +122,14 @@ export default function Plan() {
 
   const handleLove = async (itemId: number) => {
     try {
-      await markMealAsLoved(itemId);
+      const result = await markMealAsLoved(itemId);
       setLovedIds((prev) => {
         const next = new Set(prev);
-        next.add(itemId);
+        if (result.loved === false) {
+          next.delete(itemId);
+        } else {
+          next.add(itemId);
+        }
         return next;
       });
     } catch (err) {
