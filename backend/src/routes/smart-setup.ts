@@ -1,5 +1,5 @@
-// routes/conversational-planner.ts
-// Parses conversational text via Claude to extract structured meal planning preferences
+// routes/smart-setup.ts
+// Parses natural language week description via Claude API
 
 import { Router, Request, Response } from "express";
 import Anthropic from "@anthropic-ai/sdk";
@@ -19,40 +19,41 @@ const SYSTEM_PROMPT = `You are a meal planning assistant. The user will describe
     "saturday": { "is_cooking": false, "meal_mode": "one_main" },
     "sunday": { "is_cooking": false, "meal_mode": "one_main" }
   },
-  "specific_meals": [],
-  "dietary_preferences": {
-    "vegetarian_ratio": 40,
-    "allergies": [],
-    "cuisine_preferences": []
+  "lunch_needs": {
+    "<member_name>": ["monday", "tuesday"]
   },
-  "lunch_needs": {},
-  "cook_time_limits": {
-    "weekday": 45,
-    "weekend": 90
-  }
+  "preferences": {
+    "max_cook_minutes_weekday": 45,
+    "max_cook_minutes_weekend": 90,
+    "vegetarian_ratio": 40
+  },
+  "specific_meals": [
+    { "day": "tuesday", "description": "Ina Garten's mac and cheese" }
+  ]
 }
 
 Rules:
 - CRITICAL: Default ALL days to is_cooking: false. ONLY set is_cooking: true for days the user EXPLICITLY mentions as cooking days. Be literal — do not infer or assume additional days.
 - If the user lists specific days (e.g. "Monday, Wednesday, Thursday"), ONLY those days get is_cooking: true. All other days MUST be is_cooking: false.
-- If the user says they're "eating out", "ordering in", "not cooking", or "off" on a day, set is_cooking to false.
-- meal_mode should be "one_main" unless they explicitly say they need multiple mains (then use "customize_mains").
-- specific_meals is an array of { "day": "<day>", "description": "<meal>" } for any meals the user explicitly requests (e.g. "tacos on Tuesday", "pizza Friday"). Only include meals the user actually mentions.
-- dietary_preferences.vegetarian_ratio: percentage 0-100, default 40. Increase if user mentions vegetarian/vegan/meatless.
-- dietary_preferences.allergies: array of strings for any mentioned allergies or intolerances (e.g. "gluten", "dairy", "nuts", "shellfish").
-- dietary_preferences.cuisine_preferences: array of strings for any cuisine types mentioned (e.g. "Italian", "Mexican", "Asian").
-- lunch_needs: object keyed by member name, value is array of day strings when they need lunch. Only include if user mentions lunch needs.
-- cook_time_limits.weekday: max minutes for weeknight cooking, default 45. Adjust if user says "quick meals" or gives a time limit.
-- cook_time_limits.weekend: max minutes for weekend cooking, default 90. Adjust if user mentions weekend time constraints.
+- If the user says they're "eating out", "ordering in", or "not cooking" on a day, set is_cooking to false.
+- If they mention needing lunch for someone, include those days in lunch_needs.
+- meal_mode should be "one_main" unless they say they need multiple mains (then use "customize_mains").
+- For preferences, only include fields the user explicitly mentions. Use these defaults if not mentioned: weekday 45 min, weekend 90 min, vegetarian_ratio 40.
+- If the user says "quick meals" or mentions a time limit, adjust max_cook_minutes accordingly.
 - Match member names case-insensitively against the provided family members.
+- If the user requests a specific dish or recipe for a day (e.g. "tacos on Tuesday", "Ina Garten's mac and cheese on Wednesday"), add it to specific_meals with the day and the EXACT description the user used. Preserve the FULL text including chef names, recipe authors, brand names, and possessives (e.g. "Ina Garten's mac and cheese", NOT "mac and cheese"). Do NOT simplify, shorten, or clean up meal descriptions. Make sure the day for that meal has is_cooking set to true.
+- specific_meals should be an empty array if the user doesn't request any specific dishes.
 - Return ONLY valid JSON, no markdown fences, no explanation.`;
 
-// POST /api/plan/generate-from-conversation
-router.post("/generate-from-conversation", async (req: Request, res: Response) => {
-  const { text } = req.body;
+// POST /api/smart-setup
+router.post("/", async (req: Request, res: Response) => {
+  const { text, family_id } = req.body;
 
-  if (!text || !text.trim()) {
+  if (!text) {
     return res.status(400).json({ error: "text is required" });
+  }
+  if (!family_id) {
+    return res.status(400).json({ error: "family_id is required" });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -60,26 +61,14 @@ router.post("/generate-from-conversation", async (req: Request, res: Response) =
     return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
   }
 
-  // Get or create a default family
-  let family: any = db.prepare("SELECT * FROM families LIMIT 1").get();
-  if (!family) {
-    const result = db.prepare(
-      `INSERT INTO families (name, allergies, vegetarian_ratio, gluten_free, dairy_free, nut_free)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run("My Family", "[]", 40, 0, 0, 0);
-    family = { id: result.lastInsertRowid };
-  }
-
-  const familyId = family.id;
-
   // Get family members for context
   const members = db
     .prepare("SELECT id, name FROM family_members WHERE family_id = ?")
-    .all(familyId) as { id: number; name: string }[];
+    .all(family_id) as { id: number; name: string }[];
 
   const memberContext = members.length > 0
     ? `Family members: ${members.map((m) => m.name).join(", ")}`
-    : "Single person household.";
+    : "No family members found.";
 
   const client = new Anthropic({ apiKey });
 
@@ -101,8 +90,8 @@ router.post("/generate-from-conversation", async (req: Request, res: Response) =
       return res.status(500).json({ error: "Unexpected response from Claude" });
     }
 
-    const rawText = content.text.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "").trim();
-    const parsed = JSON.parse(rawText);
+    const cleanedText = content.text.replace(/^```json\s*\n?/, "").replace(/\n?```\s*$/, "");
+    const parsed = JSON.parse(cleanedText);
 
     // Map member names to IDs in lunch_needs
     const lunchNeedsById: Record<number, string[]> = {};
@@ -118,25 +107,17 @@ router.post("/generate-from-conversation", async (req: Request, res: Response) =
     }
 
     res.json({
-      cooking_days: parsed.cooking_days || {},
-      specific_meals: parsed.specific_meals || [],
-      dietary_preferences: parsed.dietary_preferences || {
-        vegetarian_ratio: 40,
-        allergies: [],
-        cuisine_preferences: [],
-      },
+      cooking_days: parsed.cooking_days,
       lunch_needs: lunchNeedsById,
-      cook_time_limits: parsed.cook_time_limits || {
-        weekday: 45,
-        weekend: 90,
-      },
+      preferences: parsed.preferences || {},
+      specific_meals: parsed.specific_meals || [],
     });
   } catch (error: any) {
-    console.error("Conversational planner error:", error);
+    console.error("Smart setup error:", error);
     if (error instanceof SyntaxError) {
       return res.status(500).json({ error: "Failed to parse Claude response" });
     }
-    res.status(500).json({ error: error.message || "Conversational planner failed" });
+    res.status(500).json({ error: error.message || "Smart setup failed" });
   }
 });
 
