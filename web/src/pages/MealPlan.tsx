@@ -186,7 +186,7 @@ export default function MealPlan() {
       <div className="text-center py-12">
         <p className="text-gray-500 mb-4">No meal plan found.</p>
         <button
-          onClick={() => navigate("/this-week")}
+          onClick={() => navigate("/plan")}
           className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700"
         >
           Generate a Plan
@@ -206,7 +206,7 @@ export default function MealPlan() {
           </p>
         </div>
         <button
-          onClick={() => navigate("/this-week")}
+          onClick={() => navigate("/plan")}
           className="text-sm text-blue-600 hover:text-blue-700 font-medium"
         >
           ← Back to This Week
