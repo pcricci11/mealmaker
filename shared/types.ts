@@ -296,6 +296,7 @@ export interface GeneratePlanRequestV3 {
   vegetarian_ratio: number;
   locks?: Partial<Record<DayOfWeek, number>>;
   settings?: PlanSettings;
+  specific_meals?: Array<{ day: string; description: string }>;
 }
 
 // ── Grocery List ──

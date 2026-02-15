@@ -106,9 +106,10 @@ export default function Plan() {
         max_cook_minutes_weekday: parsed.cook_time_limits.weekday,
         max_cook_minutes_weekend: parsed.cook_time_limits.weekend,
         vegetarian_ratio: parsed.dietary_preferences.vegetarian_ratio,
+        specific_meals: parsed.specific_meals,
       });
 
-      setPlan({ id: result.id, week_start: result.week_start || weekStart, items: result.items as any });
+      setPlan({ id: result.id, week_start: result.week_start || weekStart, items: (result.items || []) as any });
       localStorage.setItem("lastPlanId", String(result.id));
       localStorage.setItem("lastMealPlanId", String(result.id));
     } catch (err: any) {
@@ -134,7 +135,7 @@ export default function Plan() {
   // Group plan items by day
   const dayData = plan
     ? DAYS.map(({ key, label }) => {
-        const items = plan.items.filter((i) => i.day === key);
+        const items = (plan.items || []).filter((i) => i.day === key);
         const mains = items.filter((i) => i.meal_type === "main");
         const sides = items.filter((i) => i.meal_type === "side");
         const lunches = items.filter((i) => i.meal_type === "lunch");

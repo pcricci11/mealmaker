@@ -19,6 +19,7 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
       max_cook_minutes_weekend,
       vegetarian_ratio,
       settings,
+      specific_meals,
     } = req.body;
 
     if (!family_id || !week_start || !cooking_schedule) {
@@ -26,6 +27,18 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
         error: "family_id, week_start, and cooking_schedule are required",
       });
     }
+
+    // Debug: log incoming cooking schedule
+    console.log("[generate-v3] cooking_schedule received:", JSON.stringify(cooking_schedule, null, 2));
+    const dayCount: Record<string, number> = {};
+    for (const entry of cooking_schedule) {
+      dayCount[entry.day] = (dayCount[entry.day] || 0) + 1;
+    }
+    const duplicateDays = Object.entries(dayCount).filter(([, count]) => count > 1);
+    if (duplicateDays.length > 0) {
+      console.warn("[generate-v3] DUPLICATE DAYS in cooking_schedule:", duplicateDays);
+    }
+    console.log("[generate-v3] Days cooking:", cooking_schedule.filter((d: any) => d.is_cooking).map((d: any) => d.day));
 
     // Generate the meal plan
     const mealPlan = await generateMealPlanV3({
@@ -37,9 +50,43 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
       maxCookMinutesWeekend: max_cook_minutes_weekend || 90,
       vegetarianRatio: vegetarian_ratio || 40,
       settings: settings || {},
+      specificMeals: specific_meals,
     });
 
-    res.status(201).json(mealPlan);
+    // Fetch the generated items with recipe details
+    const items = db.prepare(`
+      SELECT mpi.id, mpi.meal_plan_id, mpi.day, mpi.recipe_id, mpi.locked,
+             mpi.meal_type, mpi.main_number, mpi.assigned_member_ids,
+             mpi.parent_meal_item_id, mpi.is_custom, mpi.notes,
+             r.name as recipe_name, r.cuisine, r.vegetarian,
+             r.protein_type, r.cook_minutes, r.makes_leftovers, r.kid_friendly
+      FROM meal_plan_items mpi
+      LEFT JOIN recipes r ON r.id = mpi.recipe_id
+      WHERE mpi.meal_plan_id = ?
+      ORDER BY CASE mpi.day
+        WHEN 'monday' THEN 1 WHEN 'tuesday' THEN 2 WHEN 'wednesday' THEN 3
+        WHEN 'thursday' THEN 4 WHEN 'friday' THEN 5 WHEN 'saturday' THEN 6 WHEN 'sunday' THEN 7
+      END, mpi.meal_type, mpi.main_number
+    `).all(mealPlan.id) as any[];
+
+    res.status(201).json({
+      ...mealPlan,
+      items: items.map((row: any) => ({
+        id: row.id,
+        day: row.day,
+        recipe_id: row.recipe_id,
+        meal_type: row.meal_type || "main",
+        main_number: row.main_number || null,
+        is_custom: !!row.is_custom,
+        notes: row.notes ? (() => { try { return JSON.parse(row.notes); } catch { return row.notes; } })() : null,
+        recipe_name: row.recipe_name || (row.notes ? (() => { try { return JSON.parse(row.notes)?.side_name; } catch { return null; } })() : null),
+        cuisine: row.cuisine || null,
+        vegetarian: !!row.vegetarian,
+        cook_minutes: row.cook_minutes || null,
+        makes_leftovers: !!row.makes_leftovers,
+        kid_friendly: !!row.kid_friendly,
+      })),
+    });
   } catch (error: any) {
     console.error("Generate meal plan V3 error:", error);
     res.status(500).json({

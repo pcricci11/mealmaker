@@ -12,6 +12,7 @@ interface GeneratePlanOptions {
   maxCookMinutesWeekend: number;
   vegetarianRatio: number;
   settings?: any;
+  specificMeals?: Array<{ day: string; description: string }>;
 }
 
 interface Recipe {
@@ -38,6 +39,7 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
     maxCookMinutesWeekday,
     maxCookMinutesWeekend,
     vegetarianRatio,
+    specificMeals,
   } = options;
 
   // 1. Get family members with dietary restrictions
@@ -77,21 +79,45 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
 
   // 3-7. Generate plan inside a transaction
   const generatePlan = db.transaction(() => {
-  // 3. Create meal plan record
-  const planResult = db
+  // 3. Find existing plan or create a new one
+  const existing = db
     .prepare(
-      `INSERT INTO meal_plans (family_id, week_start, variant)
-      VALUES (?, ?, 0)`
+      `SELECT id FROM meal_plans WHERE family_id = ? AND week_start = ? AND variant = 0`
     )
-    .run(familyId, weekStart);
+    .get(familyId, weekStart) as { id: number } | undefined;
 
-  const mealPlanId = planResult.lastInsertRowid as number;
+  let mealPlanId: number;
 
-  // 4. Generate meals for each cooking day
+  if (existing) {
+    mealPlanId = existing.id;
+    // Clear old items so we can regenerate
+    db.prepare(`DELETE FROM meal_plan_items WHERE meal_plan_id = ?`).run(mealPlanId);
+  } else {
+    const planResult = db
+      .prepare(
+        `INSERT INTO meal_plans (family_id, week_start, variant)
+        VALUES (?, ?, 0)`
+      )
+      .run(familyId, weekStart);
+    mealPlanId = planResult.lastInsertRowid as number;
+  }
+
+  // 4. Generate meals for each cooking day (deduplicate by day)
   const plannedMeals: any[] = [];
   const usedRecipeIds = new Set<number>();
+  const seenDays = new Set<string>();
+
+  // Build lookup for specific meal requests (e.g., "salmon on tuesday")
+  const specificMealsByDay = new Map<string, string>();
+  if (specificMeals) {
+    for (const sm of specificMeals) {
+      specificMealsByDay.set(sm.day.toLowerCase(), sm.description);
+    }
+  }
 
   for (const daySchedule of cookingSchedule) {
+    if (seenDays.has(daySchedule.day)) continue;
+    seenDays.add(daySchedule.day);
     if (!daySchedule.is_cooking) continue;
 
     const day = daySchedule.day;
@@ -101,16 +127,66 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
       : maxCookMinutesWeekday;
 
     if (daySchedule.meal_mode === "one_main") {
-      // Single main for everyone
-      const recipe = selectRecipe({
-        recipes: allRecipes,
-        members: members,
-        memberIds: members.map((m) => m.id),
-        maxCookTime,
-        usedRecipeIds,
-        vegetarianRatio,
-        isVegetarianDay: shouldBeVegetarianDay(plannedMeals, vegetarianRatio),
-      });
+      // Check if user requested a specific meal for this day
+      let recipe: Recipe | null = null;
+      const specificDescription = specificMealsByDay.get(day);
+
+      if (specificDescription) {
+        // Try to find a recipe matching the specific request
+        const keywordMatches = findRecipesByKeyword(specificDescription, allRecipes);
+
+        // Apply hard filters (allergies, dietary, cook time) to keyword matches
+        for (const { recipe: candidate } of keywordMatches) {
+          if (usedRecipeIds.has(candidate.id)) continue;
+          if (candidate.cook_minutes > maxCookTime) continue;
+
+          let compatible = true;
+          for (const member of members) {
+            if (member.dietary_style === "vegan" && !candidate.tags.includes("vegan")) {
+              compatible = false;
+              break;
+            }
+            if (member.dietary_style === "vegetarian" && !candidate.vegetarian) {
+              compatible = false;
+              break;
+            }
+            for (const allergy of member.allergies) {
+              if (candidate.allergens.includes(allergy)) {
+                compatible = false;
+                break;
+              }
+            }
+            if (!compatible) break;
+            if (member.no_spicy && candidate.tags.includes("spicy")) {
+              compatible = false;
+              break;
+            }
+          }
+
+          if (compatible) {
+            recipe = candidate;
+            console.log(`[mealPlanGeneratorV3] Matched specific request "${specificDescription}" on ${day} → ${candidate.name}`);
+            break;
+          }
+        }
+
+        if (!recipe) {
+          console.log(`[mealPlanGeneratorV3] No match for "${specificDescription}" on ${day}, falling back to normal selection`);
+        }
+      }
+
+      // Fall back to normal selection if no specific match
+      if (!recipe) {
+        recipe = selectRecipe({
+          recipes: allRecipes,
+          members: members,
+          memberIds: members.map((m) => m.id),
+          maxCookTime,
+          usedRecipeIds,
+          vegetarianRatio,
+          isVegetarianDay: shouldBeVegetarianDay(plannedMeals, vegetarianRatio),
+        });
+      }
 
       if (recipe) {
         plannedMeals.push({
@@ -245,7 +321,21 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
     }
   }
 
-  // 6. Insert all planned meals
+  // 6. Log and insert all planned meals
+  console.log(`[mealPlanGeneratorV3] Total meals to insert: ${plannedMeals.length}`);
+  const mainsByDay: Record<string, number> = {};
+  for (const meal of plannedMeals) {
+    if (meal.meal_type === "main") {
+      mainsByDay[meal.day] = (mainsByDay[meal.day] || 0) + 1;
+    }
+  }
+  console.log("[mealPlanGeneratorV3] Mains per day:", mainsByDay);
+  const duplicateMainDays = Object.entries(mainsByDay).filter(([, count]) => count > 1);
+  if (duplicateMainDays.length > 0) {
+    console.warn("[mealPlanGeneratorV3] DUPLICATE MAINS:", duplicateMainDays);
+  }
+  console.log("[mealPlanGeneratorV3] All planned meals:", plannedMeals.map(m => `${m.day}/${m.meal_type}/${m.recipe_id}`));
+
   for (const meal of plannedMeals) {
     db.prepare(
       `INSERT INTO meal_plan_items
@@ -276,6 +366,87 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
   }); // end transaction
 
   return generatePlan();
+}
+
+// Helper: Find recipes matching a keyword description (e.g., "salmon", "tacos")
+function findRecipesByKeyword(keyword: string, recipes: Recipe[]): { recipe: Recipe; score: number }[] {
+  const kw = keyword.toLowerCase();
+
+  // Related terms for fallback matching
+  const relatedTerms: Record<string, string[]> = {
+    salmon: ["fish", "seafood"],
+    tuna: ["fish", "seafood"],
+    shrimp: ["shellfish", "seafood"],
+    steak: ["beef"],
+    burger: ["beef", "ground beef"],
+    tacos: ["taco", "mexican"],
+    taco: ["tacos", "mexican"],
+    pasta: ["noodles", "italian"],
+    pizza: ["italian"],
+    curry: ["indian", "thai"],
+    sushi: ["japanese", "fish"],
+    chicken: ["poultry"],
+    pork: ["pork chop", "pulled pork"],
+  };
+
+  const matches: { recipe: Recipe; score: number }[] = [];
+
+  for (const recipe of recipes) {
+    let score = 0;
+    const nameLower = recipe.name.toLowerCase();
+    const proteinLower = (recipe.protein_type || "").toLowerCase();
+    const cuisineLower = (recipe.cuisine || "").toLowerCase();
+    const tagsLower = recipe.tags.map((t) => t.toLowerCase());
+    const ingredientNames = recipe.ingredients.map((ing: any) =>
+      (typeof ing === "string" ? ing : ing.name || "").toLowerCase()
+    );
+
+    // Exact name match
+    if (nameLower === kw) {
+      score = 200;
+    }
+    // Name contains keyword
+    else if (nameLower.includes(kw)) {
+      score = 150;
+    }
+    // Protein type match
+    else if (proteinLower.includes(kw)) {
+      score = 100;
+    }
+    // Tag or cuisine match
+    else if (tagsLower.some((t) => t.includes(kw)) || cuisineLower.includes(kw)) {
+      score = 80;
+    }
+    // Ingredient name match
+    else if (ingredientNames.some((name) => name.includes(kw))) {
+      score = 50;
+    }
+
+    // Fallback: check related terms
+    if (score === 0 && relatedTerms[kw]) {
+      for (const related of relatedTerms[kw]) {
+        if (proteinLower.includes(related)) {
+          score = 60;
+          break;
+        }
+        if (cuisineLower.includes(related) || tagsLower.some((t) => t.includes(related))) {
+          score = 40;
+          break;
+        }
+        if (ingredientNames.some((name) => name.includes(related))) {
+          score = 30;
+          break;
+        }
+      }
+    }
+
+    if (score > 0) {
+      matches.push({ recipe, score });
+    }
+  }
+
+  matches.sort((a, b) => b.score - a.score);
+  return matches;
 }
 
 // Helper: Select a recipe based on constraints
