@@ -219,18 +219,34 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
       }
     } else if (daySchedule.meal_mode === "customize_mains") {
       // Multiple mains for different members
-      for (const assignment of daySchedule.main_assignments || []) {
+      let assignments = daySchedule.main_assignments;
+
+      // If no explicit assignments provided, generate default ones
+      // so that customize_mains still produces meals
+      if (!assignments || assignments.length === 0) {
+        const numMains = daySchedule.num_mains || 2;
+        assignments = Array.from({ length: numMains }, (_, i) => ({
+          main_number: i + 1,
+          member_ids: members.map((m: any) => m.id),
+        }));
+      }
+
+      for (const assignment of assignments) {
         const memberIds = assignment.member_ids || [];
-        if (memberIds.length === 0) continue;
+
+        // Use all members if none specified for this assignment
+        const effectiveMemberIds = memberIds.length > 0
+          ? memberIds
+          : members.map((m: any) => m.id);
 
         const assignedMembers = members.filter((m) =>
-          memberIds.includes(m.id)
+          effectiveMemberIds.includes(m.id)
         );
 
         const recipe = selectRecipe({
           recipes: allRecipes,
           members: assignedMembers,
-          memberIds,
+          memberIds: effectiveMemberIds,
           maxCookTime,
           usedRecipeIds,
           vegetarianRatio,
@@ -244,7 +260,7 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
             recipe_id: recipe.id,
             meal_type: "main",
             main_number: assignment.main_number,
-            assigned_member_ids: JSON.stringify(memberIds),
+            assigned_member_ids: JSON.stringify(effectiveMemberIds),
           });
 
           usedRecipeIds.add(recipe.id);
@@ -368,9 +384,37 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
   return generatePlan();
 }
 
-// Helper: Find recipes matching a keyword description (e.g., "salmon", "tacos")
+// Helper: Extract meaningful food words from a description like "Ina Garten's mac and cheese"
+function extractFoodWords(description: string): string[] {
+  const lower = description.toLowerCase();
+
+  // Common stop words and non-food words to filter out
+  const stopWords = new Set([
+    "a", "an", "the", "and", "or", "with", "in", "on", "for", "of", "my",
+    "her", "his", "their", "our", "your", "its", "from", "to", "at", "by",
+    "style", "recipe", "dish", "homemade", "classic", "famous", "best",
+    "easy", "quick", "simple", "favorite", "favourite", "night", "dinner",
+    "lunch", "meal", "like", "type", "kind", "some", "good", "great",
+    "really", "super", "ina", "garten", "giada", "julia", "child",
+    "gordon", "ramsay", "jamie", "oliver", "bobby", "flay", "ree",
+    "drummond", "alton", "brown", "martha", "stewart", "rachael", "ray",
+    "barefoot", "contessa", "pioneer", "woman",
+  ]);
+
+  // Split on non-alpha characters, possessives, etc.
+  const words = lower
+    .replace(/[''`]/g, " ")   // possessives like "garten's" → "garten s"
+    .replace(/[^a-z\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 1 && !stopWords.has(w));
+
+  return words;
+}
+
+// Helper: Find recipes matching a keyword description (e.g., "salmon", "tacos", "Ina Garten's mac and cheese")
 function findRecipesByKeyword(keyword: string, recipes: Recipe[]): { recipe: Recipe; score: number }[] {
   const kw = keyword.toLowerCase();
+  const foodWords = extractFoodWords(keyword);
 
   // Related terms for fallback matching
   const relatedTerms: Record<string, string[]> = {
@@ -387,6 +431,9 @@ function findRecipesByKeyword(keyword: string, recipes: Recipe[]): { recipe: Rec
     sushi: ["japanese", "fish"],
     chicken: ["poultry"],
     pork: ["pork chop", "pulled pork"],
+    mac: ["macaroni", "pasta"],
+    cheese: ["cheddar", "cheesy"],
+    macaroni: ["mac", "pasta"],
   };
 
   const matches: { recipe: Recipe; score: number }[] = [];
@@ -401,41 +448,101 @@ function findRecipesByKeyword(keyword: string, recipes: Recipe[]): { recipe: Rec
       (typeof ing === "string" ? ing : ing.name || "").toLowerCase()
     );
 
-    // Exact name match
+    // Exact full-string name match
     if (nameLower === kw) {
       score = 200;
     }
-    // Name contains keyword
+    // Name contains full keyword string
     else if (nameLower.includes(kw)) {
       score = 150;
     }
-    // Protein type match
-    else if (proteinLower.includes(kw)) {
-      score = 100;
-    }
-    // Tag or cuisine match
-    else if (tagsLower.some((t) => t.includes(kw)) || cuisineLower.includes(kw)) {
-      score = 80;
-    }
-    // Ingredient name match
-    else if (ingredientNames.some((name) => name.includes(kw))) {
-      score = 50;
+
+    // If no full-string match, try matching individual food words
+    if (score === 0 && foodWords.length > 0) {
+      let nameHits = 0;
+      let proteinHits = 0;
+      let tagHits = 0;
+      let ingredientHits = 0;
+      let relatedHits = 0;
+
+      for (const word of foodWords) {
+        if (nameLower.includes(word)) {
+          nameHits++;
+        }
+        if (proteinLower.includes(word)) {
+          proteinHits++;
+        }
+        if (tagsLower.some((t) => t.includes(word)) || cuisineLower.includes(word)) {
+          tagHits++;
+        }
+        if (ingredientNames.some((name) => name.includes(word))) {
+          ingredientHits++;
+        }
+        // Check related terms for each food word
+        if (relatedTerms[word]) {
+          for (const related of relatedTerms[word]) {
+            if (nameLower.includes(related) || proteinLower.includes(related) ||
+                ingredientNames.some((name) => name.includes(related)) ||
+                tagsLower.some((t) => t.includes(related))) {
+              relatedHits++;
+              break;
+            }
+          }
+        }
+      }
+
+      const totalHits = nameHits + proteinHits + tagHits + ingredientHits + relatedHits;
+      const hitRatio = totalHits / foodWords.length;
+
+      // Require at least half the food words to match something
+      if (hitRatio >= 0.5) {
+        // Score based on where matches occurred and how many words matched
+        if (nameHits >= 2) {
+          score = 140; // Multiple food words in recipe name — strong match
+        } else if (nameHits === 1 && (ingredientHits > 0 || relatedHits > 0)) {
+          score = 120; // Name + ingredient/related match
+        } else if (nameHits === 1) {
+          score = 100; // Single name word match
+        } else if (proteinHits > 0) {
+          score = 80;
+        } else if (ingredientHits >= 2) {
+          score = 70; // Multiple ingredient matches
+        } else if (tagHits > 0 || ingredientHits > 0) {
+          score = 60;
+        } else if (relatedHits > 0) {
+          score = 40;
+        }
+
+        // Bonus for matching more food words
+        score += Math.min(totalHits - 1, 3) * 5;
+      }
     }
 
-    // Fallback: check related terms
-    if (score === 0 && relatedTerms[kw]) {
-      for (const related of relatedTerms[kw]) {
-        if (proteinLower.includes(related)) {
-          score = 60;
-          break;
-        }
-        if (cuisineLower.includes(related) || tagsLower.some((t) => t.includes(related))) {
-          score = 40;
-          break;
-        }
-        if (ingredientNames.some((name) => name.includes(related))) {
-          score = 30;
-          break;
+    // Single-word fallback: protein, tag/cuisine, ingredient, related terms
+    if (score === 0 && foodWords.length <= 1) {
+      const singleWord = foodWords[0] || kw;
+      if (proteinLower.includes(singleWord)) {
+        score = 100;
+      } else if (tagsLower.some((t) => t.includes(singleWord)) || cuisineLower.includes(singleWord)) {
+        score = 80;
+      } else if (ingredientNames.some((name) => name.includes(singleWord))) {
+        score = 50;
+      }
+
+      if (score === 0 && relatedTerms[singleWord]) {
+        for (const related of relatedTerms[singleWord]) {
+          if (proteinLower.includes(related)) {
+            score = 60;
+            break;
+          }
+          if (cuisineLower.includes(related) || tagsLower.some((t) => t.includes(related))) {
+            score = 40;
+            break;
+          }
+          if (ingredientNames.some((name) => name.includes(related))) {
+            score = 30;
+            break;
+          }
         }
       }
     }
