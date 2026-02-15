@@ -135,6 +135,7 @@ export default function Plan() {
       localStorage.setItem("currentPlanId", String(result.id));
       localStorage.setItem("lastPlanId", String(result.id));
       localStorage.setItem("lastMealPlanId", String(result.id));
+      navigate(`/meal-plan?id=${result.id}`);
     } catch (err: any) {
       console.error("[Plan] generatePlanAfterSearch error", err);
       setError(err.message || "Failed to generate plan");

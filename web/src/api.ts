@@ -3,8 +3,8 @@ import type {
   FamilyMemberV3, FamilyMemberInputV3,
   FamilyFavoriteChef, FamilyFavoriteMeal, FamilyFavoriteSide,
   WeeklyCookingSchedule, WeeklyLunchNeed, GeneratePlanRequestV3,
-  Recipe, RecipeInput, MealPlan, GroceryList, DayOfWeek,
-  GeneratePlanResponse, ServingMultiplier,
+  Recipe, RecipeInput, Ingredient, MealPlan, GroceryList, DayOfWeek,
+  GeneratePlanResponse, ServingMultiplier, WebSearchRecipeResult,
 } from "@shared/types";
 
 const BASE = "http://localhost:3001/api";
@@ -110,6 +110,10 @@ export async function getRecipes(): Promise<Recipe[]> {
   return json(await fetch(`${BASE}/recipes`));
 }
 
+export async function getRecipeById(id: number): Promise<Recipe> {
+  return json(await fetch(`${BASE}/recipes/${id}`));
+}
+
 export async function createRecipe(data: RecipeInput): Promise<Recipe> {
   return json(
     await fetch(`${BASE}/recipes`, {
@@ -118,6 +122,17 @@ export async function createRecipe(data: RecipeInput): Promise<Recipe> {
       body: JSON.stringify(data),
     }),
   );
+}
+
+export async function searchRecipesWeb(query: string): Promise<WebSearchRecipeResult[]> {
+  const data = await json<{ results: WebSearchRecipeResult[] }>(
+    await fetch(`${BASE}/recipes/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    }),
+  );
+  return data.results;
 }
 
 // ── Meal Plans ──
@@ -168,6 +183,7 @@ export async function smartSetup(familyId: number, text: string): Promise<{
     max_cook_minutes_weekend?: number;
     vegetarian_ratio?: number;
   };
+  specific_meals: Array<{ day: string; description: string }>;
 }> {
   return json(
     await fetch(`${BASE}/smart-setup`, {
@@ -221,7 +237,23 @@ export async function addSide(mainMealItemId: number, sideId?: number, customNam
   if (!res.ok) throw new Error("Failed to add side");
 }
 
+export async function removeSide(mealItemId: number): Promise<void> {
+  const res = await fetch(`${BASE}/sides/${mealItemId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to remove side");
+}
+
+export async function removeMealItem(mealItemId: number): Promise<void> {
+  const res = await fetch(`${BASE}/meal-plans/items/${mealItemId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to remove meal item");
+}
+
 // ── Grocery List ──
+export async function suggestIngredients(recipeId: number): Promise<Ingredient[]> {
+  return json(
+    await fetch(`${BASE}/recipes/${recipeId}/suggest-ingredients`, { method: "POST" }),
+  );
+}
+
 export async function getGroceryList(planId: number): Promise<GroceryList> {
   return json(await fetch(`${BASE}/meal-plans/${planId}/grocery-list`));
 }

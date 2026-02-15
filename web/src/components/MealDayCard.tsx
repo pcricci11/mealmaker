@@ -15,6 +15,7 @@ interface Props {
   onAddSide: (mainMealItemId: number) => void;
   onLoveMeal: (mealItemId: number) => void;
   onSwapMain: (mealItemId: number) => void;
+  onRemoveSide?: (mealItemId: number) => void;
 }
 
 const DAY_LABELS: Record<string, string> = {
@@ -52,6 +53,7 @@ export default function MealDayCard({
   onAddSide,
   onLoveMeal,
   onSwapMain,
+  onRemoveSide,
 }: Props) {
   const [lovedMeals, setLovedMeals] = useState<Set<number>>(new Set());
   const isWeekend = day === "saturday" || day === "sunday";
@@ -191,6 +193,7 @@ export default function MealDayCard({
                         key={side.id}
                         side={side}
                         onSwap={() => onSwapSide(side.id, main.recipe_id!)}
+                        onRemove={onRemoveSide ? () => onRemoveSide(side.id) : undefined}
                       />
                     ))}
                   </div>

@@ -279,4 +279,23 @@ router.post("/add/:meal_item_id", (req, res) => {
   res.status(201).json(newSide);
 });
 
+// Remove a side from a meal plan
+router.delete("/:meal_item_id", (req, res) => {
+  const mealItemId = parseInt(req.params.meal_item_id);
+
+  const side: any = db
+    .prepare(
+      `SELECT * FROM meal_plan_items WHERE id = ? AND meal_type = 'side'`
+    )
+    .get(mealItemId);
+
+  if (!side) {
+    return res.status(404).json({ error: "Side meal item not found" });
+  }
+
+  db.prepare("DELETE FROM meal_plan_items WHERE id = ?").run(mealItemId);
+
+  res.json({ message: "Side removed successfully" });
+});
+
 export default router;

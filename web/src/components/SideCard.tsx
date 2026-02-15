@@ -6,9 +6,10 @@ import type { MealPlanItemV3 } from "@shared/types";
 interface Props {
   side: MealPlanItemV3;
   onSwap: () => void;
+  onRemove?: () => void;
 }
 
-export default function SideCard({ side, onSwap }: Props) {
+export default function SideCard({ side, onSwap, onRemove }: Props) {
   // Parse side info from notes
   let sideName = "Side Dish";
   let sideCategory = null;
@@ -37,12 +38,22 @@ export default function SideCard({ side, onSwap }: Props) {
             </div>
           )}
         </div>
-        <button
-          onClick={onSwap}
-          className="ml-2 text-xs text-blue-600 hover:text-blue-700 font-medium shrink-0"
-        >
-          Swap
-        </button>
+        <div className="flex gap-2 ml-2 shrink-0">
+          <button
+            onClick={onSwap}
+            className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+          >
+            Swap
+          </button>
+          {onRemove && (
+            <button
+              onClick={onRemove}
+              className="text-xs text-red-500 hover:text-red-600 font-medium"
+            >
+              Remove
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

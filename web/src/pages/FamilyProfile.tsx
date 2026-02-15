@@ -308,7 +308,7 @@ export default function FamilyProfile() {
         )}
         {family && (
           <button
-            onClick={() => navigate("/plan")}
+            onClick={() => navigate("/meal-plan")}
             className="text-emerald-600 text-sm font-medium hover:underline"
           >
             Go to Meal Plan &rarr;

@@ -313,4 +313,33 @@ router.post("/items/:id/copy", async (req, res) => {
   }
 });
 
+// Delete a meal plan item (main or side); if main, also delete child sides
+router.delete("/items/:id", (req, res) => {
+  try {
+    const itemId = parseInt(req.params.id);
+
+    const item: any = db
+      .prepare("SELECT * FROM meal_plan_items WHERE id = ?")
+      .get(itemId);
+
+    if (!item) {
+      return res.status(404).json({ error: "Meal plan item not found" });
+    }
+
+    // If it's a main, also delete its child sides
+    if (item.meal_type === "main") {
+      db.prepare(
+        "DELETE FROM meal_plan_items WHERE parent_meal_item_id = ?"
+      ).run(itemId);
+    }
+
+    db.prepare("DELETE FROM meal_plan_items WHERE id = ?").run(itemId);
+
+    res.json({ message: "Meal plan item removed successfully" });
+  } catch (error) {
+    console.error("Delete meal plan item error:", error);
+    res.status(500).json({ error: "Failed to delete meal plan item" });
+  }
+});
+
 export default router;

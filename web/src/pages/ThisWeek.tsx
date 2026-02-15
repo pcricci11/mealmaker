@@ -282,7 +282,7 @@ export default function ThisWeek() {
           : undefined,
       });
 
-      navigate(`/plan?id=${plan.id}`);
+      navigate(`/meal-plan?id=${plan.id}`);
     } catch (error) {
       console.error("Error generating meal plan:", error);
       alert("Failed to generate meal plan. Please try again.");

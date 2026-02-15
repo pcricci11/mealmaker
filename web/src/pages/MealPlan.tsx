@@ -16,6 +16,7 @@ import {
   getFamilyMembers,
   swapSide,
   addSide,
+  removeSide,
   markMealAsLoved,
   swapMainRecipe,
 } from "../api";
@@ -114,6 +115,17 @@ export default function MealPlan() {
       await markMealAsLoved(mealItemId);
     } catch (error) {
       console.error("Error loving meal:", error);
+    }
+  };
+
+  const handleRemoveSide = async (mealItemId: number) => {
+    if (!confirm("Remove this side?")) return;
+    try {
+      await removeSide(mealItemId);
+      await loadData();
+    } catch (error) {
+      console.error("Error removing side:", error);
+      alert("Failed to remove side");
     }
   };
 
@@ -219,6 +231,7 @@ export default function MealPlan() {
               }
               onAddSide={(mainMealItemId) => setAddSideModal(mainMealItemId)}
               onLoveMeal={handleLoveMeal}
+              onRemoveSide={handleRemoveSide}
               onSwapMain={(mealItemId) =>
                 setSwapMainModal({ mealItemId, day: day as DayOfWeek })
               }
