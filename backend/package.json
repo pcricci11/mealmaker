@@ -10,8 +10,10 @@
     "migrate": "tsx src/migrate.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "better-sqlite3": "^11.0.0",
     "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
     "express": "^4.21.0"
   },
   "devDependencies": {

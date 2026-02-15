@@ -51,7 +51,7 @@ export default function History() {
           Generate your first meal plan to get started!
         </p>
         <button
-          onClick={() => navigate("/this-week")}
+          onClick={() => navigate("/plan")}
           className="bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-emerald-700"
         >
           Plan This Week
@@ -132,7 +132,7 @@ export default function History() {
       {/* Generate New Plan */}
       <div className="text-center pt-4">
         <button
-          onClick={() => navigate("/this-week")}
+          onClick={() => navigate("/plan")}
           className="bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-emerald-700"
         >
           + Generate New Plan

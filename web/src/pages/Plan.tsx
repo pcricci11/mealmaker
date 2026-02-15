@@ -1,32 +1,36 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { generateMealPlanV3, getFamilies, smartSetup, getRecipes, markMealAsLoved, swapMainRecipe, getMealPlan } from "../api";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import {
+  generateMealPlanV3,
+  getFamilies,
+  smartSetup,
+  getRecipes,
+  markMealAsLoved,
+  swapMainRecipe,
+  getMealPlan,
+  getFamilyMembers,
+  swapSide,
+  addSide,
+  removeSide,
+  matchRecipeInDb,
+} from "../api";
 import MealDetailModal from "../components/MealDetailModal";
 import ConversationalPlanner from "../components/ConversationalPlanner";
 import RecipeSearchModal from "../components/RecipeSearchModal";
-import type { DayOfWeek, Recipe } from "@shared/types";
+import MealDayCard from "../components/MealDayCard";
+import SwapSideModal from "../components/SwapSideModal";
+import AddSideModal from "../components/AddSideModal";
+import SwapMainModal from "../components/SwapMainModal";
+import type {
+  DayOfWeek,
+  Recipe,
+  Family,
+  MealPlan,
+  MealPlanItemV3,
+  FamilyMemberV3,
+} from "@shared/types";
 
-interface PlanItem {
-  id: number;
-  day: string;
-  recipe_id: number | null;
-  meal_type: string;
-  recipe_name: string | null;
-  cuisine: string | null;
-  vegetarian: boolean;
-  cook_minutes: number | null;
-  makes_leftovers: boolean;
-  kid_friendly: boolean;
-  notes: any;
-}
-
-interface GeneratedPlan {
-  id: number;
-  week_start: string;
-  items: PlanItem[];
-}
-
-const DAYS = [
+const DAYS: { key: string; label: string }[] = [
   { key: "monday", label: "Mon" },
   { key: "tuesday", label: "Tue" },
   { key: "wednesday", label: "Wed" },
@@ -38,12 +42,28 @@ const DAYS = [
 
 export default function Plan() {
   const navigate = useNavigate();
-  const [plan, setPlan] = useState<GeneratedPlan | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [plan, setPlan] = useState<MealPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lovedIds, setLovedIds] = useState<Set<number>>(new Set());
-  const [selectedItem, setSelectedItem] = useState<PlanItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<MealPlanItemV3 | null>(null);
   const [smartSetupLoading, setSmartSetupLoading] = useState(false);
+
+  // Family & members
+  const [family, setFamily] = useState<Family | null>(null);
+  const [members, setMembers] = useState<FamilyMemberV3[]>([]);
+
+  // Modal states (from MealPlan.tsx)
+  const [swapSideModal, setSwapSideModal] = useState<{
+    mealItemId: number;
+    mainRecipeId: number;
+  } | null>(null);
+  const [addSideModal, setAddSideModal] = useState<number | null>(null);
+  const [swapMainModal, setSwapMainModal] = useState<{
+    mealItemId: number;
+    day: DayOfWeek;
+  } | null>(null);
 
   // Recipe search state for specific meal requests
   const [pendingSearchMeals, setPendingSearchMeals] = useState<
@@ -59,26 +79,52 @@ export default function Plan() {
   // Stored across the search flow for plan generation
   const [cookingSchedule, setCookingSchedule] = useState<any[]>([]);
 
-  // Load saved plan on mount
+  // Load saved plan + family/members on mount
   useEffect(() => {
-    const savedPlanId = localStorage.getItem("currentPlanId");
-    if (savedPlanId) {
+    const loadFamilyData = async () => {
+      try {
+        const families = await getFamilies();
+        if (families.length > 0) {
+          setFamily(families[0]);
+          const membersData = await getFamilyMembers(families[0].id);
+          setMembers(membersData);
+        }
+      } catch (err) {
+        console.error("Failed to load family data:", err);
+      }
+    };
+    loadFamilyData();
+
+    // Load plan from ?id= query param, or fall back to localStorage
+    const paramId = searchParams.get("id");
+    const planIdToLoad = paramId || localStorage.getItem("currentPlanId");
+    if (planIdToLoad) {
       setLoading(true);
-      getMealPlan(Number(savedPlanId))
+      getMealPlan(Number(planIdToLoad))
         .then((result) => {
-          setPlan({
-            id: result.id,
-            week_start: result.week_start || "",
-            items: (result.items || []) as any,
-          });
+          setPlan(result);
+          localStorage.setItem("currentPlanId", String(result.id));
+          // Clean up the ?id= param so URL stays clean
+          if (paramId) {
+            setSearchParams({}, { replace: true });
+          }
         })
         .catch(() => {
-          // Plan no longer exists, clear stale ID
           localStorage.removeItem("currentPlanId");
         })
         .finally(() => setLoading(false));
     }
   }, []);
+
+  const refreshPlan = async () => {
+    if (!plan) return;
+    try {
+      const refreshed = await getMealPlan(plan.id);
+      setPlan(refreshed);
+    } catch (err) {
+      console.error("Failed to refresh plan:", err);
+    }
+  };
 
   const getWeekStart = () => {
     const today = new Date();
@@ -99,8 +145,8 @@ export default function Plan() {
     setError(null);
     try {
       const families = await getFamilies();
-      const family = families[0];
-      if (!family?.id) throw new Error("No family found. Please create a family first.");
+      const fam = families[0];
+      if (!fam?.id) throw new Error("No family found. Please create a family first.");
 
       const weekStart = getWeekStart();
 
@@ -119,23 +165,22 @@ export default function Plan() {
       console.log("[Plan] calling generateMealPlanV3", { specificMealsForPlan, locksObj });
 
       const result = await generateMealPlanV3({
-        family_id: family.id,
+        family_id: fam.id,
         week_start: weekStart,
         cooking_schedule: schedule,
         lunch_needs: [],
-        max_cook_minutes_weekday: family.max_cook_minutes_weekday ?? 45,
-        max_cook_minutes_weekend: family.max_cook_minutes_weekend ?? 90,
-        vegetarian_ratio: family.vegetarian_ratio ?? 0,
+        max_cook_minutes_weekday: fam.max_cook_minutes_weekday ?? 45,
+        max_cook_minutes_weekend: fam.max_cook_minutes_weekend ?? 90,
+        vegetarian_ratio: fam.vegetarian_ratio ?? 0,
         specific_meals: specificMealsForPlan,
         locks: locksObj,
       });
 
       console.log("[Plan] generateMealPlanV3 result", { id: result.id, itemCount: result.items?.length });
-      setPlan({ id: result.id, week_start: result.week_start || weekStart, items: (result.items || []) as any });
+      setPlan(result);
       localStorage.setItem("currentPlanId", String(result.id));
       localStorage.setItem("lastPlanId", String(result.id));
       localStorage.setItem("lastMealPlanId", String(result.id));
-      navigate(`/meal-plan?id=${result.id}`);
     } catch (err: any) {
       console.error("[Plan] generatePlanAfterSearch error", err);
       setError(err.message || "Failed to generate plan");
@@ -175,21 +220,26 @@ export default function Plan() {
 
       // Check for specific meal requests
       if (result.specific_meals && result.specific_meals.length > 0) {
-        const recipes = await getRecipes();
-        setAllRecipes(recipes);
-        console.log("[Plan] loaded recipes for matching", { count: recipes.length, specificMeals: result.specific_meals });
+        const fetchedRecipes = await getRecipes();
+        setAllRecipes(fetchedRecipes);
+        console.log("[Plan] loaded recipes for matching", { count: fetchedRecipes.length, specificMeals: result.specific_meals });
 
         const unmatched: Array<{ day: string; description: string }> = [];
         const autoResolved: Array<{ day: string; recipe_id: number }> = [];
 
+        // Fuzzy-match each specific meal against the database
         for (const meal of result.specific_meals) {
-          const desc = meal.description.toLowerCase();
-          const match = recipes.find((r) => r.title.toLowerCase() === desc);
-          if (match) {
-            console.log("[Plan] auto-matched meal", { description: meal.description, matchedRecipe: match.title, id: match.id });
-            autoResolved.push({ day: meal.day, recipe_id: match.id });
+          const dbMatch = await matchRecipeInDb(meal.description);
+          if (dbMatch) {
+            console.log("[Plan] DB fuzzy-matched meal", { description: meal.description, matchedRecipe: dbMatch.title, id: dbMatch.id });
+            autoResolved.push({ day: meal.day, recipe_id: dbMatch.id });
+            // Ensure the matched recipe is in allRecipes for later use
+            if (!fetchedRecipes.some((r) => r.id === dbMatch.id)) {
+              fetchedRecipes.push(dbMatch);
+              setAllRecipes([...fetchedRecipes]);
+            }
           } else {
-            console.log("[Plan] unmatched meal, will show search modal", { description: meal.description, day: meal.day });
+            console.log("[Plan] no DB match, will show search modal", { description: meal.description, day: meal.day });
             unmatched.push(meal);
           }
         }
@@ -202,7 +252,7 @@ export default function Plan() {
           setCurrentSearchIndex(0);
         } else {
           setSmartSetupLoading(false);
-          generatePlanAfterSearch(schedule, autoResolved, recipes);
+          generatePlanAfterSearch(schedule, autoResolved, fetchedRecipes);
           return;
         }
       } else {
@@ -277,6 +327,54 @@ export default function Plan() {
     }
   };
 
+  // Editing handlers (from MealPlan.tsx)
+  const handleSwapSide = async (newSideId: number) => {
+    if (!swapSideModal) return;
+    try {
+      await swapSide(swapSideModal.mealItemId, newSideId);
+      await refreshPlan();
+      setSwapSideModal(null);
+    } catch (error) {
+      console.error("Error swapping side:", error);
+      alert("Failed to swap side");
+    }
+  };
+
+  const handleAddSide = async (sideId?: number, customName?: string) => {
+    if (!addSideModal) return;
+    try {
+      await addSide(addSideModal, sideId, customName);
+      await refreshPlan();
+      setAddSideModal(null);
+    } catch (error) {
+      console.error("Error adding side:", error);
+      alert("Failed to add side");
+    }
+  };
+
+  const handleRemoveSide = async (mealItemId: number) => {
+    if (!confirm("Remove this side?")) return;
+    try {
+      await removeSide(mealItemId);
+      await refreshPlan();
+    } catch (error) {
+      console.error("Error removing side:", error);
+      alert("Failed to remove side");
+    }
+  };
+
+  const handleSwapMain = async (newRecipeId: number) => {
+    if (!swapMainModal) return;
+    try {
+      const updatedPlan = await swapMainRecipe(swapMainModal.mealItemId, newRecipeId);
+      setPlan(updatedPlan);
+      setSwapMainModal(null);
+    } catch (error) {
+      console.error("Error swapping main:", error);
+      alert("Failed to swap main");
+    }
+  };
+
   // Group plan items by day
   const dayData = plan
     ? DAYS.map(({ key, label }) => {
@@ -324,7 +422,7 @@ export default function Plan() {
       )}
 
       {/* Loading state */}
-      {loading && (
+      {(loading || smartSetupLoading) && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
             Your Week
@@ -376,13 +474,16 @@ export default function Plan() {
         </div>
       )}
 
-      {/* Generated plan grid */}
+      {/* Generated plan — MealDayCard layout */}
       {plan && !loading && dayData && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-              Your Week — {plan.week_start}
-            </h3>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Your Meal Plan</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Week of {plan.week_start || "this week"}
+              </p>
+            </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
@@ -402,104 +503,34 @@ export default function Plan() {
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
-            {dayData.map(({ key, label, mains, sides, lunches, hasMeals }) => (
-              <div
-                key={key}
-                className={`rounded-xl p-3 min-h-[160px] flex flex-col ${
-                  hasMeals
-                    ? "bg-white border border-gray-200"
-                    : "bg-gray-50 border border-dashed border-gray-300"
-                }`}
-              >
-                <span className="text-xs font-semibold text-gray-400 uppercase text-center">
-                  {label}
-                </span>
-
-                {!hasMeals && (
-                  <div className="flex-1 flex items-center justify-center">
-                    <span className="text-xs text-gray-300 italic">Off</span>
-                  </div>
-                )}
-
-                {/* Mains */}
-                {mains.map((item) => (
-                  <div key={item.id} className="mt-2 space-y-1">
-                    <p
-                      className="text-xs font-medium text-gray-900 leading-tight cursor-pointer hover:text-emerald-600 transition-colors"
-                      onClick={() => setSelectedItem(item)}
-                    >
-                      {item.recipe_name || "—"}
-                    </p>
-                    {item.cook_minutes && (
-                      <p className="text-[10px] text-gray-400">
-                        {item.cook_minutes}min
-                        {item.vegetarian && " · 🌿"}
-                        {item.makes_leftovers && " · 📦"}
-                      </p>
-                    )}
-                    <div className="flex gap-1 mt-1">
-                      <button
-                        onClick={() => handleLove(item.id)}
-                        className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
-                          lovedIds.has(item.id)
-                            ? "bg-red-100 text-red-500"
-                            : "hover:bg-gray-100 text-gray-400"
-                        }`}
-                        title="Love this recipe"
-                      >
-                        {lovedIds.has(item.id) ? "❤️" : "🤍"}
-                      </button>
-                      <button
-                        onClick={() => alert("Swap coming soon!")}
-                        className="text-xs px-1.5 py-0.5 rounded text-gray-400 hover:bg-gray-100 transition-colors"
-                        title="Swap recipe"
-                      >
-                        🔄
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Sides */}
-                {sides.map((item) => {
-                  const sideName =
-                    item.recipe_name ||
-                    (typeof item.notes === "object" ? item.notes?.side_name : null) ||
-                    "Side";
-                  return (
-                    <p
-                      key={item.id}
-                      className="text-[10px] text-gray-500 mt-1 italic"
-                    >
-                      + {sideName}
-                    </p>
-                  );
-                })}
-
-                {/* Lunches */}
-                {lunches.length > 0 && (
-                  <div className="mt-auto pt-2 border-t border-gray-100">
-                    {lunches.map((item) => (
-                      <p
-                        key={item.id}
-                        className="text-[10px] text-amber-600"
-                      >
-                        🥪 {item.recipe_name || "Leftovers"}
-                      </p>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+          <div className="space-y-4">
+            {dayData.map(({ key, mains, lunches, sides, hasMeals }) => {
+              if (!hasMeals) return null;
+              return (
+                <MealDayCard
+                  key={key}
+                  day={key}
+                  mains={mains}
+                  lunches={lunches}
+                  sides={sides}
+                  members={members}
+                  onSwapSide={(mealItemId, mainRecipeId) =>
+                    setSwapSideModal({ mealItemId, mainRecipeId })
+                  }
+                  onAddSide={(mainMealItemId) => setAddSideModal(mainMealItemId)}
+                  onLoveMeal={handleLove}
+                  onRemoveSide={handleRemoveSide}
+                  onSwapMain={(mealItemId) =>
+                    setSwapMainModal({ mealItemId, day: key as DayOfWeek })
+                  }
+                  onMealClick={(item) => setSelectedItem(item)}
+                />
+              );
+            })}
           </div>
-
-          {/* Regenerate hint */}
-          <p className="text-center text-sm text-gray-400">
-            Not quite right? Click "Generate New Plan" above to start fresh.
-          </p>
         </div>
       )}
+
       {/* Recipe Search Modal for specific meal requests */}
       {pendingSearchMeals.length > 0 && currentSearchIndex < pendingSearchMeals.length && (
         <RecipeSearchModal
@@ -525,21 +556,36 @@ export default function Plan() {
           isLoved={lovedIds.has(selectedItem.id)}
           onSwap={async (newRecipeId) => {
             await swapMainRecipe(selectedItem.id, newRecipeId);
-            // Refresh the plan to reflect the swap
-            if (plan) {
-              try {
-                const refreshed = await getMealPlan(plan.id);
-                setPlan({
-                  id: refreshed.id,
-                  week_start: refreshed.week_start || plan.week_start,
-                  items: (refreshed.items || []) as any,
-                });
-              } catch {
-                // Fallback: just close the modal
-              }
-            }
+            await refreshPlan();
             setSelectedItem(null);
           }}
+        />
+      )}
+
+      {/* Side/Main swap modals */}
+      {swapSideModal && (
+        <SwapSideModal
+          mealItemId={swapSideModal.mealItemId}
+          mainRecipeId={swapSideModal.mainRecipeId}
+          onSwap={handleSwapSide}
+          onClose={() => setSwapSideModal(null)}
+        />
+      )}
+
+      {addSideModal && (
+        <AddSideModal
+          mainMealItemId={addSideModal}
+          onAdd={handleAddSide}
+          onClose={() => setAddSideModal(null)}
+        />
+      )}
+
+      {swapMainModal && (
+        <SwapMainModal
+          mealItemId={swapMainModal.mealItemId}
+          day={swapMainModal.day}
+          onSwap={handleSwapMain}
+          onClose={() => setSwapMainModal(null)}
         />
       )}
     </div>

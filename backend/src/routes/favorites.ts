@@ -62,6 +62,62 @@ router.delete("/chefs/:id", (req, res) => {
   res.status(204).send();
 });
 
+// ===== FAVORITE WEBSITES =====
+
+router.get("/websites", (req, res) => {
+  const familyId = parseInt(req.query.family_id as string);
+
+  if (!familyId) {
+    return res.status(400).json({ error: "family_id is required" });
+  }
+
+  const websites = db
+    .prepare(
+      `SELECT id, family_id, name, created_at
+      FROM family_favorite_websites
+      WHERE family_id = ?
+      ORDER BY name ASC`
+    )
+    .all(familyId);
+
+  res.json(websites);
+});
+
+router.post("/websites", (req, res) => {
+  const { family_id, name } = req.body;
+
+  if (!family_id || !name) {
+    return res.status(400).json({ error: "family_id and name are required" });
+  }
+
+  const result = db
+    .prepare(
+      `INSERT INTO family_favorite_websites (family_id, name)
+      VALUES (?, ?)`
+    )
+    .run(family_id, name);
+
+  const website = db
+    .prepare("SELECT * FROM family_favorite_websites WHERE id = ?")
+    .get(result.lastInsertRowid);
+
+  res.status(201).json(website);
+});
+
+router.delete("/websites/:id", (req, res) => {
+  const id = parseInt(req.params.id);
+
+  const result = db
+    .prepare("DELETE FROM family_favorite_websites WHERE id = ?")
+    .run(id);
+
+  if (result.changes === 0) {
+    return res.status(404).json({ error: "Website not found" });
+  }
+
+  res.status(204).send();
+});
+
 // ===== FAVORITE MEALS =====
 
 router.get("/meals", (req, res) => {

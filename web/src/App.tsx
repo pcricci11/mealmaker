@@ -15,9 +15,10 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-6">
           <h1 className="text-xl font-bold text-emerald-700">MealMaker</h1>
           <nav className="flex gap-2">
-            <NavLink to="/meal-plan" className={navCls}>Plan</NavLink>
+            <NavLink to="/plan" className={navCls}>Plan</NavLink>
             <NavLink to="/grocery" className={navCls}>Grocery List</NavLink>
             <NavLink to="/recipes" className={navCls}>My Recipes</NavLink>
+            <NavLink to="/family" className={navCls}>My Family</NavLink>
           </nav>
         </div>
       </header>

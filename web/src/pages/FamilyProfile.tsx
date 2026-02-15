@@ -308,10 +308,10 @@ export default function FamilyProfile() {
         )}
         {family && (
           <button
-            onClick={() => navigate("/meal-plan")}
+            onClick={() => navigate("/plan")}
             className="text-emerald-600 text-sm font-medium hover:underline"
           >
-            Go to Meal Plan &rarr;
+            Go to Plan &rarr;
           </button>
         )}
       </div>

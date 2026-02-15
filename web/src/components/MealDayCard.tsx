@@ -16,6 +16,7 @@ interface Props {
   onLoveMeal: (mealItemId: number) => void;
   onSwapMain: (mealItemId: number) => void;
   onRemoveSide?: (mealItemId: number) => void;
+  onMealClick?: (item: MealPlanItemV3) => void;
 }
 
 const DAY_LABELS: Record<string, string> = {
@@ -54,6 +55,7 @@ export default function MealDayCard({
   onLoveMeal,
   onSwapMain,
   onRemoveSide,
+  onMealClick,
 }: Props) {
   const [lovedMeals, setLovedMeals] = useState<Set<number>>(new Set());
   const isWeekend = day === "saturday" || day === "sunday";
@@ -109,7 +111,10 @@ export default function MealDayCard({
               <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 relative">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
-                    <div className="font-semibold text-lg text-gray-900">
+                    <div
+                      className={`font-semibold text-lg text-gray-900${onMealClick ? " cursor-pointer hover:text-emerald-600 transition-colors" : ""}`}
+                      onClick={onMealClick ? () => onMealClick(main) : undefined}
+                    >
                       {main.recipe_name || "Unknown Recipe"}
                       {main.main_number && (
                         <span className="ml-2 text-sm text-gray-500">

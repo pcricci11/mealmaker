@@ -92,6 +92,70 @@ Constraints:
   }
 });
 
+// POST /api/recipes/match — fuzzy search for a recipe in the local database
+router.post("/match", (req: Request, res: Response) => {
+  const { query } = req.body;
+  if (!query || typeof query !== "string" || !query.trim()) {
+    return res.status(400).json({ error: "query is required" });
+  }
+
+  // Normalize: lowercase, strip possessives/apostrophes/punctuation, collapse whitespace
+  const normalize = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[''\u2019]s\b/g, "") // strip possessive 's
+      .replace(/[''\u2019]/g, "")     // strip remaining apostrophes
+      .replace(/&/g, "and")
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const normQuery = normalize(query);
+  const queryWords = normQuery.split(" ").filter(Boolean);
+
+  // Pull all recipe names from DB (fast — recipes table is small)
+  const rows = db
+    .prepare("SELECT id, name FROM recipes")
+    .all() as Array<{ id: number; name: string }>;
+
+  let bestRow: { id: number; name: string } | null = null;
+  let bestScore = 0;
+
+  for (const row of rows) {
+    const normName = normalize(row.name);
+
+    // Exact normalized match → perfect score
+    if (normName === normQuery) {
+      bestRow = row;
+      bestScore = 1;
+      break;
+    }
+
+    // Word-overlap scoring (handles containment proportionally)
+    const nameWords = normName.split(" ").filter(Boolean);
+    const matchingWords = queryWords.filter((w) => nameWords.includes(w));
+    if (matchingWords.length === 0) continue;
+
+    const overlapScore =
+      matchingWords.length / Math.max(queryWords.length, nameWords.length);
+
+    if (overlapScore > bestScore) {
+      bestScore = overlapScore;
+      bestRow = row;
+    }
+  }
+
+  // Require at least 70% word overlap to consider it a match
+  if (bestRow && bestScore >= 0.7) {
+    const full = db
+      .prepare("SELECT * FROM recipes WHERE id = ?")
+      .get(bestRow.id);
+    return res.json({ match: rowToRecipe(full), score: bestScore });
+  }
+
+  res.json({ match: null, score: 0 });
+});
+
 // GET /api/recipes/:id
 router.get("/:id", (req: Request, res: Response) => {
   const row = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id);

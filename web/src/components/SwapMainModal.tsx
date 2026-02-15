@@ -12,7 +12,7 @@ interface Props {
   onClose: () => void;
 }
 
-const CUISINE_COLORS: Record<string, string> = {
+export const CUISINE_COLORS: Record<string, string> = {
   american: "bg-blue-100 text-blue-700",
   italian: "bg-red-100 text-red-700",
   mexican: "bg-orange-100 text-orange-700",

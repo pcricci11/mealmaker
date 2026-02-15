@@ -192,10 +192,10 @@ export default function GroceryList() {
       <div className="text-center py-12">
         <p className="text-gray-500 mb-4">No meal plan found. Generate a plan first.</p>
         <button
-          onClick={() => navigate("/meal-plan")}
+          onClick={() => navigate("/plan")}
           className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700"
         >
-          Go to Meal Plan
+          Go to Plan
         </button>
       </div>
     );

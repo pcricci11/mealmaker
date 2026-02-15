@@ -11,6 +11,7 @@ import {
   generateMealPlanV3,
   smartSetup,
   getRecipes,
+  matchRecipeInDb,
 } from "../api";
 import type {
   Family,
@@ -151,16 +152,18 @@ export default function ThisWeek() {
         const recipes = await getRecipes();
         setAllRecipes(recipes);
 
-        // Check which meals already match existing recipes
+        // Fuzzy-match each specific meal against the database
         const unmatched: Array<{ day: string; description: string }> = [];
         const autoResolved: Array<{ day: string; recipe_id: number }> = [];
 
         for (const meal of result.specific_meals) {
-          const desc = meal.description.toLowerCase();
-          // Match if recipe title contains the description or vice-versa
-          const match = recipes.find((r) => r.title.toLowerCase() === desc);
-          if (match) {
-            autoResolved.push({ day: meal.day, recipe_id: match.id });
+          const dbMatch = await matchRecipeInDb(meal.description);
+          if (dbMatch) {
+            autoResolved.push({ day: meal.day, recipe_id: dbMatch.id });
+            if (!recipes.some((r) => r.id === dbMatch.id)) {
+              recipes.push(dbMatch);
+              setAllRecipes([...recipes]);
+            }
           } else {
             unmatched.push(meal);
           }
@@ -282,7 +285,7 @@ export default function ThisWeek() {
           : undefined,
       });
 
-      navigate(`/meal-plan?id=${plan.id}`);
+      navigate(`/plan?id=${plan.id}`);
     } catch (error) {
       console.error("Error generating meal plan:", error);
       alert("Failed to generate meal plan. Please try again.");

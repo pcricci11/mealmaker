@@ -1,7 +1,7 @@
 import type {
   Family, FamilyInput, FamilyMember, FamilyMemberInput,
   FamilyMemberV3, FamilyMemberInputV3,
-  FamilyFavoriteChef, FamilyFavoriteMeal, FamilyFavoriteSide,
+  FamilyFavoriteChef, FamilyFavoriteMeal, FamilyFavoriteSide, FamilyFavoriteWebsite,
   WeeklyCookingSchedule, WeeklyLunchNeed, GeneratePlanRequestV3,
   Recipe, RecipeInput, Ingredient, MealPlan, GroceryList, DayOfWeek,
   GeneratePlanResponse, ServingMultiplier, WebSearchRecipeResult,
@@ -122,6 +122,17 @@ export async function createRecipe(data: RecipeInput): Promise<Recipe> {
       body: JSON.stringify(data),
     }),
   );
+}
+
+export async function matchRecipeInDb(query: string): Promise<Recipe | null> {
+  const data = await json<{ match: Recipe | null; score: number }>(
+    await fetch(`${BASE}/recipes/match`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    }),
+  );
+  return data.match;
 }
 
 export async function searchRecipesWeb(query: string): Promise<WebSearchRecipeResult[]> {
@@ -276,6 +287,26 @@ export async function createFavoriteChef(familyId: number, name: string): Promis
 export async function deleteFavoriteChef(id: number): Promise<void> {
   const res = await fetch(`${BASE}/favorites/chefs/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete favorite chef");
+}
+
+// ── Favorite Websites ──
+export async function getFavoriteWebsites(familyId: number): Promise<FamilyFavoriteWebsite[]> {
+  return json(await fetch(`${BASE}/favorites/websites?family_id=${familyId}`));
+}
+
+export async function createFavoriteWebsite(familyId: number, name: string): Promise<FamilyFavoriteWebsite> {
+  return json(
+    await fetch(`${BASE}/favorites/websites`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ family_id: familyId, name }),
+    }),
+  );
+}
+
+export async function deleteFavoriteWebsite(id: number): Promise<void> {
+  const res = await fetch(`${BASE}/favorites/websites/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete favorite website");
 }
 
 // ── Favorite Meals ──

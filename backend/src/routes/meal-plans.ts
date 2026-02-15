@@ -390,7 +390,20 @@ router.get("/:id/grocery-list", (req: Request, res: Response) => {
     return a.name.localeCompare(b.name);
   });
 
-  res.json({ meal_plan_id: Number(req.params.id), items: groceryItems });
+  // Find recipes in this plan that have no ingredients
+  const missingRecipes = db.prepare(`
+    SELECT DISTINCT mpi.recipe_id, r.name
+    FROM meal_plan_items mpi
+    JOIN recipes r ON r.id = mpi.recipe_id
+    LEFT JOIN recipe_ingredients ri ON ri.recipe_id = mpi.recipe_id
+    WHERE mpi.meal_plan_id = ? AND ri.id IS NULL AND mpi.recipe_id IS NOT NULL
+  `).all(req.params.id) as Array<{ recipe_id: number; name: string }>;
+
+  res.json({
+    meal_plan_id: Number(req.params.id),
+    items: groceryItems,
+    missing_recipes: missingRecipes,
+  });
 });
 
 export default router;

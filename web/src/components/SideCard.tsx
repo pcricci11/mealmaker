@@ -15,12 +15,16 @@ export default function SideCard({ side, onSwap, onRemove }: Props) {
   let sideCategory = null;
 
   if (side.notes) {
-    try {
-      const parsed = JSON.parse(side.notes);
-      sideName = parsed.side_name || sideName;
-      sideCategory = parsed.category || null;
-    } catch (e) {
-      // If notes aren't JSON, use as-is
+    // notes may arrive as a JSON string or an already-parsed object
+    const parsed =
+      typeof side.notes === "object"
+        ? side.notes
+        : (() => { try { return JSON.parse(side.notes as string); } catch { return null; } })();
+
+    if (parsed && typeof parsed === "object") {
+      sideName = (parsed as any).side_name || sideName;
+      sideCategory = (parsed as any).category || null;
+    } else if (typeof side.notes === "string") {
       sideName = side.notes;
     }
   }

@@ -20,7 +20,7 @@ export const VALID_CUISINES = [
 ] as const;
 export type Cuisine = (typeof VALID_CUISINES)[number];
 
-export const VALID_SOURCE_TYPES = ["seeded", "user", "imported", "chef"] as const;
+export const VALID_SOURCE_TYPES = ["seeded", "user", "imported", "chef", "web_search"] as const;
 export type RecipeSourceType = (typeof VALID_SOURCE_TYPES)[number];
 
 export const VALID_DAYS = [
@@ -107,6 +107,19 @@ export interface Recipe {
 }
 
 export type RecipeInput = Omit<Recipe, "id">;
+
+export interface WebSearchRecipeResult {
+  name: string;
+  source_name: string;
+  source_url: string;
+  cook_minutes: number;
+  cuisine: Cuisine;
+  vegetarian: boolean;
+  protein_type: string | null;
+  difficulty: Difficulty;
+  kid_friendly: boolean;
+  description: string;
+}
 
 // ── Meal Plan ──
 
@@ -234,6 +247,13 @@ export interface FamilyFavoriteMeal {
   created_at?: string;
 }
 
+export interface FamilyFavoriteWebsite {
+  id: number;
+  family_id: number;
+  name: string;
+  created_at?: string;
+}
+
 export interface FamilyFavoriteSide {
   id: number;
   family_id: number;
@@ -312,4 +332,5 @@ export interface GroceryItem {
 export interface GroceryList {
   meal_plan_id: number;
   items: GroceryItem[];
+  missing_recipes: { recipe_id: number; name: string }[];
 }
