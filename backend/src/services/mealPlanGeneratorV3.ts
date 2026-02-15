@@ -13,6 +13,7 @@ interface GeneratePlanOptions {
   vegetarianRatio: number;
   settings?: any;
   specificMeals?: Array<{ day: string; description: string }>;
+  locks?: Record<string, number>;
 }
 
 interface Recipe {
@@ -40,7 +41,27 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
     maxCookMinutesWeekend,
     vegetarianRatio,
     specificMeals,
+    locks,
   } = options;
+
+  // Safeguard: if locks are provided, ensure only locked days + already-cooking days
+  // have is_cooking: true. This prevents Claude misparsing from adding unwanted days.
+  if (locks && Object.keys(locks).length > 0) {
+    const lockedDays = new Set(Object.keys(locks).map(d => d.toLowerCase()));
+    for (const daySchedule of cookingSchedule) {
+      const dayLower = daySchedule.day.toLowerCase();
+      if (!lockedDays.has(dayLower) && !daySchedule.is_cooking) {
+        // Day is neither locked nor explicitly marked cooking — leave it alone
+      } else if (lockedDays.has(dayLower) && !daySchedule.is_cooking) {
+        // Day has a lock but wasn't marked cooking — force it on
+        console.log(`[mealPlanGeneratorV3] Safeguard: forcing is_cooking=true for locked day "${daySchedule.day}"`);
+        daySchedule.is_cooking = true;
+        daySchedule.meal_mode = daySchedule.meal_mode || "one_main";
+      }
+    }
+    console.log(`[mealPlanGeneratorV3] Locks provided:`, locks);
+    console.log(`[mealPlanGeneratorV3] Cooking days after safeguard:`, cookingSchedule.filter((d: any) => d.is_cooking).map((d: any) => d.day));
+  }
 
   // 1. Get family members with dietary restrictions
   const members = (db
@@ -90,8 +111,6 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
 
   if (existing) {
     mealPlanId = existing.id;
-    // Clear old items so we can regenerate
-    db.prepare(`DELETE FROM meal_plan_items WHERE meal_plan_id = ?`).run(mealPlanId);
   } else {
     const planResult = db
       .prepare(
@@ -101,6 +120,11 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
       .run(familyId, weekStart);
     mealPlanId = planResult.lastInsertRowid as number;
   }
+
+  // Always clear existing items before inserting — prevents duplicates
+  // if the generator is called multiple times for the same plan
+  const deleted = db.prepare(`DELETE FROM meal_plan_items WHERE meal_plan_id = ?`).run(mealPlanId);
+  console.log(`[mealPlanGeneratorV3] Plan ${mealPlanId} (${existing ? "existing" : "new"}), cleared ${deleted.changes} old items`);
 
   // 4. Generate meals for each cooking day (deduplicate by day)
   const plannedMeals: any[] = [];
@@ -127,24 +151,32 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
       : maxCookMinutesWeekday;
 
     if (daySchedule.meal_mode === "one_main") {
-      // Check if user requested a specific meal for this day
+      // Check if this day has a locked recipe (direct ID assignment)
       let recipe: Recipe | null = null;
+      const lockedRecipeId = locks?.[day];
+
+      if (lockedRecipeId) {
+        recipe = allRecipes.find(r => r.id === lockedRecipeId) || null;
+        if (recipe) {
+          console.log(`[mealPlanGeneratorV3] Locked recipe for ${day}: ${recipe.name} (id=${recipe.id})`);
+        } else {
+          console.log(`[mealPlanGeneratorV3] Locked recipe id=${lockedRecipeId} for ${day} not found in recipes, falling back`);
+        }
+      }
+
+      // Check if user requested a specific meal for this day (keyword matching)
       const specificDescription = specificMealsByDay.get(day);
 
-      if (specificDescription) {
+      if (!recipe && specificDescription) {
         // Try to find a recipe matching the specific request
         const keywordMatches = findRecipesByKeyword(specificDescription, allRecipes);
         console.log(`[mealPlanGeneratorV3] Keyword "${specificDescription}" matched ${keywordMatches.length} recipes:`, keywordMatches.map(m => `${m.recipe.name} (score=${m.score})`));
 
         // For explicit user requests, only enforce allergy constraints (safety),
-        // not dietary style preferences — the user made a conscious choice.
+        // not dietary style preferences or cook time — the user made a conscious choice.
         for (const { recipe: candidate, score } of keywordMatches) {
           if (usedRecipeIds.has(candidate.id)) {
             console.log(`[mealPlanGeneratorV3]   Skipping "${candidate.name}": already used`);
-            continue;
-          }
-          if (candidate.cook_minutes > maxCookTime) {
-            console.log(`[mealPlanGeneratorV3]   Skipping "${candidate.name}": cook time ${candidate.cook_minutes}min > ${maxCookTime}min limit`);
             continue;
           }
 

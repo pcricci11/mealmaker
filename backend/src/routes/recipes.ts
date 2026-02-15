@@ -3,105 +3,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import db from "../db";
 import { rowToRecipe } from "../helpers";
 import { validateRecipe } from "../validation";
-import type { RecipeInput, Ingredient, GroceryCategory } from "../../../shared/types";
+import { extractIngredientsFromUrl } from "../services/ingredientExtractor";
+import type { RecipeInput } from "../../../shared/types";
 import { VALID_CUISINES, VALID_DIFFICULTIES } from "../../../shared/types";
 
 const router = Router();
-
-const VALID_UNITS = new Set([
-  "lb", "oz", "cup", "cups", "tbsp", "tsp", "count", "cloves", "can",
-  "bag", "bunch", "inch", "box", "slices", "head", "pint",
-]);
-const VALID_CATEGORIES = new Set([
-  "produce", "dairy", "pantry", "protein", "spices", "grains", "frozen", "other",
-]);
-
-/**
- * Fetch a recipe URL via Claude web_search and extract a structured ingredient list.
- * Returns [] on any failure so recipe creation is never blocked.
- */
-async function extractIngredientsFromUrl(
-  recipeName: string,
-  sourceUrl: string,
-): Promise<Ingredient[]> {
-  try {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) return [];
-
-    const client = new Anthropic({ apiKey });
-
-    const message = await client.messages.create({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 2048,
-      tools: [
-        { type: "web_search_20250305", name: "web_search", max_uses: 3 } as any,
-      ],
-      system: `You are a recipe ingredient extractor. Given a recipe name and URL, fetch the page and extract the REAL ingredient list exactly as the recipe specifies.
-
-Return ONLY a JSON array of ingredients with this structure:
-[
-  { "name": "ingredient name", "quantity": 1.5, "unit": "lb", "category": "protein" }
-]
-
-Rules:
-- Extract the ACTUAL ingredients from the recipe page, do not guess or make up ingredients
-- quantity must be a positive number
-- Valid units: lb, oz, cup, cups, tbsp, tsp, count, cloves, can, bag, bunch, inch, box, slices, head, pint
-- Valid categories: produce, dairy, pantry, protein, spices, grains, frozen, other
-- For items like "salt and pepper to taste", use quantity 1 and unit "tsp"
-- For items counted by number (e.g. "3 eggs"), use unit "count"
-- Return ONLY valid JSON, no markdown fences, no explanation.`,
-      messages: [
-        {
-          role: "user",
-          content: `Extract the ingredient list from this recipe:\nName: "${recipeName}"\nURL: ${sourceUrl}`,
-        },
-      ],
-    });
-
-    // Take the last text block (web search produces multiple content blocks)
-    let lastText = "";
-    for (const block of message.content) {
-      if (block.type === "text") {
-        lastText = block.text;
-      }
-    }
-    if (!lastText) return [];
-
-    // Strip markdown fences, then try to extract a JSON array from the text
-    let cleaned = lastText
-      .replace(/^```(?:json)?\s*\n?/, "")
-      .replace(/\n?```\s*$/, "")
-      .trim();
-
-    // If the text isn't pure JSON, try to extract the JSON array from it
-    const arrayStart = cleaned.indexOf("[");
-    const arrayEnd = cleaned.lastIndexOf("]");
-    if (arrayStart === -1 || arrayEnd === -1) return [];
-    cleaned = cleaned.slice(arrayStart, arrayEnd + 1);
-
-    const parsed = JSON.parse(cleaned);
-    if (!Array.isArray(parsed)) return [];
-
-    // Validate and filter each ingredient
-    return parsed.filter((ing: any) => {
-      if (!ing || typeof ing !== "object") return false;
-      if (typeof ing.name !== "string" || !ing.name.trim()) return false;
-      if (typeof ing.quantity !== "number" || ing.quantity <= 0) return false;
-      if (!VALID_UNITS.has(ing.unit)) return false;
-      if (!VALID_CATEGORIES.has(ing.category)) return false;
-      return true;
-    }).map((ing: any): Ingredient => ({
-      name: ing.name.trim(),
-      quantity: ing.quantity,
-      unit: ing.unit,
-      category: ing.category as GroceryCategory,
-    }));
-  } catch (error) {
-    console.error("extractIngredientsFromUrl failed (non-fatal):", error);
-    return [];
-  }
-}
 
 // GET /api/recipes
 router.get("/", (_req: Request, res: Response) => {
@@ -203,11 +109,11 @@ router.post("/", async (req: Request, res: Response) => {
   const r: RecipeInput = req.body;
   const sourceType = r.source_type || "user";
 
-  // Check for existing recipe with same name and source URL to avoid duplicates
+  // Check for existing recipe with same source URL to avoid duplicates
   if (r.source_url) {
     const existing = db.prepare(
-      "SELECT * FROM recipes WHERE name = ? AND source_url = ?"
-    ).get(r.title, r.source_url);
+      "SELECT * FROM recipes WHERE source_url = ?"
+    ).get(r.source_url);
     if (existing) {
       return res.status(200).json(rowToRecipe(existing));
     }
@@ -399,6 +305,52 @@ Return ONLY valid JSON, no markdown fences, no explanation.`,
       return res.status(500).json({ error: "Failed to parse Claude response" });
     }
     res.status(500).json({ error: error.message || "Failed to suggest ingredients" });
+  }
+});
+
+// POST /api/recipes/backfill-ingredients — re-extract ingredients for web_search recipes with empty ingredients
+router.post("/backfill-ingredients", async (_req: Request, res: Response) => {
+  try {
+    const emptyRecipes = db.prepare(
+      `SELECT id, name, source_url FROM recipes
+       WHERE source_type = 'web_search'
+         AND source_url IS NOT NULL
+         AND (ingredients IS NULL OR ingredients = '[]' OR ingredients = '')`
+    ).all() as Array<{ id: number; name: string; source_url: string }>;
+
+    if (emptyRecipes.length === 0) {
+      return res.json({ message: "No recipes need backfill", backfilled: [] });
+    }
+
+    console.log(`[backfill] Found ${emptyRecipes.length} recipes with empty ingredients:`, emptyRecipes.map(r => `${r.id}: ${r.name}`));
+
+    const results: Array<{ id: number; name: string; ingredientCount: number }> = [];
+
+    for (const recipe of emptyRecipes) {
+      const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url);
+      if (extracted.length > 0) {
+        db.prepare("UPDATE recipes SET ingredients = ? WHERE id = ?").run(
+          JSON.stringify(extracted),
+          recipe.id,
+        );
+        // Also insert into recipe_ingredients table
+        const insertIng = db.prepare(
+          "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
+        );
+        for (const ing of extracted) {
+          insertIng.run(recipe.id, ing.name, ing.quantity, ing.unit, ing.category);
+        }
+        console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extracted ${extracted.length} ingredients`);
+      } else {
+        console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extraction still failed`);
+      }
+      results.push({ id: recipe.id, name: recipe.name, ingredientCount: extracted.length });
+    }
+
+    res.json({ message: `Backfilled ${results.filter(r => r.ingredientCount > 0).length}/${emptyRecipes.length} recipes`, results });
+  } catch (error: any) {
+    console.error("Backfill error:", error);
+    res.status(500).json({ error: error.message || "Failed to backfill ingredients" });
   }
 });
 

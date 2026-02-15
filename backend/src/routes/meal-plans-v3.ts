@@ -3,12 +3,17 @@
 
 import { Router, Request, Response } from "express";
 import { generateMealPlanV3 } from "../services/mealPlanGeneratorV3";
+import { extractIngredientsFromUrl } from "../services/ingredientExtractor";
 import db from "../db";
 
 const router = Router();
+let generateCallCount = 0;
 
 // Generate meal plan V3 (enhanced)
 router.post("/generate-v3", async (req: Request, res: Response) => {
+  generateCallCount++;
+  const callId = generateCallCount;
+  console.log(`[generate-v3] === CALL #${callId} START ===`);
   try {
     const {
       family_id,
@@ -20,6 +25,7 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
       vegetarian_ratio,
       settings,
       specific_meals,
+      locks,
     } = req.body;
 
     if (!family_id || !week_start || !cooking_schedule) {
@@ -51,7 +57,42 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
       vegetarianRatio: vegetarian_ratio || 40,
       settings: settings || {},
       specificMeals: specific_meals,
+      locks: locks || undefined,
     });
+
+    // Lazy backfill: extract ingredients for any assigned recipe that has none
+    const assignedRecipes = db.prepare(`
+      SELECT DISTINCT r.id, r.name, r.source_url, r.ingredients
+      FROM meal_plan_items mpi
+      JOIN recipes r ON r.id = mpi.recipe_id
+      WHERE mpi.meal_plan_id = ?
+        AND r.source_url IS NOT NULL
+        AND (r.ingredients IS NULL OR r.ingredients = '[]' OR r.ingredients = '')
+    `).all(mealPlan.id) as Array<{ id: number; name: string; source_url: string; ingredients: string }>;
+
+    if (assignedRecipes.length > 0) {
+      console.log(`[generate-v3] Lazy backfill: ${assignedRecipes.length} assigned recipes have no ingredients`);
+      for (const recipe of assignedRecipes) {
+        console.log(`[generate-v3] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
+        const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url);
+        if (extracted.length > 0) {
+          db.prepare("UPDATE recipes SET ingredients = ? WHERE id = ?").run(
+            JSON.stringify(extracted),
+            recipe.id,
+          );
+          // Also populate recipe_ingredients table
+          const insertIng = db.prepare(
+            "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
+          );
+          for (const ing of extracted) {
+            insertIng.run(recipe.id, ing.name, ing.quantity, ing.unit, ing.category);
+          }
+          console.log(`[generate-v3] Extracted ${extracted.length} ingredients for #${recipe.id} "${recipe.name}"`);
+        } else {
+          console.warn(`[generate-v3] Failed to extract ingredients for #${recipe.id} "${recipe.name}"`);
+        }
+      }
+    }
 
     // Fetch the generated items with recipe details
     const items = db.prepare(`
@@ -68,6 +109,8 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
         WHEN 'thursday' THEN 4 WHEN 'friday' THEN 5 WHEN 'saturday' THEN 6 WHEN 'sunday' THEN 7
       END, mpi.meal_type, mpi.main_number
     `).all(mealPlan.id) as any[];
+
+    console.log(`[generate-v3] === CALL #${callId} END === planId=${mealPlan.id}, items=${items.length}`);
 
     res.status(201).json({
       ...mealPlan,
