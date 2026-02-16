@@ -2,6 +2,7 @@
 // Shared ingredient extraction via Claude web_search
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createWithRetry } from "./claudeRetry";
 import type { Ingredient, GroceryCategory } from "../../../shared/types";
 
 const VALID_UNITS = new Set([
@@ -27,7 +28,7 @@ export async function extractIngredientsFromUrl(
 
     const client = new Anthropic({ apiKey });
 
-    const message = await client.messages.create({
+    const message = await createWithRetry(client, {
       model: "claude-sonnet-4-5-20250929",
       max_tokens: 2048,
       tools: [
@@ -68,7 +69,7 @@ Rules:
 
     // Fallback: retry with a name-only search (bypasses URL-specific bot blocking)
     console.log(`[extractIngredients] Retrying with name-only search for "${recipeName}"`);
-    const fallbackMessage = await client.messages.create({
+    const fallbackMessage = await createWithRetry(client, {
       model: "claude-sonnet-4-5-20250929",
       max_tokens: 2048,
       tools: [

@@ -4,6 +4,7 @@ import db from "../db";
 import { rowToRecipe } from "../helpers";
 import { validateRecipe } from "../validation";
 import { extractIngredientsFromUrl } from "../services/ingredientExtractor";
+import { createWithRetry, RateLimitError } from "../services/claudeRetry";
 import type { RecipeInput } from "../../../shared/types";
 import { VALID_CUISINES, VALID_DIFFICULTIES } from "../../../shared/types";
 
@@ -30,7 +31,7 @@ router.post("/search", async (req: Request, res: Response) => {
   const client = new Anthropic({ apiKey });
 
   try {
-    const message = await client.messages.create({
+    const message = await createWithRetry(client, {
       model: "claude-sonnet-4-5-20250929",
       max_tokens: 4096,
       tools: [
@@ -85,6 +86,9 @@ Constraints:
     res.json({ results });
   } catch (error: any) {
     console.error("Recipe search error:", error);
+    if (error instanceof RateLimitError) {
+      return res.status(429).json({ error: error.message });
+    }
     if (error instanceof SyntaxError) {
       return res.status(500).json({ error: "Failed to parse Claude response" });
     }
@@ -108,34 +112,13 @@ router.post("/batch-search", async (req: Request, res: Response) => {
   const cappedQueries = queries.slice(0, 5);
 
   try {
-    const message = await client.messages.create({
+    const message = await createWithRetry(client, {
       model: "claude-sonnet-4-5-20250929",
-      max_tokens: Math.min(2048 * cappedQueries.length, 8192),
+      max_tokens: Math.min(1500 * cappedQueries.length, 6000),
       tools: [
         { type: "web_search_20250305", name: "web_search", max_uses: Math.min(2 * cappedQueries.length, 10) } as any,
       ],
-      system: `You are a recipe search assistant. The user will give you multiple recipe queries. For EACH query, use web search to find real recipes online. Then return a single JSON object where each key is the EXACT original query string and each value is an array of 3-5 recipe results.
-
-Each result must have this exact structure:
-{
-  "name": "Recipe Title",
-  "source_name": "Website Name (e.g. Food Network, Bon Appetit)",
-  "source_url": "https://full-url-to-recipe",
-  "cook_minutes": 45,
-  "cuisine": "american",
-  "vegetarian": false,
-  "protein_type": "chicken",
-  "difficulty": "medium",
-  "kid_friendly": true,
-  "description": "Brief 1-2 sentence description of the dish"
-}
-
-Constraints:
-- cuisine must be one of: ${VALID_CUISINES.join(", ")}
-- difficulty must be one of: ${VALID_DIFFICULTIES.join(", ")}
-- protein_type should be null for vegetarian dishes
-- cook_minutes should be total time (prep + cook)
-- Return ONLY the JSON object, no markdown fences, no explanation.`,
+      system: `Search the web for each recipe query. Return a JSON object: keys are the EXACT original query strings, values are arrays of 3-5 results. Each result: { "name": string, "source_name": string, "source_url": string, "cook_minutes": number, "cuisine": string, "vegetarian": boolean, "protein_type": string|null, "difficulty": string, "kid_friendly": boolean, "description": string (1 sentence max) }. cuisine: one of ${VALID_CUISINES.join(", ")}. difficulty: one of ${VALID_DIFFICULTIES.join(", ")}. protein_type: null if vegetarian. Return ONLY valid JSON, no fences or explanation.`,
       messages: [
         {
           role: "user",
@@ -166,6 +149,9 @@ Constraints:
     res.json({ results: parsed });
   } catch (error: any) {
     console.error("Batch recipe search error:", error);
+    if (error instanceof RateLimitError) {
+      return res.status(429).json({ error: error.message });
+    }
     if (error instanceof SyntaxError) {
       return res.status(500).json({ error: "Failed to parse Claude response" });
     }
