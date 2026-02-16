@@ -142,6 +142,16 @@ export async function createRecipe(data: RecipeInput): Promise<Recipe> {
   );
 }
 
+export async function importRecipeFromUrl(url: string): Promise<{ recipe: Recipe; alreadyExists: boolean }> {
+  return json(
+    await fetch(`${BASE}/recipes/import-from-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    }),
+  );
+}
+
 export async function matchRecipeInDb(query: string): Promise<Recipe | null> {
   const data = await json<{ match: Recipe | null; score: number }>(
     await fetch(`${BASE}/recipes/match`, {

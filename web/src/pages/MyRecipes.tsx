@@ -4,8 +4,9 @@ import type { Recipe, FamilyFavoriteMeal, RecipeInput, Cuisine, Difficulty } fro
 import { VALID_CUISINES, VALID_DIFFICULTIES } from "@shared/types";
 import {
   getFamilies, getFavoriteMeals, getMealPlanHistory, getRecipes,
-  addMealToDay, deleteFavoriteMeal, getSideSuggestions, addSide,
-  deleteRecipe, renameRecipe, createRecipe,
+  addMealToDay, deleteFavoriteMeal, createFavoriteMeal,
+  getSideSuggestions, addSide,
+  deleteRecipe, renameRecipe, createRecipe, importRecipeFromUrl,
 } from "../api";
 import { CUISINE_COLORS } from "../components/SwapMainModal";
 
@@ -87,10 +88,13 @@ export default function MyRecipes() {
     cook_minutes: 30,
     difficulty: "medium" as Difficulty,
     vegetarian: false,
-    source_url: "",
-    noUrl: false,
   });
   const [addingSaving, setAddingSaving] = useState(false);
+
+  // URL recipe modal state
+  const [showUrlModal, setShowUrlModal] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [urlProgress, setUrlProgress] = useState<string | null>(null);
 
   // Search & filter state
   const [search, setSearch] = useState("");
@@ -243,7 +247,7 @@ export default function MyRecipes() {
         tags: [],
         source_type: "user",
         source_name: null,
-        source_url: addForm.noUrl ? null : (addForm.source_url.trim() || null),
+        source_url: null,
         difficulty: addForm.difficulty,
         seasonal_tags: [],
         frequency_cap_per_month: null,
@@ -252,11 +256,59 @@ export default function MyRecipes() {
       setRecipes((prev) => [created, ...prev]);
       showToast(`Added "${created.title}"`);
       setShowAddModal(false);
-      setAddForm({ name: "", cuisine: "american", protein_type: "", cook_minutes: 30, difficulty: "medium", vegetarian: false, source_url: "", noUrl: false });
+      setAddForm({ name: "", cuisine: "american", protein_type: "", cook_minutes: 30, difficulty: "medium", vegetarian: false });
     } catch (err: any) {
       showToast(err.message || "Failed to add recipe");
     } finally {
       setAddingSaving(false);
+    }
+  };
+
+  const toggleLoved = async (recipe: Recipe) => {
+    const name = recipe.title.toLowerCase();
+    const fav = loved.find((f) => f.name.toLowerCase() === name);
+    if (fav) {
+      try {
+        await deleteFavoriteMeal(fav.id);
+        setLoved((prev) => prev.filter((f) => f.id !== fav.id));
+        showToast(`Removed "${recipe.title}" from loved`);
+      } catch { showToast("Failed to update"); }
+    } else {
+      try {
+        const families = await getFamilies();
+        const familyId = families[0]?.id;
+        if (!familyId) return;
+        const created = await createFavoriteMeal(familyId, { name: recipe.title });
+        setLoved((prev) => [...prev, created]);
+        showToast(`Loved "${recipe.title}"`);
+      } catch { showToast("Failed to update"); }
+    }
+  };
+
+  const handleImportFromUrl = async () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    try {
+      setUrlProgress("\uD83D\uDD0D Fetching recipe details...");
+      await new Promise((r) => setTimeout(r, 600));
+      setUrlProgress("\uD83D\uDCDD Extracting recipe information...");
+      const { recipe, alreadyExists } = await importRecipeFromUrl(trimmed);
+      setUrlProgress("\uD83E\uDD55 Scanning ingredients for your grocery lists...");
+      await new Promise((r) => setTimeout(r, 800));
+      setUrlProgress("\u2705 Recipe added!");
+      await new Promise((r) => setTimeout(r, 1000));
+      if (alreadyExists) {
+        showToast(`"${recipe.title}" was already in your collection`);
+      } else {
+        setRecipes((prev) => [recipe, ...prev]);
+        showToast(`Added "${recipe.title}" with ${recipe.ingredients?.length || 0} ingredients`);
+      }
+      setShowUrlModal(false);
+      setUrlInput("");
+      setUrlProgress(null);
+    } catch (err: any) {
+      setUrlProgress(null);
+      showToast(err.message || "Failed to import recipe");
     }
   };
 
@@ -375,12 +427,20 @@ export default function MyRecipes() {
               {recipes.length} recipes
             </span>
           </h2>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
-          >
-            + Add Recipe
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
+            >
+              + Personal Recipe
+            </button>
+            <button
+              onClick={() => setShowUrlModal(true)}
+              className="text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
+            >
+              + URL Recipe
+            </button>
+          </div>
         </div>
 
         {/* Search + Filters */}
@@ -554,10 +614,14 @@ export default function MyRecipes() {
                           >Cancel</button>
                         </div>
                       ) : (
-                        <p className="font-medium text-gray-900 truncate group/name">
-                          <span className="mr-1.5 cursor-default" title={isLoved ? "Loved" : ""}>
+                        <p className="font-medium text-gray-900 truncate group/name flex items-center">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleLoved(r); }}
+                            className="mr-1.5 hover:scale-125 transition-transform shrink-0"
+                            title={isLoved ? "Remove from loved" : "Love this recipe"}
+                          >
                             {isLoved ? "❤️" : "♡"}
-                          </span>
+                          </button>
                           {r.title}
                           <button
                             onClick={(e) => { e.stopPropagation(); startRename(r); }}
@@ -765,7 +829,7 @@ export default function MyRecipes() {
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900">Add Recipe</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Add Personal Recipe</h3>
 
             <div className="space-y-3">
               <div>
@@ -774,7 +838,7 @@ export default function MyRecipes() {
                   type="text"
                   value={addForm.name}
                   onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
-                  placeholder="e.g. Ina's Best Mac and Cheese"
+                  placeholder="e.g., Grandma's Meatballs"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   autoFocus
                   onKeyDown={(e) => { if (e.key === "Enter" && addForm.name.trim()) handleAddRecipe(); }}
@@ -842,27 +906,6 @@ export default function MyRecipes() {
                 <span className="text-sm text-gray-700">Vegetarian</span>
               </label>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Reference recipe URL (optional)</label>
-                <input
-                  type="url"
-                  value={addForm.source_url}
-                  onChange={(e) => setAddForm({ ...addForm, source_url: e.target.value })}
-                  placeholder="https://..."
-                  disabled={addForm.noUrl}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-400"
-                />
-              </div>
-
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={addForm.noUrl}
-                  onChange={(e) => setAddForm({ ...addForm, noUrl: e.target.checked, source_url: e.target.checked ? "" : addForm.source_url })}
-                  className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="text-sm text-gray-700">I know this recipe by heart</span>
-              </label>
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
@@ -880,6 +923,57 @@ export default function MyRecipes() {
                 {addingSaving ? "Adding..." : "Add Recipe"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* URL Recipe Modal */}
+      {showUrlModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Add Recipe from URL</h3>
+
+            {urlProgress ? (
+              <div className="py-8 text-center space-y-3">
+                <p className="text-sm text-gray-700 font-medium">{urlProgress}</p>
+                {!urlProgress.startsWith("\u2705") && (
+                  <div className="flex justify-center">
+                    <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Paste recipe URL here</label>
+                  <input
+                    type="url"
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    placeholder="https://www.bonappetit.com/recipe/..."
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter" && urlInput.trim()) handleImportFromUrl(); }}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => { setShowUrlModal(false); setUrlInput(""); }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleImportFromUrl}
+                    disabled={!urlInput.trim()}
+                    className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Add Recipe
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

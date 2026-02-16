@@ -454,6 +454,186 @@ Return ONLY valid JSON, no markdown fences, no explanation.`,
   }
 });
 
+// POST /api/recipes/import-from-url — extract full recipe details from a URL
+router.post("/import-from-url", async (req: Request, res: Response) => {
+  const { url } = req.body;
+  if (!url || typeof url !== "string" || !url.trim()) {
+    return res.status(400).json({ error: "url is required" });
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
+  }
+
+  // Check for existing recipe with same URL
+  const existing = db.prepare("SELECT * FROM recipes WHERE source_url = ?").get(url.trim());
+  if (existing) {
+    return res.status(200).json({ recipe: rowToRecipe(existing), alreadyExists: true });
+  }
+
+  const client = new Anthropic({ apiKey });
+
+  try {
+    // Step 1: Extract recipe metadata from URL
+    const message = await createWithRetry(client, {
+      model: "claude-sonnet-4-5-20250929",
+      max_tokens: 4096,
+      tools: [
+        { type: "web_search_20250305", name: "web_search", max_uses: 5 } as any,
+      ],
+      system: `You are a recipe extraction assistant. Given a recipe URL, fetch the page and extract ALL recipe details.
+
+Return ONLY a JSON object with this exact structure:
+{
+  "title": "Full Recipe Title",
+  "source_name": "Website Name (e.g. Bon Appetit, Food Network)",
+  "cuisine": "american",
+  "cook_minutes": 45,
+  "vegetarian": false,
+  "protein_type": "chicken",
+  "difficulty": "medium",
+  "kid_friendly": true,
+  "makes_leftovers": false,
+  "allergens": [],
+  "tags": [],
+  "ingredients": [
+    { "name": "ingredient name", "quantity": 1.5, "unit": "lb", "category": "protein" }
+  ]
+}
+
+Constraints:
+- cuisine must be one of: ${VALID_CUISINES.join(", ")}
+- difficulty must be one of: ${VALID_DIFFICULTIES.join(", ")}
+- protein_type should be null for vegetarian dishes
+- cook_minutes should be total time (prep + cook)
+- Extract the ACTUAL ingredients from the recipe page exactly as specified
+- Valid ingredient units: lb, oz, cup, cups, tbsp, tsp, count, cloves, can, bag, bunch, inch, box, slices, head, pint
+- Valid ingredient categories: produce, dairy, pantry, protein, spices, grains, frozen, other
+- For items counted by number (e.g. "3 eggs"), use unit "count"
+- For items like "salt and pepper to taste", use quantity 1 and unit "tsp"
+- Return ONLY valid JSON, no markdown fences, no explanation.`,
+      messages: [
+        { role: "user", content: `Extract the full recipe details and ingredients from this URL: ${url.trim()}` },
+      ],
+    });
+
+    let lastText = "";
+    for (const block of message.content) {
+      if ((block as any).type === "text") {
+        lastText = (block as any).text;
+      }
+    }
+
+    if (!lastText) {
+      return res.status(500).json({ error: "No response from recipe extraction" });
+    }
+
+    const cleaned = lastText
+      .replace(/^```(?:json)?\s*\n?/, "")
+      .replace(/\n?```\s*$/, "")
+      .trim();
+
+    // Find JSON object
+    const objStart = cleaned.indexOf("{");
+    const objEnd = cleaned.lastIndexOf("}");
+    if (objStart === -1 || objEnd === -1) {
+      return res.status(500).json({ error: "Failed to parse recipe data" });
+    }
+
+    const parsed = JSON.parse(cleaned.slice(objStart, objEnd + 1));
+
+    // Validate and normalize
+    const cuisine = VALID_CUISINES.includes(parsed.cuisine) ? parsed.cuisine : "american";
+    const difficulty = VALID_DIFFICULTIES.includes(parsed.difficulty) ? parsed.difficulty : "medium";
+
+    const VALID_UNITS = new Set([
+      "lb", "oz", "cup", "cups", "tbsp", "tsp", "count", "cloves", "can",
+      "bag", "bunch", "inch", "box", "slices", "head", "pint",
+    ]);
+    const VALID_CATEGORIES = new Set([
+      "produce", "dairy", "pantry", "protein", "spices", "grains", "frozen", "other",
+    ]);
+
+    const ingredients = (parsed.ingredients || []).filter((ing: any) => {
+      if (!ing || typeof ing !== "object") return false;
+      if (typeof ing.name !== "string" || !ing.name.trim()) return false;
+      if (typeof ing.quantity !== "number" || ing.quantity <= 0) return false;
+      if (!VALID_UNITS.has(ing.unit)) return false;
+      if (!VALID_CATEGORIES.has(ing.category)) return false;
+      return true;
+    }).map((ing: any) => ({
+      name: ing.name.trim(),
+      quantity: ing.quantity,
+      unit: ing.unit,
+      category: ing.category,
+    }));
+
+    // Create the recipe
+    const recipeData: RecipeInput = {
+      title: parsed.title || "Untitled Recipe",
+      cuisine,
+      vegetarian: !!parsed.vegetarian,
+      protein_type: parsed.vegetarian ? null : (parsed.protein_type || null),
+      cook_minutes: parsed.cook_minutes || 30,
+      allergens: parsed.allergens || [],
+      kid_friendly: parsed.kid_friendly !== false,
+      makes_leftovers: !!parsed.makes_leftovers,
+      leftovers_score: 0,
+      ingredients,
+      tags: parsed.tags || [],
+      source_type: "web_search",
+      source_name: parsed.source_name || null,
+      source_url: url.trim(),
+      difficulty,
+      seasonal_tags: [],
+      frequency_cap_per_month: null,
+    };
+
+    const result = db.prepare(`
+      INSERT INTO recipes (name, cuisine, vegetarian, protein_type, cook_minutes,
+        allergens, kid_friendly, makes_leftovers, ingredients, tags,
+        source_type, source_name, source_url, difficulty, leftovers_score,
+        seasonal_tags, frequency_cap_per_month)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      recipeData.title, recipeData.cuisine, recipeData.vegetarian ? 1 : 0,
+      recipeData.protein_type, recipeData.cook_minutes,
+      JSON.stringify(recipeData.allergens), recipeData.kid_friendly ? 1 : 0,
+      recipeData.makes_leftovers ? 1 : 0, JSON.stringify(ingredients),
+      JSON.stringify(recipeData.tags), recipeData.source_type,
+      recipeData.source_name, recipeData.source_url, recipeData.difficulty,
+      0, JSON.stringify([]), null,
+    );
+
+    const recipeId = result.lastInsertRowid as number;
+
+    // Insert recipe_ingredients
+    if (ingredients.length > 0) {
+      const insertIng = db.prepare(
+        "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
+      );
+      for (const ing of ingredients) {
+        insertIng.run(recipeId, ing.name, ing.quantity, ing.unit, ing.category);
+      }
+    }
+
+    const created = db.prepare("SELECT * FROM recipes WHERE id = ?").get(recipeId);
+    console.log(`[import-from-url] Created recipe ${recipeId}: "${recipeData.title}" with ${ingredients.length} ingredients`);
+
+    res.status(201).json({ recipe: rowToRecipe(created), alreadyExists: false });
+  } catch (error: any) {
+    console.error("Import from URL error:", error);
+    if (error instanceof RateLimitError) {
+      return res.status(429).json({ error: error.message });
+    }
+    if (error instanceof SyntaxError) {
+      return res.status(500).json({ error: "Failed to parse recipe data from URL" });
+    }
+    res.status(500).json({ error: error.message || "Failed to import recipe from URL" });
+  }
+});
+
 // POST /api/recipes/backfill-ingredients — re-extract ingredients for web_search recipes with empty ingredients
 router.post("/backfill-ingredients", async (_req: Request, res: Response) => {
   try {
