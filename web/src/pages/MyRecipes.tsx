@@ -4,6 +4,7 @@ import type { Recipe, FamilyFavoriteMeal } from "@shared/types";
 import {
   getFamilies, getFavoriteMeals, getMealPlanHistory, getRecipes,
   addMealToDay, deleteFavoriteMeal, getSideSuggestions, addSide,
+  deleteRecipe, deleteGenericRecipes,
 } from "../api";
 import { CUISINE_COLORS } from "../components/SwapMainModal";
 
@@ -72,6 +73,9 @@ export default function MyRecipes() {
   const [addingToDay, setAddingToDay] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [removingLoved, setRemovingLoved] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Recipe | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [cleaningUp, setCleaningUp] = useState(false);
 
   // Search & filter state
   const [search, setSearch] = useState("");
@@ -163,6 +167,49 @@ export default function MyRecipes() {
       setRemovingLoved(null);
     }
   };
+
+  const handleDeleteRecipe = async (recipe: Recipe) => {
+    setDeleting(true);
+    try {
+      await deleteRecipe(recipe.id);
+      setRecipes((prev) => prev.filter((r) => r.id !== recipe.id));
+      // Also remove from loved if applicable
+      const fav = loved.find((f) => f.name.toLowerCase() === recipe.title.toLowerCase());
+      if (fav) {
+        try { await deleteFavoriteMeal(fav.id); } catch {}
+        setLoved((prev) => prev.filter((f) => f.id !== fav.id));
+      }
+      showToast(`Deleted "${recipe.title}"`);
+    } catch (err: any) {
+      showToast(err.message || "Failed to delete recipe");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(null);
+    }
+  };
+
+  const handleCleanUpGeneric = async () => {
+    setCleaningUp(true);
+    try {
+      const { deleted } = await deleteGenericRecipes();
+      if (deleted > 0) {
+        const updated = await getRecipes();
+        setRecipes(updated);
+        showToast(`Removed ${deleted} generic recipe${deleted !== 1 ? "s" : ""}`);
+      } else {
+        showToast("No generic recipes to remove");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to clean up");
+    } finally {
+      setCleaningUp(false);
+    }
+  };
+
+  const genericCount = useMemo(
+    () => recipes.filter((r) => !r.source_url).length,
+    [recipes],
+  );
 
   // Build lookup maps from history for sorting
   const { recencyMap, frequencyMap } = useMemo(() => {
@@ -286,12 +333,23 @@ export default function MyRecipes() {
     <div className="max-w-2xl mx-auto space-y-10 py-4">
       {/* ── Recipe Collection with Search/Filter/Sort ── */}
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-          My Recipe Collection
-          <span className="ml-2 text-gray-300 font-normal normal-case">
-            {recipes.length} recipes
-          </span>
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+            My Recipe Collection
+            <span className="ml-2 text-gray-300 font-normal normal-case">
+              {recipes.length} recipes
+            </span>
+          </h2>
+          {genericCount > 0 && (
+            <button
+              onClick={handleCleanUpGeneric}
+              disabled={cleaningUp}
+              className="text-xs text-gray-400 hover:text-red-500 font-medium transition-colors disabled:opacity-50"
+            >
+              {cleaningUp ? "Cleaning up..." : `Clean up ${genericCount} generic recipe${genericCount !== 1 ? "s" : ""}`}
+            </button>
+          )}
+        </div>
 
         {/* Search bar */}
         <div className="relative">
@@ -528,6 +586,12 @@ export default function MyRecipes() {
                             {removingLoved === r.id ? "Removing..." : "Remove from Loved"}
                           </button>
                         )}
+                        <button
+                          onClick={() => setConfirmDelete(r)}
+                          className="text-xs text-gray-400 hover:text-red-500 font-medium ml-auto"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   )}
@@ -542,6 +606,36 @@ export default function MyRecipes() {
       {successMessage && (
         <div className="fixed top-4 right-4 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg animate-fade-in">
           {successMessage}
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full mx-4 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Delete {confirmDelete.title}?
+            </h3>
+            <p className="text-sm text-gray-500">
+              This will remove it from your collection and any future meal plans.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteRecipe(confirmDelete)}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

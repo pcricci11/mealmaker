@@ -378,22 +378,33 @@ router.put("/:id", (req: Request, res: Response) => {
   res.json(rowToRecipe(updated));
 });
 
+// DELETE /api/recipes/bulk/generic — remove all recipes without a source_url
+router.delete("/bulk/generic", (_req: Request, res: Response) => {
+  const generics = db.prepare(
+    "SELECT id FROM recipes WHERE source_url IS NULL OR source_url = ''"
+  ).all() as Array<{ id: number }>;
+
+  if (generics.length === 0) {
+    return res.json({ deleted: 0 });
+  }
+
+  const ids = generics.map((r) => r.id);
+  const placeholders = ids.map(() => "?").join(",");
+
+  db.prepare(`UPDATE meal_plan_items SET recipe_id = NULL WHERE recipe_id IN (${placeholders})`).run(...ids);
+  db.prepare(`DELETE FROM recipe_ingredients WHERE recipe_id IN (${placeholders})`).run(...ids);
+  db.prepare(`DELETE FROM recipes WHERE id IN (${placeholders})`).run(...ids);
+
+  res.json({ deleted: ids.length });
+});
+
 // DELETE /api/recipes/:id
 router.delete("/:id", (req: Request, res: Response) => {
   const existing = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id) as any;
   if (!existing) return res.status(404).json({ error: "Recipe not found" });
 
-  // Only user-created recipes can be deleted
-  if (existing.source_type !== "user") {
-    return res.status(403).json({ error: "Only user-created recipes can be deleted" });
-  }
-
-  // Check if used in any meal plans
-  const usage = db.prepare("SELECT COUNT(*) as c FROM meal_plan_items WHERE recipe_id = ?").get(req.params.id) as { c: number };
-  if (usage.c > 0) {
-    return res.status(409).json({ error: "Recipe is used in existing meal plans and cannot be deleted" });
-  }
-
+  // Nullify references in meal_plan_items so we don't break plan history
+  db.prepare("UPDATE meal_plan_items SET recipe_id = NULL WHERE recipe_id = ?").run(req.params.id);
   db.prepare("DELETE FROM recipe_ingredients WHERE recipe_id = ?").run(req.params.id);
   db.prepare("DELETE FROM recipes WHERE id = ?").run(req.params.id);
   res.status(204).send();
