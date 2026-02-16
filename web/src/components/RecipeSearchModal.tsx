@@ -177,10 +177,10 @@ export default function RecipeSearchModal({
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-200 border-t-emerald-600 mb-3" />
               <p className="text-gray-500 text-sm">
-                Searching the web for recipes...
+                \uD83D\uDD0D Sizzling up some recipe ideas...
               </p>
               <p className="text-gray-400 text-xs mt-1">
-                This may take 5-15 seconds
+                Saut\u00E9ing through the web for you
               </p>
             </div>
           ) : saving ? (
@@ -188,13 +188,13 @@ export default function RecipeSearchModal({
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-200 border-t-emerald-600 mb-3" />
               {savingPhase === "ingredients" ? (
                 <>
-                  <p className="text-gray-500 text-sm">Building your grocery list...</p>
-                  <p className="text-gray-400 text-xs mt-1">Extracting ingredients from the recipe</p>
+                  <p className="text-gray-500 text-sm">\uD83E\uDD55 Chopping through the ingredient list...</p>
+                  <p className="text-gray-400 text-xs mt-1">Prepping ingredients for your grocery lists</p>
                 </>
               ) : (
                 <>
-                  <p className="text-gray-500 text-sm">Adding recipe to your collection...</p>
-                  <p className="text-gray-400 text-xs mt-1">Saving to your recipe book</p>
+                  <p className="text-gray-500 text-sm">Whisking this recipe into your collection...</p>
+                  <p className="text-gray-400 text-xs mt-1">Almost plated!</p>
                 </>
               )}
             </div>

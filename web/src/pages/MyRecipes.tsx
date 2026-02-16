@@ -289,13 +289,13 @@ export default function MyRecipes() {
     const trimmed = urlInput.trim();
     if (!trimmed) return;
     try {
-      setUrlProgress("\uD83D\uDD0D Fetching recipe details...");
-      await new Promise((r) => setTimeout(r, 600));
-      setUrlProgress("\uD83D\uDCDD Extracting recipe information...");
-      const { recipe, alreadyExists } = await importRecipeFromUrl(trimmed);
-      setUrlProgress("\uD83E\uDD55 Scanning ingredients for your grocery lists...");
+      setUrlProgress("\uD83D\uDD0D Checking out this recipe...");
       await new Promise((r) => setTimeout(r, 800));
-      setUrlProgress("\u2705 Recipe added!");
+      setUrlProgress("Wow, that looks delicious! Save me some! \uD83D\uDE0B");
+      const { recipe, alreadyExists } = await importRecipeFromUrl(trimmed);
+      setUrlProgress("\uD83D\uDCDD Reading ingredients for future grocery lists!");
+      await new Promise((r) => setTimeout(r, 800));
+      setUrlProgress("\u2705 Added to your collection!");
       await new Promise((r) => setTimeout(r, 1000));
       if (alreadyExists) {
         showToast(`"${recipe.title}" was already in your collection`);
@@ -684,7 +684,7 @@ export default function MyRecipes() {
                                   : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                               } disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
-                              {addingToDay === key ? "..." : label}
+                              {addingToDay === key ? `Plating up! \uD83C\uDF7D\uFE0F` : label}
                             </button>
                           ))}
                         </div>

@@ -54,6 +54,7 @@ export default function Plan() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [plan, setPlan] = useState<MealPlan | null>(null);
   const [loading, setLoading] = useState(false);
+  const [lockProgress, setLockProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lovedIds, setLovedIds] = useState<Set<number>>(new Set());
   const [selectedItem, setSelectedItem] = useState<MealPlanItemV3 | null>(null);
@@ -185,7 +186,7 @@ export default function Plan() {
 
   const handleSmartSetup = async (text: string) => {
     console.log("[Plan] handleSmartSetup called", { text });
-    setSetupProgress({ phase: "parsing", message: "Understanding your week...", searchQueries: [] });
+    setSetupProgress({ phase: "parsing", message: "Prepping your week's menu...", searchQueries: [] });
     setError(null);
     setPendingSearchMeals([]);
     setCurrentSearchIndex(0);
@@ -214,7 +215,7 @@ export default function Plan() {
 
       // Check for specific meal requests
       if (result.specific_meals && result.specific_meals.length > 0) {
-        setSetupProgress({ phase: "matching", message: "Checking your recipe collection...", searchQueries: [] });
+        setSetupProgress({ phase: "matching", message: "Whisking through your recipe collection...", searchQueries: [] });
 
         const fetchedRecipes = await getRecipes();
         setAllRecipes(fetchedRecipes);
@@ -251,7 +252,7 @@ export default function Plan() {
           }));
           setSetupProgress({
             phase: "searching",
-            message: "Searching for recipes online...",
+            message: "\uD83D\uDD0D Sizzling up some recipe ideas...",
             searchQueries,
           });
 
@@ -272,7 +273,7 @@ export default function Plan() {
           await staggerRevealResults(searchQueries, batchResults);
 
           // Brief "done" phase before showing modals
-          setSetupProgress({ phase: "done", message: "All set! Let's pick your recipes...", searchQueries: [] });
+          setSetupProgress({ phase: "done", message: "Found some delicious options! Let's plate up \uD83E\uDD24", searchQueries: [] });
           await new Promise((r) => setTimeout(r, 600));
           setSetupProgress(null);
 
@@ -291,7 +292,7 @@ export default function Plan() {
         }
       } else {
         // No specific meals — just store cooking schedule, user fills manually
-        setSetupProgress({ phase: "done", message: "Schedule set! Now pick your meals.", searchQueries: [] });
+        setSetupProgress({ phase: "done", message: "Kitchen's ready! Time to pick your meals \uD83C\uDF7D\uFE0F", searchQueries: [] });
         await new Promise((r) => setTimeout(r, 1200));
         setSetupProgress(null);
         return;
@@ -358,6 +359,7 @@ export default function Plan() {
 
   const handleLockPlan = async () => {
     setLoading(true);
+    setLockProgress("\uD83D\uDCDD Reading ingredients for your grocery lists!");
     setError(null);
     try {
       const families = await getFamilies();
@@ -380,12 +382,21 @@ export default function Plan() {
         ? Array.from(draftRecipes.entries()).map(([day, r]) => ({ day, description: r.title }))
         : undefined;
 
+      // Timed progress messages
+      const progressTimer1 = setTimeout(() => setLockProgress("Mixing together your shopping list..."), 4000);
+      const progressTimer2 = setTimeout(() => setLockProgress("Almost done \u2014 just seasoning the details..."), 8000);
+
       const result = await generateMealPlanV3({
         family_id: fam.id, week_start: weekStart, cooking_schedule: schedule,
         lunch_needs: [], max_cook_minutes_weekday: fam.max_cook_minutes_weekday ?? 45,
         max_cook_minutes_weekend: fam.max_cook_minutes_weekend ?? 90,
         vegetarian_ratio: fam.vegetarian_ratio ?? 0, locks, specific_meals: specificMeals,
       });
+
+      clearTimeout(progressTimer1);
+      clearTimeout(progressTimer2);
+      setLockProgress("\u2705 Your grocery list is ready!");
+      await new Promise((r) => setTimeout(r, 800));
 
       setPlan(result);
       setDraftRecipes(new Map());
@@ -397,6 +408,7 @@ export default function Plan() {
       setError(err.message || "Failed to lock plan");
     } finally {
       setLoading(false);
+      setLockProgress(null);
     }
   };
 
@@ -530,7 +542,7 @@ export default function Plan() {
             ))}
           </div>
           <p className="text-center text-sm text-gray-400">
-            Generating your personalized meal plan...
+            {lockProgress || "Roasting up your personalized meal plan..."}
           </p>
         </div>
       )}

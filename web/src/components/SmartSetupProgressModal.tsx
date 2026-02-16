@@ -53,12 +53,12 @@ export default function SmartSetupProgressModal({
                       <span className="text-gray-700 truncate">{q.query}</span>
                       {q.status === "found" && (
                         <span className="text-emerald-600 text-xs ml-auto shrink-0">
-                          Found!
+                          Looks delicious! 🤤
                         </span>
                       )}
                       {q.status === "not_found" && (
                         <span className="text-orange-500 text-xs ml-auto shrink-0">
-                          No results
+                          Still hunting...
                         </span>
                       )}
                     </li>
