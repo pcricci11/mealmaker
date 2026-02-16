@@ -17,7 +17,6 @@ export default function App() {
             MealMaker
           </Link>
           <nav className="flex gap-2">
-            <NavLink to="/plan" className={navCls} end>Plan</NavLink>
             <NavLink to="/my-plan" className={navCls}>My Plan</NavLink>
             <NavLink to="/grocery" className={navCls}>Grocery List</NavLink>
             <NavLink to="/recipes" className={navCls}>My Recipes</NavLink>
