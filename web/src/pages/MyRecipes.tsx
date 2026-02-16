@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Recipe, FamilyFavoriteMeal } from "@shared/types";
+import type { Recipe, FamilyFavoriteMeal, RecipeInput, Cuisine, Difficulty } from "@shared/types";
+import { VALID_CUISINES, VALID_DIFFICULTIES } from "@shared/types";
 import {
   getFamilies, getFavoriteMeals, getMealPlanHistory, getRecipes,
   addMealToDay, deleteFavoriteMeal, getSideSuggestions, addSide,
-  deleteRecipe, renameRecipe,
+  deleteRecipe, renameRecipe, createRecipe,
 } from "../api";
 import { CUISINE_COLORS } from "../components/SwapMainModal";
 
@@ -16,11 +17,9 @@ interface HistoryPlan {
 }
 
 type SortOption = "recent" | "alpha" | "cook_time" | "loved";
+type QuickFilter = "all" | "loved";
 
-const CUISINE_FILTERS = [
-  "italian", "mexican", "american", "indian", "chinese",
-  "japanese", "thai", "mediterranean", "korean", "french",
-] as const;
+const CUISINE_FILTERS = VALID_CUISINES;
 
 const PROTEIN_FILTERS = [
   { label: "Chicken", value: "chicken" },
@@ -79,8 +78,23 @@ export default function MyRecipes() {
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
 
+  // Add recipe modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({
+    name: "",
+    cuisine: "american" as Cuisine,
+    protein_type: "",
+    cook_minutes: 30,
+    difficulty: "medium" as Difficulty,
+    vegetarian: false,
+    source_url: "",
+    noUrl: false,
+  });
+  const [addingSaving, setAddingSaving] = useState(false);
+
   // Search & filter state
   const [search, setSearch] = useState("");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
   const [cuisineFilter, setCuisineFilter] = useState<string | null>(null);
   const [proteinFilter, setProteinFilter] = useState<string | "veggie" | null>(null);
   const [cookTimeFilter, setCookTimeFilter] = useState<typeof COOK_TIME_FILTERS[number] | null>(null);
@@ -136,7 +150,6 @@ export default function MyRecipes() {
     setAddingToDay(day);
     try {
       const { id: newItemId } = await addMealToDay(parseInt(currentPlanId), day, recipe.id);
-      // Try to add auto-suggested sides (optional)
       try {
         const sides = await getSideSuggestions(recipe.id);
         for (const side of sides.slice(0, 2)) {
@@ -175,7 +188,6 @@ export default function MyRecipes() {
     try {
       await deleteRecipe(recipe.id);
       setRecipes((prev) => prev.filter((r) => r.id !== recipe.id));
-      // Also remove from loved if applicable
       const fav = loved.find((f) => f.name.toLowerCase() === recipe.title.toLowerCase());
       if (fav) {
         try { await deleteFavoriteMeal(fav.id); } catch {}
@@ -213,15 +225,49 @@ export default function MyRecipes() {
     }
   };
 
+  const handleAddRecipe = async () => {
+    if (!addForm.name.trim()) return;
+    setAddingSaving(true);
+    try {
+      const data: RecipeInput = {
+        title: addForm.name.trim(),
+        cuisine: addForm.cuisine,
+        vegetarian: addForm.vegetarian,
+        protein_type: addForm.vegetarian ? null : (addForm.protein_type || null),
+        cook_minutes: addForm.cook_minutes,
+        allergens: [],
+        kid_friendly: true,
+        makes_leftovers: false,
+        leftovers_score: 0,
+        ingredients: [],
+        tags: [],
+        source_type: "user",
+        source_name: null,
+        source_url: addForm.noUrl ? null : (addForm.source_url.trim() || null),
+        difficulty: addForm.difficulty,
+        seasonal_tags: [],
+        frequency_cap_per_month: null,
+      };
+      const created = await createRecipe(data);
+      setRecipes((prev) => [created, ...prev]);
+      showToast(`Added "${created.title}"`);
+      setShowAddModal(false);
+      setAddForm({ name: "", cuisine: "american", protein_type: "", cook_minutes: 30, difficulty: "medium", vegetarian: false, source_url: "", noUrl: false });
+    } catch (err: any) {
+      showToast(err.message || "Failed to add recipe");
+    } finally {
+      setAddingSaving(false);
+    }
+  };
+
   // Build lookup maps from history for sorting
   const { recencyMap, frequencyMap } = useMemo(() => {
-    const recency = new Map<string, string>(); // recipe title -> most recent week_start
-    const frequency = new Map<string, number>(); // recipe title -> count
+    const recency = new Map<string, string>();
+    const frequency = new Map<string, number>();
     for (const plan of history) {
       for (const item of plan.items ?? []) {
         const name = item.recipe_name;
         if (!name) continue;
-        // Recency: keep the latest date
         const date = plan.week_start || plan.created_at;
         if (!recency.has(name) || date > recency.get(name)!) {
           recency.set(name, date);
@@ -232,7 +278,6 @@ export default function MyRecipes() {
     return { recencyMap: recency, frequencyMap: frequency };
   }, [history]);
 
-  // Loved recipe names for the "loved" sort
   const lovedNames = useMemo(
     () => new Set(loved.map((f) => f.name.toLowerCase())),
     [loved],
@@ -241,6 +286,11 @@ export default function MyRecipes() {
   // Filter & sort recipes
   const filteredRecipes = useMemo(() => {
     let result = recipes;
+
+    // Quick filter: loved only
+    if (quickFilter === "loved") {
+      result = result.filter((r) => lovedNames.has(r.title.toLowerCase()));
+    }
 
     // Text search
     if (search.trim()) {
@@ -257,12 +307,10 @@ export default function MyRecipes() {
       });
     }
 
-    // Cuisine filter
     if (cuisineFilter) {
       result = result.filter((r) => r.cuisine === cuisineFilter);
     }
 
-    // Protein filter
     if (proteinFilter === "veggie") {
       result = result.filter((r) => r.vegetarian);
     } else if (proteinFilter) {
@@ -271,19 +319,16 @@ export default function MyRecipes() {
       );
     }
 
-    // Vegetarian only
     if (vegetarianOnly) {
       result = result.filter((r) => r.vegetarian);
     }
 
-    // Cook time filter
     if (cookTimeFilter) {
       result = result.filter(
         (r) => r.cook_minutes >= cookTimeFilter.min && r.cook_minutes <= cookTimeFilter.max,
       );
     }
 
-    // Sort
     result = [...result].sort((a, b) => {
       switch (sort) {
         case "recent": {
@@ -311,21 +356,9 @@ export default function MyRecipes() {
     });
 
     return result;
-  }, [recipes, search, cuisineFilter, proteinFilter, vegetarianOnly, cookTimeFilter, sort, recencyMap, frequencyMap, lovedNames]);
+  }, [recipes, search, quickFilter, cuisineFilter, proteinFilter, vegetarianOnly, cookTimeFilter, sort, recencyMap, frequencyMap, lovedNames]);
 
-  const hasActiveFilters = !!(search || cuisineFilter || proteinFilter || vegetarianOnly || cookTimeFilter);
-
-  // Derive recently-made recipes from history (for the section below)
-  const recentRecipes: { name: string; lastMade: string }[] = [];
-  const seen = new Set<string>();
-  for (const plan of history) {
-    for (const item of plan.items ?? []) {
-      const name = item.recipe_name;
-      if (!name || seen.has(name)) continue;
-      seen.add(name);
-      recentRecipes.push({ name, lastMade: plan.week_start || plan.created_at });
-    }
-  }
+  const hasActiveFilters = !!(search || cuisineFilter || proteinFilter || vegetarianOnly || cookTimeFilter || quickFilter !== "all");
 
   if (loading) {
     return <div className="text-center py-12 text-gray-400">Loading...</div>;
@@ -333,17 +366,49 @@ export default function MyRecipes() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-10 py-4">
-      {/* ── Recipe Collection with Search/Filter/Sort ── */}
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-          My Recipe Collection
-          <span className="ml-2 text-gray-300 font-normal normal-case">
-            {recipes.length} recipes
-          </span>
-        </h2>
+        {/* Header with add buttons */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+            My Recipes
+            <span className="ml-2 text-gray-300 font-normal normal-case">
+              {recipes.length} recipes
+            </span>
+          </h2>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
+          >
+            + Add Recipe
+          </button>
+        </div>
 
         {/* Search + Filters */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+          {/* Quick filter tabs */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setQuickFilter("all")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                quickFilter === "all"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "text-gray-500 hover:bg-gray-100"
+              }`}
+            >
+              All Recipes
+            </button>
+            <button
+              onClick={() => setQuickFilter("loved")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                quickFilter === "loved"
+                  ? "bg-red-50 text-red-600"
+                  : "text-gray-500 hover:bg-gray-100"
+              }`}
+            >
+              Loved
+            </button>
+          </div>
+
           {/* Search bar */}
           <div className="relative">
             <input
@@ -371,7 +436,6 @@ export default function MyRecipes() {
 
           {/* Filter dropdowns */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-gray-400">Filter:</span>
             <select
               value={cuisineFilter || ""}
               onChange={(e) => setCuisineFilter(e.target.value || null)}
@@ -423,6 +487,7 @@ export default function MyRecipes() {
               <button
                 onClick={() => {
                   setSearch("");
+                  setQuickFilter("all");
                   setCuisineFilter(null);
                   setProteinFilter(null);
                   setVegetarianOnly(false);
@@ -468,7 +533,6 @@ export default function MyRecipes() {
                     <div className="min-w-0">
                       {renamingId === r.id ? (
                         <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                          {isLoved && <span className="mr-1">❤️</span>}
                           <input
                             ref={renameInputRef}
                             value={renameValue}
@@ -491,7 +555,9 @@ export default function MyRecipes() {
                         </div>
                       ) : (
                         <p className="font-medium text-gray-900 truncate group/name">
-                          {isLoved && <span className="mr-1">❤️</span>}
+                          <span className="mr-1.5 cursor-default" title={isLoved ? "Loved" : ""}>
+                            {isLoved ? "❤️" : "♡"}
+                          </span>
                           {r.title}
                           <button
                             onClick={(e) => { e.stopPropagation(); startRename(r); }}
@@ -597,93 +663,10 @@ export default function MyRecipes() {
         )}
       </section>
 
-      {/* Toast notification */}
-      {successMessage && (
-        <div className="fixed top-4 right-4 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg animate-fade-in">
-          {successMessage}
-        </div>
-      )}
-
-      {/* Delete confirmation modal */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full mx-4 p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Delete {confirmDelete.title}?
-            </h3>
-            <p className="text-sm text-gray-500">
-              This will remove it from your collection and any future meal plans.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                disabled={deleting}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDeleteRecipe(confirmDelete)}
-                disabled={deleting}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {deleting ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Loved Recipes ── */}
-      <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-          <span className="text-base">❤️</span> Loved Recipes
-        </h2>
-
-        {loved.length === 0 ? (
-          <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-8 text-center text-gray-400 text-sm">
-            No loved recipes yet. Start loving recipes from your meal plans!
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {loved.map((fav) => (
-              <div
-                key={fav.id}
-                className="bg-white border border-gray-200 rounded-xl px-5 py-4 flex items-center justify-between hover:shadow-sm transition-shadow"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{fav.name}</p>
-                  {fav.notes && (
-                    <p className="text-sm text-gray-500 truncate mt-0.5">{fav.notes}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 shrink-0 ml-4">
-                  {fav.frequency_preference && (
-                    <span className="text-xs text-gray-400 capitalize">
-                      {fav.frequency_preference.replace("_", "/")}
-                    </span>
-                  )}
-                  {fav.recipe_url && (
-                    <a
-                      href={fav.recipe_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-emerald-600 text-sm font-medium hover:text-emerald-700"
-                    >
-                      View
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
       {/* ── Past Meal Plans ── */}
       <section className="space-y-4">
         <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-          <span className="text-base">🌟</span> Past Meal Plans
+          Past Meal Plans
         </h2>
 
         {history.length === 0 ? (
@@ -740,6 +723,166 @@ export default function MyRecipes() {
           </div>
         )}
       </section>
+
+      {/* Toast notification */}
+      {successMessage && (
+        <div className="fixed top-4 right-4 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg animate-fade-in">
+          {successMessage}
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full mx-4 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Delete {confirmDelete.title}?
+            </h3>
+            <p className="text-sm text-gray-500">
+              This will remove it from your collection and any future meal plans.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteRecipe(confirmDelete)}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Recipe Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Add Recipe</h3>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Recipe name</label>
+                <input
+                  type="text"
+                  value={addForm.name}
+                  onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                  placeholder="e.g. Ina's Best Mac and Cheese"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === "Enter" && addForm.name.trim()) handleAddRecipe(); }}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Cuisine</label>
+                  <select
+                    value={addForm.cuisine}
+                    onChange={(e) => setAddForm({ ...addForm, cuisine: e.target.value as Cuisine })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {VALID_CUISINES.map((c) => (
+                      <option key={c} value={c}>{c.replace("_", " ")}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Protein</label>
+                  <input
+                    type="text"
+                    value={addForm.protein_type}
+                    onChange={(e) => setAddForm({ ...addForm, protein_type: e.target.value })}
+                    placeholder="chicken, beef, etc."
+                    disabled={addForm.vegetarian}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Cook time (min)</label>
+                  <input
+                    type="number"
+                    value={addForm.cook_minutes}
+                    onChange={(e) => setAddForm({ ...addForm, cook_minutes: parseInt(e.target.value) || 0 })}
+                    min={0}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Difficulty</label>
+                  <select
+                    value={addForm.difficulty}
+                    onChange={(e) => setAddForm({ ...addForm, difficulty: e.target.value as Difficulty })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {VALID_DIFFICULTIES.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={addForm.vegetarian}
+                  onChange={(e) => setAddForm({ ...addForm, vegetarian: e.target.checked, protein_type: e.target.checked ? "" : addForm.protein_type })}
+                  className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className="text-sm text-gray-700">Vegetarian</span>
+              </label>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Reference recipe URL (optional)</label>
+                <input
+                  type="url"
+                  value={addForm.source_url}
+                  onChange={(e) => setAddForm({ ...addForm, source_url: e.target.value })}
+                  placeholder="https://..."
+                  disabled={addForm.noUrl}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-400"
+                />
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={addForm.noUrl}
+                  onChange={(e) => setAddForm({ ...addForm, noUrl: e.target.checked, source_url: e.target.checked ? "" : addForm.source_url })}
+                  className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className="text-sm text-gray-700">I know this recipe by heart</span>
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddRecipe}
+                disabled={!addForm.name.trim() || addingSaving}
+                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {addingSaving ? "Adding..." : "Add Recipe"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
