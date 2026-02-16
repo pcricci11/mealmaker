@@ -146,6 +146,19 @@ export async function searchRecipesWeb(query: string): Promise<WebSearchRecipeRe
   return data.results;
 }
 
+export async function batchSearchRecipesWeb(
+  queries: string[]
+): Promise<Record<string, WebSearchRecipeResult[]>> {
+  const data = await json<{ results: Record<string, WebSearchRecipeResult[]> }>(
+    await fetch(`${BASE}/recipes/batch-search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queries }),
+    }),
+  );
+  return data.results;
+}
+
 // ── Meal Plans ──
 export async function generateMealPlan(
   familyId: number,

@@ -92,6 +92,87 @@ Constraints:
   }
 });
 
+// POST /api/recipes/batch-search — batch web search for multiple recipes via Claude
+router.post("/batch-search", async (req: Request, res: Response) => {
+  const { queries } = req.body;
+  if (!Array.isArray(queries) || queries.length === 0 || queries.some((q: any) => typeof q !== "string" || !q.trim())) {
+    return res.status(400).json({ error: "queries must be a non-empty array of strings" });
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
+  }
+
+  const client = new Anthropic({ apiKey });
+  const cappedQueries = queries.slice(0, 5);
+
+  try {
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-5-20250929",
+      max_tokens: Math.min(4096 * cappedQueries.length, 16384),
+      tools: [
+        { type: "web_search_20250305", name: "web_search", max_uses: Math.min(3 * cappedQueries.length, 15) } as any,
+      ],
+      system: `You are a recipe search assistant. The user will give you multiple recipe queries. For EACH query, use web search to find real recipes online. Then return a single JSON object where each key is the EXACT original query string and each value is an array of 3-5 recipe results.
+
+Each result must have this exact structure:
+{
+  "name": "Recipe Title",
+  "source_name": "Website Name (e.g. Food Network, Bon Appetit)",
+  "source_url": "https://full-url-to-recipe",
+  "cook_minutes": 45,
+  "cuisine": "american",
+  "vegetarian": false,
+  "protein_type": "chicken",
+  "difficulty": "medium",
+  "kid_friendly": true,
+  "description": "Brief 1-2 sentence description of the dish"
+}
+
+Constraints:
+- cuisine must be one of: ${VALID_CUISINES.join(", ")}
+- difficulty must be one of: ${VALID_DIFFICULTIES.join(", ")}
+- protein_type should be null for vegetarian dishes
+- cook_minutes should be total time (prep + cook)
+- Return ONLY the JSON object, no markdown fences, no explanation.`,
+      messages: [
+        {
+          role: "user",
+          content: `Search for recipes for each of these:\n${cappedQueries.map((q: string, i: number) => `${i + 1}. "${q.trim()}"`).join("\n")}`,
+        },
+      ],
+    });
+
+    // Web search produces multiple content block types; take the last text block
+    let lastText = "";
+    for (const block of message.content) {
+      if (block.type === "text") {
+        lastText = block.text;
+      }
+    }
+
+    if (!lastText) {
+      return res.status(500).json({ error: "No text response from Claude" });
+    }
+
+    // Strip markdown fences if present
+    const cleaned = lastText
+      .replace(/^```(?:json)?\s*\n?/, "")
+      .replace(/\n?```\s*$/, "")
+      .trim();
+    const parsed = JSON.parse(cleaned);
+
+    res.json({ results: parsed });
+  } catch (error: any) {
+    console.error("Batch recipe search error:", error);
+    if (error instanceof SyntaxError) {
+      return res.status(500).json({ error: "Failed to parse Claude response" });
+    }
+    res.status(500).json({ error: error.message || "Failed to batch search recipes" });
+  }
+});
+
 // POST /api/recipes/match — fuzzy search for a recipe in the local database
 router.post("/match", (req: Request, res: Response) => {
   const { query } = req.body;

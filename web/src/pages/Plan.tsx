@@ -13,6 +13,7 @@ import {
   addSide,
   removeSide,
   matchRecipeInDb,
+  batchSearchRecipesWeb,
 } from "../api";
 import MealDetailModal from "../components/MealDetailModal";
 import ConversationalPlanner from "../components/ConversationalPlanner";
@@ -28,6 +29,7 @@ import type {
   MealPlan,
   MealPlanItemV3,
   FamilyMemberV3,
+  WebSearchRecipeResult,
 } from "@shared/types";
 
 const DAYS: { key: string; label: string }[] = [
@@ -74,6 +76,9 @@ export default function Plan() {
     Array<{ day: string; recipe_id: number }>
   >([]);
   const [allRecipes, setAllRecipes] = useState<Recipe[]>([]);
+  const [batchedSearchResults, setBatchedSearchResults] = useState<
+    Record<string, WebSearchRecipeResult[]>
+  >({});
   const shouldAutoGenerate = useRef(false);
 
   // Stored across the search flow for plan generation
@@ -248,6 +253,17 @@ export default function Plan() {
         shouldAutoGenerate.current = true;
 
         if (unmatched.length > 0) {
+          // Batch search all unmatched meals in a single API call
+          try {
+            const batchResults = await batchSearchRecipesWeb(
+              unmatched.map((m) => m.description)
+            );
+            console.log("[Plan] batch search results", batchResults);
+            setBatchedSearchResults(batchResults);
+          } catch (err) {
+            console.warn("[Plan] batch search failed, modals will search individually", err);
+            setBatchedSearchResults({});
+          }
           setPendingSearchMeals(unmatched);
           setCurrentSearchIndex(0);
         } else {
@@ -542,6 +558,7 @@ export default function Plan() {
               ? `${currentSearchIndex + 1} of ${pendingSearchMeals.length}`
               : undefined
           }
+          prefetchedResults={batchedSearchResults[pendingSearchMeals[currentSearchIndex].description]}
           onRecipeSelected={handleRecipeSelected}
           onClose={handleSearchSkip}
         />

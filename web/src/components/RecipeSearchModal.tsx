@@ -10,6 +10,7 @@ interface Props {
   initialQuery?: string;
   dayLabel?: string;
   stepLabel?: string;          // e.g. "1 of 3"
+  prefetchedResults?: WebSearchRecipeResult[];
   onRecipeSelected: (recipe: Recipe) => void;
   onClose: () => void;
 }
@@ -18,6 +19,7 @@ export default function RecipeSearchModal({
   initialQuery,
   dayLabel,
   stepLabel,
+  prefetchedResults,
   onRecipeSelected,
   onClose,
 }: Props) {
@@ -29,6 +31,11 @@ export default function RecipeSearchModal({
   const didAutoSearch = useRef(false);
 
   useEffect(() => {
+    if (prefetchedResults && prefetchedResults.length > 0) {
+      setResults(prefetchedResults);
+      didAutoSearch.current = true;
+      return;
+    }
     if (initialQuery && !didAutoSearch.current) {
       didAutoSearch.current = true;
       handleSearch();
