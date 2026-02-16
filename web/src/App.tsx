@@ -10,11 +10,12 @@ function navCls({ isActive }: { isActive: boolean }) {
 
 export default function App() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-6">
-          <Link to="/plan" className="text-xl font-bold text-emerald-700 hover:text-emerald-800 transition-colors">
-            MealMaker
+          <Link to="/plan" className="leading-none hover:opacity-80 transition-opacity">
+            <span className="block text-2xl font-extrabold text-emerald-700">Yes Chef</span>
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-500">Meal Planner</span>
           </Link>
           <nav className="flex gap-2">
             <NavLink to="/my-plan" className={navCls}>My Plan</NavLink>
@@ -24,9 +25,12 @@ export default function App() {
           </nav>
         </div>
       </header>
-      <main className="max-w-4xl mx-auto px-4 py-6">
+      <main className="max-w-4xl mx-auto px-4 py-6 flex-1">
         <Outlet />
       </main>
+      <footer className="border-t border-gray-200 py-4 text-center text-xs text-gray-400">
+        &copy; 2026 Yes Chef
+      </footer>
     </div>
   );
 }

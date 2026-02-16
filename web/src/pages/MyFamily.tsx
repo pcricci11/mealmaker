@@ -199,7 +199,7 @@ export default function MyFamily() {
   if (!family) {
     return (
       <div className="max-w-2xl mx-auto py-8 text-center space-y-4">
-        <h2 className="text-2xl font-bold text-gray-900">Welcome to MealMaker</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Welcome to Yes Chef</h2>
         <p className="text-gray-500">Create a family profile to get started.</p>
         <button
           onClick={async () => {
