@@ -157,11 +157,13 @@ export default function ThisWeek() {
         const autoResolved: Array<{ day: string; recipe_id: number }> = [];
 
         for (const meal of result.specific_meals) {
-          const { match: dbMatch } = await matchRecipeInDb(meal.description);
-          if (dbMatch) {
-            autoResolved.push({ day: meal.day, recipe_id: dbMatch.id });
-            if (!recipes.some((r) => r.id === dbMatch.id)) {
-              recipes.push(dbMatch);
+          const { matches } = await matchRecipeInDb(meal.description);
+          if (matches.length > 0) {
+            // Use the top match (highest score)
+            const best = matches[0];
+            autoResolved.push({ day: meal.day, recipe_id: best.recipe.id });
+            if (!recipes.some((r) => r.id === best.recipe.id)) {
+              recipes.push(best.recipe);
               setAllRecipes([...recipes]);
             }
           } else {

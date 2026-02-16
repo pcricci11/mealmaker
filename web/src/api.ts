@@ -152,8 +152,8 @@ export async function importRecipeFromUrl(url: string): Promise<{ recipe: Recipe
   );
 }
 
-export async function matchRecipeInDb(query: string): Promise<{ match: Recipe | null; score: number }> {
-  const data = await json<{ match: Recipe | null; score: number }>(
+export async function matchRecipeInDb(query: string): Promise<{ matches: Array<{ recipe: Recipe; score: number }> }> {
+  const data = await json<{ matches: Array<{ recipe: Recipe; score: number }> }>(
     await fetch(`${BASE}/recipes/match`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

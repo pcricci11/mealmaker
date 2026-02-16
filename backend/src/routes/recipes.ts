@@ -185,17 +185,15 @@ router.post("/match", (req: Request, res: Response) => {
     .prepare("SELECT id, name FROM recipes")
     .all() as Array<{ id: number; name: string }>;
 
-  let bestRow: { id: number; name: string } | null = null;
-  let bestScore = 0;
+  const scored: Array<{ id: number; name: string; score: number }> = [];
 
   for (const row of rows) {
     const normName = normalize(row.name);
 
     // Exact normalized match → perfect score
     if (normName === normQuery) {
-      bestRow = row;
-      bestScore = 1;
-      break;
+      scored.push({ ...row, score: 1 });
+      continue;
     }
 
     // Word-overlap scoring (handles containment proportionally)
@@ -206,21 +204,25 @@ router.post("/match", (req: Request, res: Response) => {
     const overlapScore =
       matchingWords.length / Math.max(queryWords.length, nameWords.length);
 
-    if (overlapScore > bestScore) {
-      bestScore = overlapScore;
-      bestRow = row;
+    if (overlapScore >= 0.4) {
+      scored.push({ ...row, score: overlapScore });
     }
   }
 
-  // Require at least 70% word overlap to consider it a match
-  if (bestRow && bestScore >= 0.7) {
-    const full = db
-      .prepare("SELECT * FROM recipes WHERE id = ?")
-      .get(bestRow.id);
-    return res.json({ match: rowToRecipe(full), score: bestScore });
+  // Sort by score descending, take top 3
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, 3);
+
+  if (top.length > 0) {
+    const stmt = db.prepare("SELECT * FROM recipes WHERE id = ?");
+    const matches = top.map((t) => ({
+      recipe: rowToRecipe(stmt.get(t.id)),
+      score: t.score,
+    }));
+    return res.json({ matches });
   }
 
-  res.json({ match: null, score: 0 });
+  res.json({ matches: [] });
 });
 
 // GET /api/recipes/:id

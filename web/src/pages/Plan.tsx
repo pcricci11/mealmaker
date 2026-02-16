@@ -233,25 +233,18 @@ export default function Plan() {
         const autoResolved: Array<{ day: string; recipe_id: number }> = [];
         const needsConfirmation: PendingConfirmation[] = [];
 
-        // Fuzzy-match each specific meal against the database
+        // Fuzzy-match each specific meal against the database (top 3, >40%)
         for (const meal of result.specific_meals) {
-          const { match: dbMatch, score } = await matchRecipeInDb(meal.description);
-          if (dbMatch && score >= 1.0) {
-            // Perfect match — auto-resolve
-            console.log("[Plan] DB exact match", { description: meal.description, matchedRecipe: dbMatch.title, id: dbMatch.id });
-            autoResolved.push({ day: meal.day, recipe_id: dbMatch.id });
-            if (!fetchedRecipes.some((r) => r.id === dbMatch.id)) {
-              fetchedRecipes.push(dbMatch);
-              setAllRecipes([...fetchedRecipes]);
+          const { matches } = await matchRecipeInDb(meal.description);
+          if (matches.length > 0) {
+            console.log("[Plan] DB matches found", { description: meal.description, count: matches.length, top: matches[0].recipe.title, topScore: matches[0].score });
+            needsConfirmation.push({ day: meal.day, description: meal.description, matches });
+            for (const m of matches) {
+              if (!fetchedRecipes.some((r) => r.id === m.recipe.id)) {
+                fetchedRecipes.push(m.recipe);
+              }
             }
-          } else if (dbMatch && score >= 0.7) {
-            // Fuzzy match — needs user confirmation
-            console.log("[Plan] DB fuzzy match, needs confirmation", { description: meal.description, matchedRecipe: dbMatch.title, score });
-            needsConfirmation.push({ day: meal.day, description: meal.description, recipe: dbMatch, score });
-            if (!fetchedRecipes.some((r) => r.id === dbMatch.id)) {
-              fetchedRecipes.push(dbMatch);
-              setAllRecipes([...fetchedRecipes]);
-            }
+            setAllRecipes([...fetchedRecipes]);
           } else {
             console.log("[Plan] no DB match, will search web", { description: meal.description, day: meal.day });
             unmatched.push(meal);
@@ -335,12 +328,12 @@ export default function Plan() {
     }
   };
 
-  const handleConfirmUse = () => {
+  const handleConfirmUse = (recipe: Recipe) => {
     const confirmation = pendingConfirmations[currentConfirmIndex];
-    console.log("[Plan] user confirmed DB match", { day: confirmation.day, recipe: confirmation.recipe.title });
+    console.log("[Plan] user selected DB match", { day: confirmation.day, recipe: recipe.title, id: recipe.id });
     const updatedResolved = [
       ...resolvedSpecificMeals,
-      { day: confirmation.day, recipe_id: confirmation.recipe.id },
+      { day: confirmation.day, recipe_id: recipe.id },
     ];
     setResolvedSpecificMeals(updatedResolved);
 
@@ -790,7 +783,7 @@ export default function Plan() {
               ? `${currentConfirmIndex + 1} of ${pendingConfirmations.length}`
               : undefined
           }
-          onUseThis={handleConfirmUse}
+          onSelectRecipe={handleConfirmUse}
           onSearchWeb={handleConfirmSearchWeb}
         />
       )}
