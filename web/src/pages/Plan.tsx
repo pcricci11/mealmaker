@@ -15,6 +15,7 @@ import {
   addSide,
   removeSide,
   removeMealItem,
+  addMealToDay,
   matchRecipeInDb,
   batchSearchRecipesWeb,
 } from "../api";
@@ -26,7 +27,6 @@ import type { SmartSetupProgress } from "../components/SmartSetupProgressModal";
 import MealDayCard from "../components/MealDayCard";
 import SwapSideModal from "../components/SwapSideModal";
 import AddSideModal from "../components/AddSideModal";
-import SwapMainModal from "../components/SwapMainModal";
 import BuildFromRecipesModal from "../components/BuildFromRecipesModal";
 import DbMatchConfirmModal from "../components/DbMatchConfirmModal";
 import type { PendingConfirmation } from "../components/DbMatchConfirmModal";
@@ -73,10 +73,13 @@ export default function Plan() {
     mainRecipeId: number;
   } | null>(null);
   const [addSideModal, setAddSideModal] = useState<number | null>(null);
-  const [swapMainModal, setSwapMainModal] = useState<{
-    mealItemId: number;
+  const [mainModal, setMainModal] = useState<{
+    mode: "swap" | "add";
     day: DayOfWeek;
+    mealItemId?: number;
+    step: "choose" | "web-search";
   } | null>(null);
+  const [mainModalSearchQuery, setMainModalSearchQuery] = useState("");
   const [showBuildFromRecipes, setShowBuildFromRecipes] = useState(false);
   const [draftRecipes, setDraftRecipes] = useState<Map<DayOfWeek, Recipe[]>>(new Map());
 
@@ -549,15 +552,21 @@ export default function Plan() {
     }
   };
 
-  const handleSwapMain = async (newRecipeId: number) => {
-    if (!swapMainModal) return;
+  const handleMainModalSelect = async (newRecipeId: number) => {
+    if (!mainModal || !plan) return;
     try {
-      const updatedPlan = await swapMainRecipe(swapMainModal.mealItemId, newRecipeId);
-      setPlan(updatedPlan);
-      setSwapMainModal(null);
+      if (mainModal.mode === "swap" && mainModal.mealItemId) {
+        const updatedPlan = await swapMainRecipe(mainModal.mealItemId, newRecipeId);
+        setPlan(updatedPlan);
+      } else {
+        await addMealToDay(plan.id, mainModal.day, newRecipeId, "main");
+        await refreshPlan();
+      }
+      setMainModal(null);
+      setMainModalSearchQuery("");
     } catch (error) {
-      console.error("Error swapping main:", error);
-      alert("Failed to swap main");
+      console.error("Error updating main:", error);
+      alert("Failed to update main");
     }
   };
 
@@ -714,7 +723,7 @@ export default function Plan() {
                 onClick={handleLockPlan}
                 className="w-full md:w-auto px-6 py-3 md:py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
               >
-                Lock Plan & Build Grocery List
+                Adjust Plan & Build Grocery List
               </button>
               <p className="text-xs text-gray-400">
                 {Array.from(draftRecipes.values()).reduce((sum, arr) => sum + arr.length, 0)} recipe{Array.from(draftRecipes.values()).reduce((sum, arr) => sum + arr.length, 0) !== 1 ? "s" : ""} assigned — remaining days will be auto-filled
@@ -737,6 +746,12 @@ export default function Plan() {
               <h2 className="text-xl md:text-2xl font-bold text-gray-900">Your Meal Plan</h2>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => { setPlan(null); navigate("/plan"); }}
+                className="text-sm font-medium text-gray-500 hover:text-gray-700 py-2"
+              >
+                ← Home
+              </button>
               <button
                 onClick={handleEditWeek}
                 className="text-sm font-medium text-gray-500 hover:text-gray-700 py-2"
@@ -777,9 +792,14 @@ export default function Plan() {
                     try { await removeMealItem(mealItemId); await refreshPlan(); }
                     catch (err) { console.error("Failed to remove meal:", err); }
                   }}
-                  onSwapMain={(mealItemId) =>
-                    setSwapMainModal({ mealItemId, day: key as DayOfWeek })
-                  }
+                  onSwapMain={(mealItemId) => {
+                    setMainModal({ mode: "swap", mealItemId, day: key as DayOfWeek, step: "choose" });
+                    setMainModalSearchQuery("");
+                  }}
+                  onAddMain={(day) => {
+                    setMainModal({ mode: "add", day: day as DayOfWeek, step: "choose" });
+                    setMainModalSearchQuery("");
+                  }}
                   onMealClick={(item) => setSelectedItem(item)}
                 />
               );
@@ -873,12 +893,81 @@ export default function Plan() {
         />
       )}
 
-      {swapMainModal && (
-        <SwapMainModal
-          mealItemId={swapMainModal.mealItemId}
-          day={swapMainModal.day}
-          onSwap={handleSwapMain}
-          onClose={() => setSwapMainModal(null)}
+      {mainModal && plan && mainModal.step === "choose" && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-sm w-full overflow-hidden">
+            <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold">
+                {mainModal.mode === "swap" ? "Swap" : "Add"} a Main on {mainModal.day.charAt(0).toUpperCase() + mainModal.day.slice(1)}
+              </h3>
+              <button onClick={() => setMainModal(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="p-6 space-y-3">
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams({ [mainModal.mode === "swap" ? "swapDay" : "addToDay"]: mainModal.day, planId: String(plan.id) });
+                  if (mainModal.mealItemId) params.set("mealItemId", String(mainModal.mealItemId));
+                  navigate(`/recipes?${params}`);
+                  setMainModal(null);
+                }}
+                className="w-full border border-gray-200 rounded-lg p-4 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left"
+              >
+                <div className="font-medium text-gray-900">Pick from My Recipes</div>
+                <p className="text-sm text-gray-500 mt-1">Choose from your saved recipe collection</p>
+              </button>
+              <button
+                onClick={() => setMainModal({ ...mainModal, step: "web-search" })}
+                className="w-full border border-gray-200 rounded-lg p-4 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left"
+              >
+                <div className="font-medium text-gray-900">Search the Web</div>
+                <p className="text-sm text-gray-500 mt-1">Find a new recipe online</p>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mainModal && plan && mainModal.step === "web-search" && !mainModalSearchQuery && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-sm w-full overflow-hidden">
+            <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold">Search for a Recipe</h3>
+              <button onClick={() => setMainModal(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <form
+              className="p-6 space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const input = (e.target as HTMLFormElement).elements.namedItem("q") as HTMLInputElement;
+                if (input.value.trim()) setMainModalSearchQuery(input.value.trim());
+              }}
+            >
+              <label className="text-sm font-medium text-gray-700">What are you looking for?</label>
+              <input
+                name="q"
+                autoFocus
+                placeholder='e.g. "Bobby Flay burger"'
+                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+              <button
+                type="submit"
+                className="w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
+              >
+                Search
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {mainModal && plan && mainModal.step === "web-search" && mainModalSearchQuery && (
+        <RecipeSearchModal
+          initialQuery={mainModalSearchQuery}
+          dayLabel={mainModal.day}
+          onRecipeSelected={async (recipe) => {
+            await handleMainModalSelect(recipe.id);
+          }}
+          onClose={() => { setMainModal(null); setMainModalSearchQuery(""); }}
         />
       )}
 

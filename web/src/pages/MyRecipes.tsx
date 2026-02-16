@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { Recipe, FamilyFavoriteMeal, RecipeInput, Cuisine, Difficulty } from "@shared/types";
 import { VALID_CUISINES, VALID_DIFFICULTIES } from "@shared/types";
 import {
   getFamilies, getFavoriteMeals, getMealPlanHistory, getRecipes,
-  addMealToDay, deleteFavoriteMeal, createFavoriteMeal,
+  addMealToDay, swapMainRecipe, deleteFavoriteMeal, createFavoriteMeal,
   getSideSuggestions, addSide,
   deleteRecipe, renameRecipe, createRecipe, importRecipeFromUrl,
 } from "../api";
@@ -63,6 +63,13 @@ const DAY_LABELS: Record<string, string> = {
 
 export default function MyRecipes() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const addToDayParam = searchParams.get("addToDay");
+  const swapDayParam = searchParams.get("swapDay");
+  const pickDayParam = addToDayParam || swapDayParam;
+  const pickMode = addToDayParam ? "add" : swapDayParam ? "swap" : null;
+  const addToPlanId = searchParams.get("planId");
+  const swapMealItemId = searchParams.get("mealItemId");
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loved, setLoved] = useState<FamilyFavoriteMeal[]>([]);
   const [history, setHistory] = useState<HistoryPlan[]>([]);
@@ -143,6 +150,22 @@ export default function MyRecipes() {
   const showToast = (msg: string) => {
     setSuccessMessage(msg);
     setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
+  const handlePickForDay = async (recipe: Recipe) => {
+    if (!pickDayParam || !addToPlanId) return;
+    setAddingToDay(pickDayParam);
+    try {
+      if (pickMode === "swap" && swapMealItemId) {
+        await swapMainRecipe(parseInt(swapMealItemId), recipe.id);
+      } else {
+        await addMealToDay(parseInt(addToPlanId), pickDayParam, recipe.id, "main");
+      }
+      navigate("/my-plan");
+    } catch (err: any) {
+      showToast(err.message || "Failed to update meal");
+      setAddingToDay(null);
+    }
   };
 
   const handleAddToDay = async (recipe: Recipe, day: string) => {
@@ -418,6 +441,19 @@ export default function MyRecipes() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-10 py-4">
+      {pickDayParam && (
+        <div className="bg-emerald-50 border border-emerald-300 rounded-xl px-5 py-3 flex items-center justify-between">
+          <p className="text-sm font-medium text-emerald-800">
+            Select a recipe to {pickMode === "swap" ? "swap on" : "add to"} <span className="font-bold">{pickDayParam.charAt(0).toUpperCase() + pickDayParam.slice(1)}</span>
+          </p>
+          <button
+            onClick={() => navigate("/my-plan")}
+            className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
       <section className="space-y-4">
         {/* Header with add buttons */}
         <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-0 md:justify-between">
@@ -585,9 +621,10 @@ export default function MyRecipes() {
                 <div
                   key={r.id}
                   className={`bg-white border rounded-xl px-5 py-4 transition-shadow cursor-pointer ${
+                    pickDayParam ? "hover:border-emerald-500 hover:bg-emerald-50" :
                     isExpanded ? "border-emerald-300 shadow-sm" : "border-gray-200 hover:shadow-sm"
-                  }`}
-                  onClick={() => setExpandedRecipeId(isExpanded ? null : r.id)}
+                  }${addingToDay ? " opacity-50 pointer-events-none" : ""}`}
+                  onClick={() => pickDayParam ? handlePickForDay(r) : setExpandedRecipeId(isExpanded ? null : r.id)}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">

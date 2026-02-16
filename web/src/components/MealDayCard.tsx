@@ -18,6 +18,7 @@ interface Props {
   onDeleteMain?: (mealItemId: number) => void;
   onRemoveSide?: (mealItemId: number) => void;
   onMealClick?: (item: MealPlanItemV3) => void;
+  onAddMain?: (day: string) => void;
 }
 
 const DAY_LABELS: Record<string, string> = {
@@ -58,6 +59,7 @@ export default function MealDayCard({
   onDeleteMain,
   onRemoveSide,
   onMealClick,
+  onAddMain,
 }: Props) {
   const [lovedMeals, setLovedMeals] = useState<Set<number>>(new Set());
   const isWeekend = day === "saturday" || day === "sunday";
@@ -227,6 +229,16 @@ export default function MealDayCard({
             </div>
           );
         })}
+
+        {/* Add Another Main */}
+        {onAddMain && (
+          <button
+            onClick={() => onAddMain(day)}
+            className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+          >
+            + Add Another Main
+          </button>
+        )}
 
         {/* Lunches */}
         {lunches.length > 0 && (
