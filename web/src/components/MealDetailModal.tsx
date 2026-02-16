@@ -124,12 +124,12 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-none md:rounded-xl max-w-lg w-full h-full md:h-auto md:max-h-[85vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div className="border-b border-gray-200 px-4 md:px-6 py-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-900">
             {DAY_LABELS[item.day] || item.day}
           </h3>
@@ -335,7 +335,7 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-6 py-4">
+        <div className="border-t border-gray-200 px-4 md:px-6 py-4">
           <button
             onClick={onClose}
             className="w-full px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"

@@ -152,7 +152,7 @@ export async function importRecipeFromUrl(url: string): Promise<{ recipe: Recipe
   );
 }
 
-export async function matchRecipeInDb(query: string): Promise<Recipe | null> {
+export async function matchRecipeInDb(query: string): Promise<{ match: Recipe | null; score: number }> {
   const data = await json<{ match: Recipe | null; score: number }>(
     await fetch(`${BASE}/recipes/match`, {
       method: "POST",
@@ -160,7 +160,7 @@ export async function matchRecipeInDb(query: string): Promise<Recipe | null> {
       body: JSON.stringify({ query }),
     }),
   );
-  return data.match;
+  return data;
 }
 
 export async function searchRecipesWeb(query: string): Promise<WebSearchRecipeResult[]> {

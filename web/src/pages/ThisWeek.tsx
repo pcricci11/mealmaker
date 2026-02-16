@@ -157,7 +157,7 @@ export default function ThisWeek() {
         const autoResolved: Array<{ day: string; recipe_id: number }> = [];
 
         for (const meal of result.specific_meals) {
-          const dbMatch = await matchRecipeInDb(meal.description);
+          const { match: dbMatch } = await matchRecipeInDb(meal.description);
           if (dbMatch) {
             autoResolved.push({ day: meal.day, recipe_id: dbMatch.id });
             if (!recipes.some((r) => r.id === dbMatch.id)) {

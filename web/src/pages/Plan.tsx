@@ -27,6 +27,8 @@ import SwapSideModal from "../components/SwapSideModal";
 import AddSideModal from "../components/AddSideModal";
 import SwapMainModal from "../components/SwapMainModal";
 import BuildFromRecipesModal from "../components/BuildFromRecipesModal";
+import DbMatchConfirmModal from "../components/DbMatchConfirmModal";
+import type { PendingConfirmation } from "../components/DbMatchConfirmModal";
 import type {
   DayOfWeek,
   Recipe,
@@ -90,6 +92,12 @@ export default function Plan() {
     Record<string, WebSearchRecipeResult[]>
   >({});
   const shouldAutoGenerate = useRef(false);
+
+  // DB match confirmation state
+  const [pendingConfirmations, setPendingConfirmations] = useState<PendingConfirmation[]>([]);
+  const [currentConfirmIndex, setCurrentConfirmIndex] = useState(0);
+  // Meals that user rejected DB match for — will go to web search
+  const pendingWebSearchRef = useRef<Array<{ day: string; description: string }>>([]);
 
   // Stored across the search flow for plan generation
   const [cookingSchedule, setCookingSchedule] = useState<any[]>([]);
@@ -223,76 +231,50 @@ export default function Plan() {
 
         const unmatched: Array<{ day: string; description: string }> = [];
         const autoResolved: Array<{ day: string; recipe_id: number }> = [];
+        const needsConfirmation: PendingConfirmation[] = [];
 
         // Fuzzy-match each specific meal against the database
         for (const meal of result.specific_meals) {
-          const dbMatch = await matchRecipeInDb(meal.description);
-          if (dbMatch) {
-            console.log("[Plan] DB fuzzy-matched meal", { description: meal.description, matchedRecipe: dbMatch.title, id: dbMatch.id });
+          const { match: dbMatch, score } = await matchRecipeInDb(meal.description);
+          if (dbMatch && score >= 1.0) {
+            // Perfect match — auto-resolve
+            console.log("[Plan] DB exact match", { description: meal.description, matchedRecipe: dbMatch.title, id: dbMatch.id });
             autoResolved.push({ day: meal.day, recipe_id: dbMatch.id });
-            // Ensure the matched recipe is in allRecipes for later use
+            if (!fetchedRecipes.some((r) => r.id === dbMatch.id)) {
+              fetchedRecipes.push(dbMatch);
+              setAllRecipes([...fetchedRecipes]);
+            }
+          } else if (dbMatch && score >= 0.7) {
+            // Fuzzy match — needs user confirmation
+            console.log("[Plan] DB fuzzy match, needs confirmation", { description: meal.description, matchedRecipe: dbMatch.title, score });
+            needsConfirmation.push({ day: meal.day, description: meal.description, recipe: dbMatch, score });
             if (!fetchedRecipes.some((r) => r.id === dbMatch.id)) {
               fetchedRecipes.push(dbMatch);
               setAllRecipes([...fetchedRecipes]);
             }
           } else {
-            console.log("[Plan] no DB match, will show search modal", { description: meal.description, day: meal.day });
+            console.log("[Plan] no DB match, will search web", { description: meal.description, day: meal.day });
             unmatched.push(meal);
           }
         }
 
         setResolvedSpecificMeals(autoResolved);
         shouldAutoGenerate.current = true;
+        pendingWebSearchRef.current = unmatched;
 
-        if (unmatched.length > 0) {
-          // Set up searching phase with all unmatched queries
-          const searchQueries = unmatched.map((m) => ({
-            query: m.description,
-            status: "searching" as const,
-          }));
-          setSetupProgress({
-            phase: "searching",
-            message: "\uD83D\uDD0D Sizzling up some recipe ideas...",
-            searchQueries,
-          });
-
-          // Batch search all unmatched meals in a single API call
-          let batchResults: Record<string, WebSearchRecipeResult[]> = {};
-          try {
-            batchResults = await batchSearchRecipesWeb(
-              unmatched.map((m) => m.description)
-            );
-            console.log("[Plan] batch search results", batchResults);
-            setBatchedSearchResults(batchResults);
-          } catch (err) {
-            console.warn("[Plan] batch search failed, modals will search individually", err);
-            setBatchedSearchResults({});
-          }
-
-          // Stagger reveal each result
-          await staggerRevealResults(searchQueries, batchResults);
-
-          // Brief "done" phase before showing modals
-          setSetupProgress({ phase: "done", message: "Found some delicious options! Let's plate up \uD83E\uDD24", searchQueries: [] });
-          await new Promise((r) => setTimeout(r, 600));
+        // If there are fuzzy matches to confirm, show confirmation modals first
+        if (needsConfirmation.length > 0) {
           setSetupProgress(null);
-
-          setPendingSearchMeals(unmatched);
-          setCurrentSearchIndex(0);
-        } else {
-          // All specific meals matched — populate draft
-          const newDraft = new Map(draftRecipes);
-          for (const lock of autoResolved) {
-            const recipe = fetchedRecipes.find((r) => r.id === lock.recipe_id);
-            if (recipe) newDraft.set(lock.day as DayOfWeek, recipe);
-          }
-          setDraftRecipes(newDraft);
-          setSetupProgress(null);
-          return;
+          setPendingConfirmations(needsConfirmation);
+          setCurrentConfirmIndex(0);
+          return; // Confirmation flow continues via handleConfirmUse / handleConfirmSearchWeb
         }
+
+        // No confirmations needed — proceed directly to web search or finish
+        await proceedToWebSearch(unmatched, autoResolved, fetchedRecipes);
       } else {
         // No specific meals — just store cooking schedule, user fills manually
-        setSetupProgress({ phase: "done", message: "Kitchen's ready! Time to pick your meals \uD83C\uDF7D\uFE0F", searchQueries: [] });
+        setSetupProgress({ phase: "done", message: "Kitchen's ready! Time to pick your meals 🍽️", searchQueries: [] });
         await new Promise((r) => setTimeout(r, 1200));
         setSetupProgress(null);
         return;
@@ -302,6 +284,92 @@ export default function Plan() {
       setError(err.message || "Smart setup failed. Please try again.");
     } finally {
       setSetupProgress(null);
+    }
+  };
+
+  const proceedToWebSearch = async (
+    unmatched: Array<{ day: string; description: string }>,
+    resolved: Array<{ day: string; recipe_id: number }>,
+    fetchedRecipes: Recipe[],
+  ) => {
+    if (unmatched.length > 0) {
+      const searchQueries = unmatched.map((m) => ({
+        query: m.description,
+        status: "searching" as const,
+      }));
+      setSetupProgress({
+        phase: "searching",
+        message: "🔍 Sizzling up some recipe ideas...",
+        searchQueries,
+      });
+
+      let batchResults: Record<string, WebSearchRecipeResult[]> = {};
+      try {
+        batchResults = await batchSearchRecipesWeb(
+          unmatched.map((m) => m.description)
+        );
+        console.log("[Plan] batch search results", batchResults);
+        setBatchedSearchResults(batchResults);
+      } catch (err) {
+        console.warn("[Plan] batch search failed, modals will search individually", err);
+        setBatchedSearchResults({});
+      }
+
+      await staggerRevealResults(searchQueries, batchResults);
+
+      setSetupProgress({ phase: "done", message: "Found some delicious options! Let's plate up 🤤", searchQueries: [] });
+      await new Promise((r) => setTimeout(r, 600));
+      setSetupProgress(null);
+
+      setPendingSearchMeals(unmatched);
+      setCurrentSearchIndex(0);
+    } else {
+      // All resolved (via auto + confirmations) — populate draft
+      const newDraft = new Map(draftRecipes);
+      for (const lock of resolved) {
+        const recipe = fetchedRecipes.find((r) => r.id === lock.recipe_id);
+        if (recipe) newDraft.set(lock.day as DayOfWeek, recipe);
+      }
+      setDraftRecipes(newDraft);
+      setSetupProgress(null);
+    }
+  };
+
+  const handleConfirmUse = () => {
+    const confirmation = pendingConfirmations[currentConfirmIndex];
+    console.log("[Plan] user confirmed DB match", { day: confirmation.day, recipe: confirmation.recipe.title });
+    const updatedResolved = [
+      ...resolvedSpecificMeals,
+      { day: confirmation.day, recipe_id: confirmation.recipe.id },
+    ];
+    setResolvedSpecificMeals(updatedResolved);
+
+    if (currentConfirmIndex < pendingConfirmations.length - 1) {
+      setCurrentConfirmIndex((prev) => prev + 1);
+    } else {
+      // All confirmations done — proceed to web search for remaining
+      setPendingConfirmations([]);
+      setCurrentConfirmIndex(0);
+      proceedToWebSearch(pendingWebSearchRef.current, updatedResolved, allRecipes);
+    }
+  };
+
+  const handleConfirmSearchWeb = () => {
+    const confirmation = pendingConfirmations[currentConfirmIndex];
+    console.log("[Plan] user rejected DB match, will web search", { day: confirmation.day, description: confirmation.description });
+    // Add to web search queue
+    pendingWebSearchRef.current = [
+      ...pendingWebSearchRef.current,
+      { day: confirmation.day, description: confirmation.description },
+    ];
+
+    if (currentConfirmIndex < pendingConfirmations.length - 1) {
+      setCurrentConfirmIndex((prev) => prev + 1);
+    } else {
+      // All confirmations done — proceed to web search
+      setPendingConfirmations([]);
+      setCurrentConfirmIndex(0);
+      proceedToWebSearch(pendingWebSearchRef.current, resolvedSpecificMeals, allRecipes);
     }
   };
 
@@ -359,7 +427,7 @@ export default function Plan() {
 
   const handleLockPlan = async () => {
     setLoading(true);
-    setLockProgress("\uD83D\uDCDD Reading ingredients for your grocery lists!");
+    setLockProgress("📝 Reading ingredients for your grocery lists!");
     setError(null);
     try {
       const families = await getFamilies();
@@ -384,7 +452,7 @@ export default function Plan() {
 
       // Timed progress messages
       const progressTimer1 = setTimeout(() => setLockProgress("Mixing together your shopping list..."), 4000);
-      const progressTimer2 = setTimeout(() => setLockProgress("Almost done \u2014 just seasoning the details..."), 8000);
+      const progressTimer2 = setTimeout(() => setLockProgress("Almost done — just seasoning the details..."), 8000);
 
       const result = await generateMealPlanV3({
         family_id: fam.id, week_start: weekStart, cooking_schedule: schedule,
@@ -395,7 +463,7 @@ export default function Plan() {
 
       clearTimeout(progressTimer1);
       clearTimeout(progressTimer2);
-      setLockProgress("\u2705 Your grocery list is ready!");
+      setLockProgress("✅ Your grocery list is ready!");
       await new Promise((r) => setTimeout(r, 800));
 
       setPlan(result);
@@ -502,7 +570,7 @@ export default function Plan() {
     : null;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 py-4">
+    <div className="max-w-2xl mx-auto space-y-6 md:space-y-8 py-2 md:py-4">
       {/* Conversational Planner (hidden when plan is loaded) */}
       {!plan && !loading && !setupProgress && (
         <ConversationalPlanner
@@ -525,11 +593,11 @@ export default function Plan() {
           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
             Your Week
           </h3>
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
             {DAYS.map(({ label }) => (
               <div
                 key={label}
-                className="bg-white border border-gray-200 rounded-xl p-4 text-center min-h-[140px] flex flex-col items-center justify-center animate-pulse"
+                className="bg-white border border-gray-200 rounded-xl p-4 text-center min-h-[80px] md:min-h-[140px] flex flex-col items-center justify-center animate-pulse"
               >
                 <span className="text-xs font-semibold text-gray-400 uppercase">
                   {label}
@@ -568,13 +636,13 @@ export default function Plan() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
             {DAYS.map(({ key, label }) => {
               const recipe = draftRecipes.get(key as DayOfWeek);
               return recipe ? (
                 <div
                   key={key}
-                  className="bg-emerald-50 border border-emerald-300 rounded-xl p-3 text-center min-h-[120px] flex flex-col items-center justify-center relative cursor-pointer hover:border-emerald-400 transition-colors"
+                  className="bg-emerald-50 border border-emerald-300 rounded-xl p-3 text-center min-h-[80px] md:min-h-[120px] flex flex-col items-center justify-center relative cursor-pointer hover:border-emerald-400 transition-colors"
                   onClick={() => {
                     const fakeItem: MealPlanItemV3 = {
                       id: 0, meal_plan_id: 0, day: key as DayOfWeek,
@@ -619,7 +687,7 @@ export default function Plan() {
                 <button
                   key={key}
                   onClick={() => setShowBuildFromRecipes(true)}
-                  className="bg-white border border-dashed border-gray-300 rounded-xl p-4 text-center min-h-[120px] flex flex-col items-center justify-center hover:border-emerald-400 hover:bg-emerald-50/30 transition-colors"
+                  className="bg-white border border-dashed border-gray-300 rounded-xl p-4 text-center min-h-[80px] md:min-h-[120px] flex flex-col items-center justify-center hover:border-emerald-400 hover:bg-emerald-50/30 transition-colors"
                 >
                   <span className="text-xs font-semibold text-gray-400 uppercase">
                     {label}
@@ -633,7 +701,7 @@ export default function Plan() {
             <div className="flex flex-col items-center gap-2">
               <button
                 onClick={handleLockPlan}
-                className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2"
+                className="w-full md:w-auto px-6 py-3 md:py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
               >
                 Lock Plan & Build Grocery List
               </button>
@@ -652,21 +720,21 @@ export default function Plan() {
       {/* Locked plan — MealDayCard layout */}
       {plan && !loading && dayData && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:justify-between">
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Locked</span>
-              <h2 className="text-2xl font-bold text-gray-900">Your Meal Plan</h2>
+              <h2 className="text-xl md:text-2xl font-bold text-gray-900">Your Meal Plan</h2>
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={handleEditWeek}
-                className="text-sm font-medium text-gray-500 hover:text-gray-700"
+                className="text-sm font-medium text-gray-500 hover:text-gray-700 py-2"
               >
                 Edit Week
               </button>
               <button
                 onClick={() => navigate("/grocery")}
-                className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
+                className="text-sm font-medium text-emerald-600 hover:text-emerald-700 py-2"
               >
                 Grocery List →
               </button>
@@ -711,6 +779,21 @@ export default function Plan() {
 
       {/* Smart Setup Progress Modal */}
       {setupProgress && <SmartSetupProgressModal progress={setupProgress} />}
+
+      {/* DB Match Confirmation Modal */}
+      {pendingConfirmations.length > 0 && currentConfirmIndex < pendingConfirmations.length && (
+        <DbMatchConfirmModal
+          key={currentConfirmIndex}
+          confirmation={pendingConfirmations[currentConfirmIndex]}
+          stepLabel={
+            pendingConfirmations.length > 1
+              ? `${currentConfirmIndex + 1} of ${pendingConfirmations.length}`
+              : undefined
+          }
+          onUseThis={handleConfirmUse}
+          onSearchWeb={handleConfirmSearchWeb}
+        />
+      )}
 
       {/* Recipe Search Modal for specific meal requests */}
       {pendingSearchMeals.length > 0 && currentSearchIndex < pendingSearchMeals.length && (

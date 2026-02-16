@@ -15,8 +15,8 @@ export default function SmartSetupProgressModal({
   progress: SmartSetupProgress;
 }) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl max-w-md w-full p-8">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
+      <div className="bg-white rounded-none md:rounded-2xl max-w-md w-full h-full md:h-auto flex items-center justify-center p-8">
         {progress.phase === "done" ? (
           <div className="text-center space-y-3">
             <div className="text-3xl">✨</div>

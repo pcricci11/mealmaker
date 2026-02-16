@@ -84,7 +84,7 @@ export default function MealDayCard({
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {/* Day Header */}
       <div
-        className={`px-6 py-3 border-b ${
+        className={`px-4 md:px-6 py-3 border-b ${
           isWeekend
             ? "bg-emerald-50 border-emerald-200"
             : "bg-gray-50 border-gray-200"
@@ -99,7 +99,7 @@ export default function MealDayCard({
         </h3>
       </div>
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
         {/* Mains */}
         {mains.map((main) => {
           const cuisineClass =
@@ -134,7 +134,7 @@ export default function MealDayCard({
                     {onDeleteMain && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onDeleteMain(main.id); }}
-                        className="text-lg hover:scale-110 transition-transform cursor-pointer text-gray-400 hover:text-red-500"
+                        className="text-lg hover:scale-110 transition-transform cursor-pointer text-gray-400 hover:text-red-500 p-1 min-w-[44px] min-h-[44px] flex items-center justify-center"
                         title="Remove this meal"
                         type="button"
                       >✕</button>
@@ -144,7 +144,7 @@ export default function MealDayCard({
                         e.stopPropagation();
                         onSwapMain(main.id);
                       }}
-                      className="text-xl hover:scale-110 transition-transform cursor-pointer"
+                      className="text-xl hover:scale-110 transition-transform cursor-pointer p-1 min-w-[44px] min-h-[44px] flex items-center justify-center"
                       title="Swap this meal"
                       type="button"
                     >
@@ -163,7 +163,7 @@ export default function MealDayCard({
                         }
                         setLovedMeals(newLoved);
                       }}
-                      className="text-xl hover:scale-110 transition-transform cursor-pointer"
+                      className="text-xl hover:scale-110 transition-transform cursor-pointer p-1 min-w-[44px] min-h-[44px] flex items-center justify-center"
                       title="Love this meal"
                       type="button"
                     >
@@ -202,7 +202,7 @@ export default function MealDayCard({
                   <div className="text-sm font-medium text-gray-600 mb-2">
                     Sides:
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {mainSides.map((side) => (
                       <SideCard
                         key={side.id}

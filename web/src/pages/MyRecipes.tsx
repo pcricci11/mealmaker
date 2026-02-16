@@ -289,13 +289,13 @@ export default function MyRecipes() {
     const trimmed = urlInput.trim();
     if (!trimmed) return;
     try {
-      setUrlProgress("\uD83D\uDD0D Checking out this recipe...");
+      setUrlProgress("🔍 Checking out this recipe...");
       await new Promise((r) => setTimeout(r, 800));
-      setUrlProgress("Wow, that looks delicious! Save me some! \uD83D\uDE0B");
+      setUrlProgress("Wow, that looks delicious! Save me some! 😋");
       const { recipe, alreadyExists } = await importRecipeFromUrl(trimmed);
-      setUrlProgress("\uD83D\uDCDD Reading ingredients for future grocery lists!");
+      setUrlProgress("📝 Reading ingredients for future grocery lists!");
       await new Promise((r) => setTimeout(r, 800));
-      setUrlProgress("\u2705 Added to your collection!");
+      setUrlProgress("✅ Added to your collection!");
       await new Promise((r) => setTimeout(r, 1000));
       if (alreadyExists) {
         showToast(`"${recipe.title}" was already in your collection`);
@@ -420,7 +420,7 @@ export default function MyRecipes() {
     <div className="max-w-2xl mx-auto space-y-10 py-4">
       <section className="space-y-4">
         {/* Header with add buttons */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-0 md:justify-between">
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
             My Recipes
             <span className="ml-2 text-gray-300 font-normal normal-case">
@@ -684,7 +684,7 @@ export default function MyRecipes() {
                                   : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                               } disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
-                              {addingToDay === key ? `Plating up! \uD83C\uDF7D\uFE0F` : label}
+                              {addingToDay === key ? "Plating up! 🍽️" : label}
                             </button>
                           ))}
                         </div>
@@ -797,8 +797,8 @@ export default function MyRecipes() {
 
       {/* Delete confirmation modal */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full mx-4 p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/40">
+          <div className="bg-white rounded-none md:rounded-2xl shadow-xl max-w-sm w-full mx-0 md:mx-4 p-6 space-y-4">
             <h3 className="text-lg font-semibold text-gray-900">
               Delete {confirmDelete.title}?
             </h3>
@@ -827,8 +827,8 @@ export default function MyRecipes() {
 
       {/* Add Recipe Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/40">
+          <div className="bg-white rounded-none md:rounded-2xl shadow-xl max-w-md w-full mx-0 md:mx-4 h-full md:h-auto overflow-y-auto p-6 space-y-4">
             <h3 className="text-lg font-semibold text-gray-900">Add Personal Recipe</h3>
 
             <div className="space-y-3">
@@ -845,7 +845,7 @@ export default function MyRecipes() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Cuisine</label>
                   <select
@@ -871,7 +871,7 @@ export default function MyRecipes() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Cook time (min)</label>
                   <input
@@ -929,14 +929,14 @@ export default function MyRecipes() {
 
       {/* URL Recipe Modal */}
       {showUrlModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/40">
+          <div className="bg-white rounded-none md:rounded-2xl shadow-xl max-w-md w-full mx-0 md:mx-4 p-6 space-y-4">
             <h3 className="text-lg font-semibold text-gray-900">Add Recipe from URL</h3>
 
             {urlProgress ? (
               <div className="py-8 text-center space-y-3">
                 <p className="text-sm text-gray-700 font-medium">{urlProgress}</p>
-                {!urlProgress.startsWith("\u2705") && (
+                {!urlProgress.startsWith("✅") && (
                   <div className="flex justify-center">
                     <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
                   </div>

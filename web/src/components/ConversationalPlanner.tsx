@@ -88,7 +88,7 @@ export default function ConversationalPlanner({ onSmartSetup, loading, onPickFro
   }, [listening]);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
       <h3 className="font-bold text-lg text-gray-900 mb-1">
         Tell me about your week
       </h3>
@@ -100,7 +100,7 @@ export default function ConversationalPlanner({ onSmartSetup, loading, onPickFro
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={`e.g. "We're cooking Monday through Thursday, eating out Friday. My daughter needs lunch on Tuesday and Wednesday. Saturday we want something special — maybe Italian. Keep it quick on weeknights, 30 min max."`}
-        className="w-full h-32 border border-gray-300 rounded-lg px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+        className="w-full h-28 md:h-32 border border-gray-300 rounded-lg px-3 md:px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
         disabled={loading}
       />
 
@@ -108,7 +108,7 @@ export default function ConversationalPlanner({ onSmartSetup, loading, onPickFro
         <button
           onClick={handleSubmit}
           disabled={loading || !text.trim()}
-          className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-5 py-3 md:py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? "Setting up..." : "Smart Setup"}
         </button>

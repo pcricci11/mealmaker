@@ -223,7 +223,7 @@ export default function GroceryList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center gap-2 md:justify-between">
         <h2 className="text-2xl font-bold">Grocery List</h2>
         <div className="flex items-center gap-3">
           {checkedCount > 0 && (
@@ -336,7 +336,7 @@ export default function GroceryList() {
                 return (
                   <label
                     key={isCustom ? `custom-${(item as any)._index}` : key}
-                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
+                    className={`flex items-center gap-3 px-3 md:px-4 py-3.5 md:py-3 cursor-pointer hover:bg-gray-50 transition-colors ${
                       isChecked ? "opacity-50" : ""
                     }`}
                   >
@@ -344,7 +344,7 @@ export default function GroceryList() {
                       type="checkbox"
                       checked={isChecked}
                       onChange={() => toggleCheck(key)}
-                      className="accent-emerald-600 w-4 h-4"
+                      className="accent-emerald-600 w-5 h-5 md:w-4 md:h-4"
                     />
                     <span className={`flex-1 ${isChecked ? "line-through text-gray-400" : "text-gray-900"} ${isCustom ? "italic" : ""}`}>
                       {item.name}
@@ -395,7 +395,7 @@ export default function GroceryList() {
         {/* Add form */}
         {showAddForm && (
           <div className="bg-white rounded-lg border border-emerald-200 p-3 space-y-3">
-            <div className="flex gap-2">
+            <div className="flex flex-col md:flex-row gap-2">
               <input
                 type="text"
                 value={newItemName}

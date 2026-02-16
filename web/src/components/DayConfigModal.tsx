@@ -191,11 +191,11 @@ export default function DayConfigModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
+      <div className="bg-white rounded-none md:rounded-xl max-w-lg w-full h-full md:h-auto md:max-h-[90vh] flex flex-col">
         <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
           {/* Header */}
-          <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+          <div className="border-b border-gray-200 px-4 md:px-6 py-4 flex items-center justify-between">
             <h3 className="text-lg font-bold">{DAY_FULL_LABELS[day]}</h3>
             <button
               type="button"
@@ -466,7 +466,7 @@ export default function DayConfigModal({
           </div>
 
           {/* Footer */}
-          <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-end gap-3">
+          <div className="border-t border-gray-200 px-4 md:px-6 py-4 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}

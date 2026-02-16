@@ -240,11 +240,11 @@ export default function MyFamily() {
       {/* SECTION 1: FAMILY INFO                 */}
       {/* ────────────────────────────────────── */}
       <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+        <div className="px-4 md:px-6 py-4 bg-gray-50 border-b border-gray-200">
           <h2 className="text-lg font-bold text-gray-900">Family Info</h2>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4 md:p-6 space-y-6">
           {/* Family Name */}
           {editingName ? (
             <div className="flex items-center gap-2">
@@ -371,11 +371,11 @@ export default function MyFamily() {
       {/* SECTION 2: PREFERENCES                 */}
       {/* ────────────────────────────────────── */}
       <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+        <div className="px-4 md:px-6 py-4 bg-gray-50 border-b border-gray-200">
           <h2 className="text-lg font-bold text-gray-900">Preferences</h2>
         </div>
 
-        <div className="p-6 space-y-8">
+        <div className="p-4 md:p-6 space-y-8">
           {/* Serving Multiplier */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -500,14 +500,14 @@ export default function MyFamily() {
       {/* SECTION 3: FAVORITE CHEFS              */}
       {/* ────────────────────────────────────── */}
       <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+        <div className="px-4 md:px-6 py-4 bg-gray-50 border-b border-gray-200">
           <h2 className="text-lg font-bold text-gray-900">Favorite Chefs</h2>
           <p className="text-sm text-gray-500 mt-0.5">
             We'll prioritize recipes from these chefs when planning meals.
           </p>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-4 md:p-6 space-y-4">
           {/* Add chef */}
           <div className="flex gap-2">
             <input
@@ -574,14 +574,14 @@ export default function MyFamily() {
       {/* SECTION 4: FAVORITE WEBSITES            */}
       {/* ────────────────────────────────────── */}
       <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+        <div className="px-4 md:px-6 py-4 bg-gray-50 border-b border-gray-200">
           <h2 className="text-lg font-bold text-gray-900">Favorite Websites</h2>
           <p className="text-sm text-gray-500 mt-0.5">
             We'll prioritize recipes from these sources when planning meals.
           </p>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-4 md:p-6 space-y-4">
           {/* Add website */}
           <div className="flex gap-2">
             <input

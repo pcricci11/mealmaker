@@ -113,10 +113,10 @@ export default function RecipeSearchModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl max-w-lg w-full max-h-[80vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
+      <div className="bg-white rounded-none md:rounded-xl max-w-lg w-full h-full md:h-auto md:max-h-[80vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="border-b border-gray-200 px-6 py-4">
+        <div className="border-b border-gray-200 px-4 md:px-6 py-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-gray-900">Find a Recipe</h3>
             <button
@@ -150,7 +150,7 @@ export default function RecipeSearchModal({
         </div>
 
         {/* Search Input */}
-        <div className="px-6 pt-4 pb-2">
+        <div className="px-4 md:px-6 pt-4 pb-2">
           <div className="flex gap-2">
             <input
               type="text"
@@ -172,15 +172,15 @@ export default function RecipeSearchModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 pb-4">
+        <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4">
           {searching ? (
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-200 border-t-emerald-600 mb-3" />
               <p className="text-gray-500 text-sm">
-                \uD83D\uDD0D Sizzling up some recipe ideas...
+                🔍 Sizzling up some recipe ideas...
               </p>
               <p className="text-gray-400 text-xs mt-1">
-                Saut\u00E9ing through the web for you
+                Sautéing through the web for you
               </p>
             </div>
           ) : saving ? (
@@ -188,7 +188,7 @@ export default function RecipeSearchModal({
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-200 border-t-emerald-600 mb-3" />
               {savingPhase === "ingredients" ? (
                 <>
-                  <p className="text-gray-500 text-sm">\uD83E\uDD55 Chopping through the ingredient list...</p>
+                  <p className="text-gray-500 text-sm">🥕 Chopping through the ingredient list...</p>
                   <p className="text-gray-400 text-xs mt-1">Prepping ingredients for your grocery lists</p>
                 </>
               ) : (
@@ -282,7 +282,7 @@ export default function RecipeSearchModal({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-6 py-4">
+        <div className="border-t border-gray-200 px-4 md:px-6 py-4">
           <button
             onClick={onClose}
             disabled={saving}
