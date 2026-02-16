@@ -342,6 +342,133 @@ router.delete("/items/:id", (req, res) => {
   }
 });
 
+// Lock an existing meal plan: save draft items and extract ingredients (NO regeneration)
+router.post("/lock", async (req: Request, res: Response) => {
+  console.log("[lock] === Lock Plan START ===");
+  try {
+    const { family_id, week_start, items } = req.body as {
+      family_id: number;
+      week_start: string;
+      items: Array<{ day: string; recipe_id: number }>;
+    };
+
+    if (!family_id || !week_start || !items || items.length === 0) {
+      return res.status(400).json({
+        error: "family_id, week_start, and items are required",
+      });
+    }
+
+    // Find or create the meal plan
+    const existing = db
+      .prepare(
+        `SELECT id FROM meal_plans WHERE family_id = ? AND week_start = ? AND variant = 0`
+      )
+      .get(family_id, week_start) as { id: number } | undefined;
+
+    let mealPlanId: number;
+    if (existing) {
+      mealPlanId = existing.id;
+    } else {
+      const planResult = db
+        .prepare(
+          `INSERT INTO meal_plans (family_id, week_start, variant) VALUES (?, ?, 0)`
+        )
+        .run(family_id, week_start);
+      mealPlanId = planResult.lastInsertRowid as number;
+    }
+
+    // Clear existing items and insert the user's selections
+    db.prepare(`DELETE FROM meal_plan_items WHERE meal_plan_id = ?`).run(mealPlanId);
+    console.log(`[lock] Plan ${mealPlanId}, cleared old items`);
+
+    const insertItem = db.prepare(
+      `INSERT INTO meal_plan_items (meal_plan_id, day, recipe_id, meal_type, main_number, locked)
+       VALUES (?, ?, ?, 'main', ?, 1)`
+    );
+    const dayMainCount: Record<string, number> = {};
+    for (const item of items) {
+      dayMainCount[item.day] = (dayMainCount[item.day] || 0) + 1;
+      insertItem.run(mealPlanId, item.day, item.recipe_id, dayMainCount[item.day]);
+    }
+    console.log(`[lock] Inserted ${items.length} items`);
+
+    // Lazy backfill: extract ingredients for any assigned recipe that has none
+    const assignedRecipes = db.prepare(`
+      SELECT DISTINCT r.id, r.name, r.source_url, r.ingredients
+      FROM meal_plan_items mpi
+      JOIN recipes r ON r.id = mpi.recipe_id
+      WHERE mpi.meal_plan_id = ?
+        AND r.source_url IS NOT NULL
+        AND (r.ingredients IS NULL OR r.ingredients = '[]' OR r.ingredients = '')
+    `).all(mealPlanId) as Array<{ id: number; name: string; source_url: string; ingredients: string }>;
+
+    if (assignedRecipes.length > 0) {
+      console.log(`[lock] Backfill: ${assignedRecipes.length} recipes need ingredients`);
+      for (const recipe of assignedRecipes) {
+        console.log(`[lock] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
+        const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url);
+        if (extracted.length > 0) {
+          db.prepare("UPDATE recipes SET ingredients = ? WHERE id = ?").run(
+            JSON.stringify(extracted),
+            recipe.id,
+          );
+          const insertIng = db.prepare(
+            "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
+          );
+          for (const ing of extracted) {
+            insertIng.run(recipe.id, ing.name, ing.quantity, ing.unit, ing.category);
+          }
+          console.log(`[lock] Extracted ${extracted.length} ingredients for #${recipe.id}`);
+        }
+      }
+    }
+
+    // Fetch the saved items with recipe details
+    const savedItems = db.prepare(`
+      SELECT mpi.id, mpi.meal_plan_id, mpi.day, mpi.recipe_id, mpi.locked,
+             mpi.meal_type, mpi.main_number, mpi.is_custom, mpi.notes,
+             r.name as recipe_name, r.cuisine, r.vegetarian,
+             r.protein_type, r.cook_minutes, r.makes_leftovers, r.kid_friendly
+      FROM meal_plan_items mpi
+      LEFT JOIN recipes r ON r.id = mpi.recipe_id
+      WHERE mpi.meal_plan_id = ?
+      ORDER BY CASE mpi.day
+        WHEN 'monday' THEN 1 WHEN 'tuesday' THEN 2 WHEN 'wednesday' THEN 3
+        WHEN 'thursday' THEN 4 WHEN 'friday' THEN 5 WHEN 'saturday' THEN 6 WHEN 'sunday' THEN 7
+      END, mpi.meal_type, mpi.main_number
+    `).all(mealPlanId) as any[];
+
+    console.log(`[lock] === Lock Plan END === planId=${mealPlanId}, items=${savedItems.length}`);
+
+    res.status(201).json({
+      id: mealPlanId,
+      family_id,
+      week_start,
+      variant: 0,
+      items: savedItems.map((row: any) => ({
+        id: row.id,
+        day: row.day,
+        recipe_id: row.recipe_id,
+        meal_type: row.meal_type || "main",
+        main_number: row.main_number || null,
+        is_custom: !!row.is_custom,
+        notes: row.notes ? (() => { try { return JSON.parse(row.notes); } catch { return row.notes; } })() : null,
+        recipe_name: row.recipe_name || null,
+        cuisine: row.cuisine || null,
+        vegetarian: !!row.vegetarian,
+        cook_minutes: row.cook_minutes || null,
+        makes_leftovers: !!row.makes_leftovers,
+        kid_friendly: !!row.kid_friendly,
+      })),
+    });
+  } catch (error: any) {
+    console.error("Lock meal plan error:", error);
+    res.status(500).json({
+      error: error.message || "Failed to lock meal plan",
+    });
+  }
+});
+
 // Add a recipe to a specific day on an existing meal plan
 router.post("/:planId/items", async (req: Request, res: Response) => {
   try {

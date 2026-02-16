@@ -118,7 +118,11 @@ router.post("/batch-search", async (req: Request, res: Response) => {
       tools: [
         { type: "web_search_20250305", name: "web_search", max_uses: Math.min(2 * cappedQueries.length, 10) } as any,
       ],
-      system: `Search the web for each recipe query. Return a JSON object: keys are the EXACT original query strings, values are arrays of 3-5 results. Each result: { "name": string, "source_name": string, "source_url": string, "cook_minutes": number, "cuisine": string, "vegetarian": boolean, "protein_type": string|null, "difficulty": string, "kid_friendly": boolean, "description": string (1 sentence max) }. cuisine: one of ${VALID_CUISINES.join(", ")}. difficulty: one of ${VALID_DIFFICULTIES.join(", ")}. protein_type: null if vegetarian. Return ONLY valid JSON, no fences or explanation.`,
+      system: `Search the web for each recipe query. Return a JSON object: keys are the EXACT original query strings, values are arrays of 3-5 results. Each result: { "name": string, "source_name": string, "source_url": string, "cook_minutes": number, "cuisine": string, "vegetarian": boolean, "protein_type": string|null, "difficulty": string, "kid_friendly": boolean, "description": string (1 sentence max) }. cuisine: one of ${VALID_CUISINES.join(", ")}. difficulty: one of ${VALID_DIFFICULTIES.join(", ")}. protein_type: null if vegetarian.
+
+CRITICAL: Return ONLY the JSON object. No explanation, no preamble, no markdown.
+Do not write "Based on" or "Here are" or any other text.
+Your entire response must be valid JSON that starts with { and ends with }.`,
       messages: [
         {
           role: "user",
@@ -139,11 +143,19 @@ router.post("/batch-search", async (req: Request, res: Response) => {
       return res.status(500).json({ error: "No text response from Claude" });
     }
 
-    // Strip markdown fences if present
-    const cleaned = lastText
+    // Strip markdown fences if present, then extract JSON object
+    let cleaned = lastText
       .replace(/^```(?:json)?\s*\n?/, "")
       .replace(/\n?```\s*$/, "")
       .trim();
+
+    // If Claude added preamble text, extract the JSON between first { and last }
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace > 0 && lastBrace > firstBrace) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+    }
+
     const parsed = JSON.parse(cleaned);
 
     res.json({ results: parsed });

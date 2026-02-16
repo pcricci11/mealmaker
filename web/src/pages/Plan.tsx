@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   generateMealPlanV3,
+  lockMealPlan,
   getFamilies,
   smartSetup,
   getRecipes,
@@ -77,7 +78,7 @@ export default function Plan() {
     day: DayOfWeek;
   } | null>(null);
   const [showBuildFromRecipes, setShowBuildFromRecipes] = useState(false);
-  const [draftRecipes, setDraftRecipes] = useState<Map<DayOfWeek, Recipe>>(new Map());
+  const [draftRecipes, setDraftRecipes] = useState<Map<DayOfWeek, Recipe[]>>(new Map());
 
   // Recipe search state for specific meal requests
   const [pendingSearchMeals, setPendingSearchMeals] = useState<
@@ -147,7 +148,13 @@ export default function Plan() {
     if (!isMyPlan) {
       const state = location.state as { draftRecipes?: Array<[DayOfWeek, Recipe]> } | null;
       if (state?.draftRecipes) {
-        setDraftRecipes(new Map(state.draftRecipes));
+        const grouped = new Map<DayOfWeek, Recipe[]>();
+        for (const [day, recipe] of state.draftRecipes) {
+          const existing = grouped.get(day) || [];
+          existing.push(recipe);
+          grouped.set(day, existing);
+        }
+        setDraftRecipes(grouped);
         // Clear the state so refreshing doesn't re-apply
         window.history.replaceState({}, "");
       }
@@ -321,7 +328,12 @@ export default function Plan() {
       const newDraft = new Map(draftRecipes);
       for (const lock of resolved) {
         const recipe = fetchedRecipes.find((r) => r.id === lock.recipe_id);
-        if (recipe) newDraft.set(lock.day as DayOfWeek, recipe);
+        if (recipe) {
+          const day = lock.day as DayOfWeek;
+          const existing = newDraft.get(day) || [];
+          existing.push(recipe);
+          newDraft.set(day, existing);
+        }
       }
       setDraftRecipes(newDraft);
       setSetupProgress(null);
@@ -374,7 +386,12 @@ export default function Plan() {
       const newDraft = new Map(draftRecipes);
       for (const lock of finalResolved) {
         const recipe = recipes.find((r) => r.id === lock.recipe_id);
-        if (recipe) newDraft.set(lock.day as DayOfWeek, recipe);
+        if (recipe) {
+          const day = lock.day as DayOfWeek;
+          const existing = newDraft.get(day) || [];
+          existing.push(recipe);
+          newDraft.set(day, existing);
+        }
       }
       setDraftRecipes(newDraft);
       shouldAutoGenerate.current = false;
@@ -413,7 +430,9 @@ export default function Plan() {
     setShowBuildFromRecipes(false);
     const merged = new Map(draftRecipes);
     for (const [day, recipe] of assignments) {
-      merged.set(day, recipe);
+      const existing = merged.get(day) || [];
+      existing.push(recipe);
+      merged.set(day, existing);
     }
     setDraftRecipes(merged);
   };
@@ -428,30 +447,19 @@ export default function Plan() {
       if (!fam?.id) throw new Error("No family found.");
       const weekStart = getWeekStart();
 
-      const days: DayOfWeek[] = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
-      const schedule = cookingSchedule.length > 0
-        ? cookingSchedule
-        : days.map((day) => ({
-            family_id: fam.id, week_start: weekStart, day,
-            is_cooking: draftRecipes.has(day), meal_mode: "one_main" as const,
-          }));
-
-      const locks = draftRecipes.size > 0
-        ? Object.fromEntries(Array.from(draftRecipes.entries()).map(([day, r]) => [day, r.id]))
-        : undefined;
-      const specificMeals = draftRecipes.size > 0
-        ? Array.from(draftRecipes.entries()).map(([day, r]) => ({ day, description: r.title }))
-        : undefined;
+      // Build items directly from the user's draft selections — no regeneration
+      const items = Array.from(draftRecipes.entries()).flatMap(([day, recipes]) =>
+        recipes.map((r) => ({ day, recipe_id: r.id }))
+      );
 
       // Timed progress messages
       const progressTimer1 = setTimeout(() => setLockProgress("Mixing together your shopping list..."), 4000);
       const progressTimer2 = setTimeout(() => setLockProgress("Almost done — just seasoning the details..."), 8000);
 
-      const result = await generateMealPlanV3({
-        family_id: fam.id, week_start: weekStart, cooking_schedule: schedule,
-        lunch_needs: [], max_cook_minutes_weekday: fam.max_cook_minutes_weekday ?? 45,
-        max_cook_minutes_weekend: fam.max_cook_minutes_weekend ?? 90,
-        vegetarian_ratio: fam.vegetarian_ratio ?? 0, locks, specific_meals: specificMeals,
+      const result = await lockMealPlan({
+        family_id: fam.id,
+        week_start: weekStart,
+        items,
       });
 
       clearTimeout(progressTimer1);
@@ -483,6 +491,8 @@ export default function Plan() {
         if (recipe) entries.push([item.day, recipe]);
       }
     }
+    // entries may have multiple [day, recipe] pairs for the same day — that's fine,
+    // the navigation state restore groups them into arrays
     navigate("/plan", { state: { draftRecipes: entries } });
   };
 
@@ -631,50 +641,58 @@ export default function Plan() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
             {DAYS.map(({ key, label }) => {
-              const recipe = draftRecipes.get(key as DayOfWeek);
-              return recipe ? (
+              const recipes = draftRecipes.get(key as DayOfWeek);
+              return recipes && recipes.length > 0 ? (
                 <div
                   key={key}
-                  className="bg-emerald-50 border border-emerald-300 rounded-xl p-3 text-center min-h-[80px] md:min-h-[120px] flex flex-col items-center justify-center relative cursor-pointer hover:border-emerald-400 transition-colors"
-                  onClick={() => {
-                    const fakeItem: MealPlanItemV3 = {
-                      id: 0, meal_plan_id: 0, day: key as DayOfWeek,
-                      recipe_id: recipe.id, recipe: recipe, locked: false,
-                      lunch_leftover_label: null, leftover_lunch_recipe_id: null,
-                      notes: null, meal_type: "main", main_number: null,
-                      assigned_member_ids: null, parent_meal_item_id: null,
-                      is_custom: false, recipe_name: recipe.title,
-                    };
-                    setSelectedItem(fakeItem);
-                  }}
+                  className="bg-emerald-50 border border-emerald-300 rounded-xl p-3 text-center min-h-[80px] md:min-h-[120px] flex flex-col items-center justify-center relative"
                 >
                   <span className="text-xs font-semibold text-emerald-700 uppercase">
                     {label}
                   </span>
-                  <span className="text-xs text-gray-700 mt-1 line-clamp-2 leading-tight font-medium">
-                    {recipe.title}
-                  </span>
-                  {recipe.cuisine && (
-                    <span className="text-[10px] text-emerald-600 mt-0.5">
-                      {recipe.cuisine.replace("_", " ")}
-                    </span>
-                  )}
-                  {recipe.cook_minutes && (
-                    <span className="text-[10px] text-gray-400">
-                      {recipe.cook_minutes} min
-                    </span>
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const next = new Map(draftRecipes);
-                      next.delete(key as DayOfWeek);
-                      setDraftRecipes(next);
-                    }}
-                    className="absolute top-1 right-1 text-gray-400 hover:text-red-500 text-xs"
-                  >
-                    ✕
-                  </button>
+                  {recipes.map((recipe, idx) => (
+                    <div
+                      key={recipe.id}
+                      className="w-full cursor-pointer hover:bg-emerald-100/50 rounded px-1 py-0.5 relative group"
+                      onClick={() => {
+                        const fakeItem: MealPlanItemV3 = {
+                          id: 0, meal_plan_id: 0, day: key as DayOfWeek,
+                          recipe_id: recipe.id, recipe: recipe, locked: false,
+                          lunch_leftover_label: null, leftover_lunch_recipe_id: null,
+                          notes: null, meal_type: "main", main_number: idx + 1,
+                          assigned_member_ids: null, parent_meal_item_id: null,
+                          is_custom: false, recipe_name: recipe.title,
+                        };
+                        setSelectedItem(fakeItem);
+                      }}
+                    >
+                      <span className="text-xs text-gray-700 line-clamp-2 leading-tight font-medium">
+                        {recipe.title}
+                      </span>
+                      {recipe.cuisine && (
+                        <span className="text-[10px] text-emerald-600">
+                          {recipe.cuisine.replace("_", " ")}
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const next = new Map(draftRecipes);
+                          const arr = [...(next.get(key as DayOfWeek) || [])];
+                          arr.splice(idx, 1);
+                          if (arr.length === 0) {
+                            next.delete(key as DayOfWeek);
+                          } else {
+                            next.set(key as DayOfWeek, arr);
+                          }
+                          setDraftRecipes(next);
+                        }}
+                        className="absolute top-0 right-0 text-gray-400 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <button
@@ -699,7 +717,7 @@ export default function Plan() {
                 Lock Plan & Build Grocery List
               </button>
               <p className="text-xs text-gray-400">
-                {draftRecipes.size} recipe{draftRecipes.size !== 1 ? "s" : ""} assigned — remaining days will be auto-filled
+                {Array.from(draftRecipes.values()).reduce((sum, arr) => sum + arr.length, 0)} recipe{Array.from(draftRecipes.values()).reduce((sum, arr) => sum + arr.length, 0) !== 1 ? "s" : ""} assigned — remaining days will be auto-filled
               </p>
             </div>
           ) : (
@@ -814,11 +832,18 @@ export default function Plan() {
           isLoved={plan ? lovedIds.has(selectedItem.id) : false}
           onSwap={async (newRecipeId) => {
             if (!plan) {
-              // Draft mode — update local state
+              // Draft mode — replace the specific recipe in the array
               const recipe = await getRecipeById(newRecipeId);
               const day = selectedItem.day as DayOfWeek;
               const next = new Map(draftRecipes);
-              next.set(day, recipe);
+              const arr = [...(next.get(day) || [])];
+              const idx = arr.findIndex((r) => r.id === selectedItem.recipe_id);
+              if (idx >= 0) {
+                arr[idx] = recipe;
+              } else {
+                arr.push(recipe);
+              }
+              next.set(day, arr);
               setDraftRecipes(next);
             } else {
               // Locked mode — API call
@@ -860,7 +885,14 @@ export default function Plan() {
       {showBuildFromRecipes && family && (
         <BuildFromRecipesModal
           familyId={family.id}
-          initialAssignments={draftRecipes}
+          initialAssignments={(() => {
+            // Convert Recipe[] map to single Recipe map for the modal (takes first per day)
+            const single = new Map<DayOfWeek, Recipe>();
+            for (const [day, recipes] of draftRecipes) {
+              if (recipes.length > 0) single.set(day, recipes[0]);
+            }
+            return single;
+          })()}
           onSelect={handleRecipesSelected}
           onClose={() => setShowBuildFromRecipes(false)}
         />

@@ -467,6 +467,20 @@ export async function generateMealPlanV3(request: GeneratePlanRequestV3): Promis
   );
 }
 
+export async function lockMealPlan(request: {
+  family_id: number;
+  week_start: string;
+  items: Array<{ day: string; recipe_id: number }>;
+}): Promise<MealPlan> {
+  return json(
+    await fetch(`${BASE}/meal-plans/lock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    }),
+  );
+}
+
 export async function getMealPlanHistory(familyId?: number): Promise<any[]> {
   let url = `${BASE}/meal-plans/history`;
   if (familyId) {
