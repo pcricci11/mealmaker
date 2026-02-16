@@ -170,22 +170,35 @@ router.post("/suggest", (req, res) => {
 // Swap a side in a meal plan
 router.post("/swap/:meal_item_id", (req, res) => {
   const mealItemId = parseInt(req.params.meal_item_id);
-  const { new_side_id } = req.body;
+  const { new_side_id, custom_name } = req.body;
 
-  if (!new_side_id) {
-    return res.status(400).json({ error: "new_side_id is required" });
+  if (!new_side_id && !custom_name) {
+    return res.status(400).json({ error: "new_side_id or custom_name is required" });
   }
 
   // Get the current side
   const currentSide: any = db
     .prepare(
-      `SELECT * FROM meal_plan_items 
+      `SELECT * FROM meal_plan_items
       WHERE id = ? AND meal_type = 'side'`
     )
     .get(mealItemId);
 
   if (!currentSide) {
     return res.status(404).json({ error: "Side meal item not found" });
+  }
+
+  if (custom_name) {
+    db.prepare(
+      `UPDATE meal_plan_items
+      SET is_custom = 1,
+          notes = ?
+      WHERE id = ?`
+    ).run(
+      JSON.stringify({ custom_side: true, side_name: custom_name }),
+      mealItemId
+    );
+    return res.json({ message: "Side swapped successfully" });
   }
 
   // Get the new side from library
@@ -197,12 +210,9 @@ router.post("/swap/:meal_item_id", (req, res) => {
     return res.status(404).json({ error: "New side not found in library" });
   }
 
-  // Update the meal_plan_item to reference the new side
-  // Note: You may want to create a recipe from the side, or handle this differently
-  // For now, we'll just update with a custom flag
   db.prepare(
-    `UPDATE meal_plan_items 
-    SET is_custom = 1, 
+    `UPDATE meal_plan_items
+    SET is_custom = 1,
         notes = ?
     WHERE id = ?`
   ).run(

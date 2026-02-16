@@ -240,11 +240,14 @@ export async function getSideSuggestions(mainRecipeId: number, excludeIds?: numb
   );
 }
 
-export async function swapSide(mealItemId: number, newSideId: number): Promise<void> {
+export async function swapSide(mealItemId: number, newSideId?: number, customName?: string): Promise<void> {
+  const body: any = {};
+  if (newSideId) body.new_side_id = newSideId;
+  if (customName) body.custom_name = customName;
   const res = await fetch(`${BASE}/sides/swap/${mealItemId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ new_side_id: newSideId }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error("Failed to swap side");
 }

@@ -84,11 +84,11 @@ export default function MealPlan() {
     }
   };
 
-  const handleSwapSide = async (newSideId: number) => {
+  const handleSwapSide = async (newSideId?: number, customName?: string) => {
     if (!swapSideModal) return;
 
     try {
-      await swapSide(swapSideModal.mealItemId, newSideId);
+      await swapSide(swapSideModal.mealItemId, newSideId, customName);
       await loadData(); // Reload plan
       setSwapSideModal(null);
     } catch (error) {

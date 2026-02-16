@@ -387,10 +387,10 @@ export default function Plan() {
   };
 
   // Editing handlers (from MealPlan.tsx)
-  const handleSwapSide = async (newSideId: number) => {
+  const handleSwapSide = async (newSideId?: number, customName?: string) => {
     if (!swapSideModal) return;
     try {
-      await swapSide(swapSideModal.mealItemId, newSideId);
+      await swapSide(swapSideModal.mealItemId, newSideId, customName);
       await refreshPlan();
       setSwapSideModal(null);
     } catch (error) {
