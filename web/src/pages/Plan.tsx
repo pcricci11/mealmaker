@@ -18,6 +18,8 @@ import {
 import MealDetailModal from "../components/MealDetailModal";
 import ConversationalPlanner from "../components/ConversationalPlanner";
 import RecipeSearchModal from "../components/RecipeSearchModal";
+import SmartSetupProgressModal from "../components/SmartSetupProgressModal";
+import type { SmartSetupProgress } from "../components/SmartSetupProgressModal";
 import MealDayCard from "../components/MealDayCard";
 import SwapSideModal from "../components/SwapSideModal";
 import AddSideModal from "../components/AddSideModal";
@@ -50,7 +52,7 @@ export default function Plan() {
   const [error, setError] = useState<string | null>(null);
   const [lovedIds, setLovedIds] = useState<Set<number>>(new Set());
   const [selectedItem, setSelectedItem] = useState<MealPlanItemV3 | null>(null);
-  const [smartSetupLoading, setSmartSetupLoading] = useState(false);
+  const [setupProgress, setSetupProgress] = useState<SmartSetupProgress | null>(null);
 
   // Family & members
   const [family, setFamily] = useState<Family | null>(null);
@@ -194,9 +196,27 @@ export default function Plan() {
     }
   };
 
+  const staggerRevealResults = async (
+    queries: Array<{ query: string; status: "searching" | "found" | "not_found" }>,
+    results: Record<string, WebSearchRecipeResult[]>,
+  ) => {
+    for (let i = 0; i < queries.length; i++) {
+      await new Promise((r) => setTimeout(r, 400));
+      setSetupProgress((prev) => {
+        if (!prev) return prev;
+        const updated = [...prev.searchQueries];
+        updated[i] = {
+          ...updated[i],
+          status: (results[queries[i].query]?.length ?? 0) > 0 ? "found" : "not_found",
+        };
+        return { ...prev, searchQueries: updated };
+      });
+    }
+  };
+
   const handleSmartSetup = async (text: string) => {
     console.log("[Plan] handleSmartSetup called", { text });
-    setSmartSetupLoading(true);
+    setSetupProgress({ phase: "parsing", message: "Understanding your week...", searchQueries: [] });
     setError(null);
     setPendingSearchMeals([]);
     setCurrentSearchIndex(0);
@@ -225,6 +245,8 @@ export default function Plan() {
 
       // Check for specific meal requests
       if (result.specific_meals && result.specific_meals.length > 0) {
+        setSetupProgress({ phase: "matching", message: "Checking your recipe collection...", searchQueries: [] });
+
         const fetchedRecipes = await getRecipes();
         setAllRecipes(fetchedRecipes);
         console.log("[Plan] loaded recipes for matching", { count: fetchedRecipes.length, specificMeals: result.specific_meals });
@@ -253,9 +275,21 @@ export default function Plan() {
         shouldAutoGenerate.current = true;
 
         if (unmatched.length > 0) {
+          // Set up searching phase with all unmatched queries
+          const searchQueries = unmatched.map((m) => ({
+            query: m.description,
+            status: "searching" as const,
+          }));
+          setSetupProgress({
+            phase: "searching",
+            message: "Searching for recipes online...",
+            searchQueries,
+          });
+
           // Batch search all unmatched meals in a single API call
+          let batchResults: Record<string, WebSearchRecipeResult[]> = {};
           try {
-            const batchResults = await batchSearchRecipesWeb(
+            batchResults = await batchSearchRecipesWeb(
               unmatched.map((m) => m.description)
             );
             console.log("[Plan] batch search results", batchResults);
@@ -264,17 +298,26 @@ export default function Plan() {
             console.warn("[Plan] batch search failed, modals will search individually", err);
             setBatchedSearchResults({});
           }
+
+          // Stagger reveal each result
+          await staggerRevealResults(searchQueries, batchResults);
+
+          // Brief "done" phase before showing modals
+          setSetupProgress({ phase: "done", message: "All set! Let's pick your recipes...", searchQueries: [] });
+          await new Promise((r) => setTimeout(r, 600));
+          setSetupProgress(null);
+
           setPendingSearchMeals(unmatched);
           setCurrentSearchIndex(0);
         } else {
-          setSmartSetupLoading(false);
+          setSetupProgress(null);
           generatePlanAfterSearch(schedule, autoResolved, fetchedRecipes);
           return;
         }
       } else {
         // No specific meals — generate immediately
         console.log("[Plan] no specific meals, generating immediately");
-        setSmartSetupLoading(false);
+        setSetupProgress(null);
         generatePlanAfterSearch(schedule, [], []);
         return;
       }
@@ -282,7 +325,7 @@ export default function Plan() {
       console.error("[Plan] handleSmartSetup error", err);
       setError(err.message || "Smart setup failed. Please try again.");
     } finally {
-      setSmartSetupLoading(false);
+      setSetupProgress(null);
     }
   };
 
@@ -405,7 +448,7 @@ export default function Plan() {
   return (
     <div className="max-w-2xl mx-auto space-y-8 py-4">
       {/* Welcome message + Conversational Planner (hidden when plan is loaded) */}
-      {!plan && !loading && (
+      {!plan && !loading && !setupProgress && (
         <>
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 space-y-4 text-gray-700 leading-relaxed text-[15px]">
             <p>
@@ -425,7 +468,7 @@ export default function Plan() {
 
           <ConversationalPlanner
             onSmartSetup={handleSmartSetup}
-            loading={smartSetupLoading}
+            loading={setupProgress !== null}
           />
         </>
       )}
@@ -438,7 +481,7 @@ export default function Plan() {
       )}
 
       {/* Loading state */}
-      {(loading || smartSetupLoading) && (
+      {loading && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
             Your Week
@@ -460,13 +503,13 @@ export default function Plan() {
             ))}
           </div>
           <p className="text-center text-sm text-gray-400">
-            Talking to the chef... picking recipes... setting the table...
+            Generating your personalized meal plan...
           </p>
         </div>
       )}
 
       {/* Empty grid (no plan yet, not loading) */}
-      {!plan && !loading && (
+      {!plan && !loading && !setupProgress && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
             Your Week
@@ -546,6 +589,9 @@ export default function Plan() {
           </div>
         </div>
       )}
+
+      {/* Smart Setup Progress Modal */}
+      {setupProgress && <SmartSetupProgressModal progress={setupProgress} />}
 
       {/* Recipe Search Modal for specific meal requests */}
       {pendingSearchMeals.length > 0 && currentSearchIndex < pendingSearchMeals.length && (

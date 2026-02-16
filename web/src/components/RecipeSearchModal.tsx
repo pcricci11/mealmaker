@@ -27,8 +27,10 @@ export default function RecipeSearchModal({
   const [results, setResults] = useState<WebSearchRecipeResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingPhase, setSavingPhase] = useState<"adding" | "ingredients" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const didAutoSearch = useRef(false);
+  const savingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (prefetchedResults && prefetchedResults.length > 0) {
@@ -66,7 +68,13 @@ export default function RecipeSearchModal({
   const handleSelect = async (result: WebSearchRecipeResult) => {
     console.log("[RecipeSearchModal] handleSelect clicked", { name: result.name, cuisine: result.cuisine });
     setSaving(true);
+    setSavingPhase("adding");
     setError(null);
+
+    // After 3 seconds, switch to the ingredients phase message
+    savingTimerRef.current = setTimeout(() => {
+      setSavingPhase("ingredients");
+    }, 3000);
 
     try {
       const saved = await createRecipe({
@@ -89,11 +97,14 @@ export default function RecipeSearchModal({
         frequency_cap_per_month: null,
       });
       console.log("[RecipeSearchModal] recipe saved to DB", { id: saved.id, title: saved.title });
+      if (savingTimerRef.current) clearTimeout(savingTimerRef.current);
       onRecipeSelected(saved);
     } catch (err: any) {
       console.error("[RecipeSearchModal] createRecipe failed", err);
+      if (savingTimerRef.current) clearTimeout(savingTimerRef.current);
       setError(err.message || "Failed to save recipe.");
       setSaving(false);
+      setSavingPhase(null);
     }
   };
 
@@ -177,8 +188,17 @@ export default function RecipeSearchModal({
           ) : saving ? (
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-200 border-t-emerald-600 mb-3" />
-              <p className="text-gray-500 text-sm">Saving recipe and fetching ingredients...</p>
-              <p className="text-gray-400 text-xs mt-1">This may take 10-20 seconds</p>
+              {savingPhase === "ingredients" ? (
+                <>
+                  <p className="text-gray-500 text-sm">Building your grocery list...</p>
+                  <p className="text-gray-400 text-xs mt-1">Extracting ingredients from the recipe</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-gray-500 text-sm">Adding recipe to your collection...</p>
+                  <p className="text-gray-400 text-xs mt-1">Saving to your recipe book</p>
+                </>
+              )}
             </div>
           ) : (
             <>
