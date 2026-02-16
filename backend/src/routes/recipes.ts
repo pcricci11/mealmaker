@@ -110,9 +110,9 @@ router.post("/batch-search", async (req: Request, res: Response) => {
   try {
     const message = await client.messages.create({
       model: "claude-sonnet-4-5-20250929",
-      max_tokens: Math.min(4096 * cappedQueries.length, 16384),
+      max_tokens: Math.min(2048 * cappedQueries.length, 8192),
       tools: [
-        { type: "web_search_20250305", name: "web_search", max_uses: Math.min(3 * cappedQueries.length, 15) } as any,
+        { type: "web_search_20250305", name: "web_search", max_uses: Math.min(2 * cappedQueries.length, 10) } as any,
       ],
       system: `You are a recipe search assistant. The user will give you multiple recipe queries. For EACH query, use web search to find real recipes online. Then return a single JSON object where each key is the EXACT original query string and each value is an array of 3-5 recipe results.
 
@@ -292,25 +292,8 @@ router.post("/", async (req: Request, res: Response) => {
 
   const recipeId = result.lastInsertRowid as number;
 
-  // Auto-extract ingredients for web_search recipes that arrive with none
+  // Insert recipe_ingredients from any provided ingredients
   let ingredients = r.ingredients || [];
-  if (
-    sourceType === "web_search" &&
-    r.source_url &&
-    (!r.ingredients || r.ingredients.length === 0)
-  ) {
-    const extracted = await extractIngredientsFromUrl(r.title, r.source_url);
-    if (extracted.length > 0) {
-      ingredients = extracted;
-      // Update the recipes.ingredients JSON column with the extracted data
-      db.prepare("UPDATE recipes SET ingredients = ? WHERE id = ?").run(
-        JSON.stringify(extracted),
-        recipeId,
-      );
-    }
-  }
-
-  // Insert recipe_ingredients
   if (ingredients.length > 0) {
     const insertIng = db.prepare(
       "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
@@ -322,6 +305,33 @@ router.post("/", async (req: Request, res: Response) => {
 
   const created = db.prepare("SELECT * FROM recipes WHERE id = ?").get(recipeId);
   res.status(201).json(rowToRecipe(created));
+
+  // Fire-and-forget: extract ingredients in background for web_search recipes
+  if (
+    sourceType === "web_search" &&
+    r.source_url &&
+    (!r.ingredients || r.ingredients.length === 0)
+  ) {
+    extractIngredientsFromUrl(r.title, r.source_url)
+      .then((extracted) => {
+        if (extracted.length > 0) {
+          db.prepare("UPDATE recipes SET ingredients = ? WHERE id = ?").run(
+            JSON.stringify(extracted),
+            recipeId,
+          );
+          const insertIng = db.prepare(
+            "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
+          );
+          for (const ing of extracted) {
+            insertIng.run(recipeId, ing.name, ing.quantity, ing.unit, ing.category);
+          }
+          console.log(`[create] Background extraction for recipe ${recipeId}: ${extracted.length} ingredients`);
+        }
+      })
+      .catch((err) => {
+        console.error(`[create] Background ingredient extraction failed for recipe ${recipeId}:`, err);
+      });
+  }
 });
 
 // PUT /api/recipes/:id
@@ -469,28 +479,27 @@ router.post("/backfill-ingredients", async (_req: Request, res: Response) => {
 
     console.log(`[backfill] Found ${emptyRecipes.length} recipes with empty ingredients:`, emptyRecipes.map(r => `${r.id}: ${r.name}`));
 
-    const results: Array<{ id: number; name: string; ingredientCount: number }> = [];
-
-    for (const recipe of emptyRecipes) {
-      const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url);
-      if (extracted.length > 0) {
-        db.prepare("UPDATE recipes SET ingredients = ? WHERE id = ?").run(
-          JSON.stringify(extracted),
-          recipe.id,
-        );
-        // Also insert into recipe_ingredients table
-        const insertIng = db.prepare(
-          "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
-        );
-        for (const ing of extracted) {
-          insertIng.run(recipe.id, ing.name, ing.quantity, ing.unit, ing.category);
+    const results = await Promise.all(
+      emptyRecipes.map(async (recipe) => {
+        const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url);
+        if (extracted.length > 0) {
+          db.prepare("UPDATE recipes SET ingredients = ? WHERE id = ?").run(
+            JSON.stringify(extracted),
+            recipe.id,
+          );
+          const insertIng = db.prepare(
+            "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
+          );
+          for (const ing of extracted) {
+            insertIng.run(recipe.id, ing.name, ing.quantity, ing.unit, ing.category);
+          }
+          console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extracted ${extracted.length} ingredients`);
+        } else {
+          console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extraction still failed`);
         }
-        console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extracted ${extracted.length} ingredients`);
-      } else {
-        console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extraction still failed`);
-      }
-      results.push({ id: recipe.id, name: recipe.name, ingredientCount: extracted.length });
-    }
+        return { id: recipe.id, name: recipe.name, ingredientCount: extracted.length };
+      })
+    );
 
     res.json({ message: `Backfilled ${results.filter(r => r.ingredientCount > 0).length}/${emptyRecipes.length} recipes`, results });
   } catch (error: any) {

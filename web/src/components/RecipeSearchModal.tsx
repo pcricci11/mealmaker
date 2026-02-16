@@ -24,21 +24,19 @@ export default function RecipeSearchModal({
   onClose,
 }: Props) {
   const [query, setQuery] = useState(initialQuery || "");
-  const [results, setResults] = useState<WebSearchRecipeResult[]>([]);
+  const hasPrefetched = !!(prefetchedResults && prefetchedResults.length > 0);
+  const [results, setResults] = useState<WebSearchRecipeResult[]>(hasPrefetched ? prefetchedResults : []);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingPhase, setSavingPhase] = useState<"adding" | "ingredients" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const didAutoSearch = useRef(false);
+  const didAutoSearch = useRef(hasPrefetched);
   const savingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Only auto-search when there are no prefetched results
   useEffect(() => {
-    if (prefetchedResults && prefetchedResults.length > 0) {
-      setResults(prefetchedResults);
-      didAutoSearch.current = true;
-      return;
-    }
-    if (initialQuery && !didAutoSearch.current) {
+    if (didAutoSearch.current) return;
+    if (initialQuery) {
       didAutoSearch.current = true;
       handleSearch();
     }
