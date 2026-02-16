@@ -378,26 +378,6 @@ router.put("/:id", (req: Request, res: Response) => {
   res.json(rowToRecipe(updated));
 });
 
-// DELETE /api/recipes/bulk/generic — remove all recipes without a source_url
-router.delete("/bulk/generic", (_req: Request, res: Response) => {
-  const generics = db.prepare(
-    "SELECT id FROM recipes WHERE source_url IS NULL OR source_url = ''"
-  ).all() as Array<{ id: number }>;
-
-  if (generics.length === 0) {
-    return res.json({ deleted: 0 });
-  }
-
-  const ids = generics.map((r) => r.id);
-  const placeholders = ids.map(() => "?").join(",");
-
-  db.prepare(`UPDATE meal_plan_items SET recipe_id = NULL WHERE recipe_id IN (${placeholders})`).run(...ids);
-  db.prepare(`DELETE FROM recipe_ingredients WHERE recipe_id IN (${placeholders})`).run(...ids);
-  db.prepare(`DELETE FROM recipes WHERE id IN (${placeholders})`).run(...ids);
-
-  res.json({ deleted: ids.length });
-});
-
 // DELETE /api/recipes/:id
 router.delete("/:id", (req: Request, res: Response) => {
   const existing = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id) as any;

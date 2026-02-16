@@ -4,7 +4,7 @@ import type { Recipe, FamilyFavoriteMeal } from "@shared/types";
 import {
   getFamilies, getFavoriteMeals, getMealPlanHistory, getRecipes,
   addMealToDay, deleteFavoriteMeal, getSideSuggestions, addSide,
-  deleteRecipe, deleteGenericRecipes,
+  deleteRecipe,
 } from "../api";
 import { CUISINE_COLORS } from "../components/SwapMainModal";
 
@@ -75,7 +75,6 @@ export default function MyRecipes() {
   const [removingLoved, setRemovingLoved] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Recipe | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [cleaningUp, setCleaningUp] = useState(false);
 
   // Search & filter state
   const [search, setSearch] = useState("");
@@ -187,29 +186,6 @@ export default function MyRecipes() {
       setConfirmDelete(null);
     }
   };
-
-  const handleCleanUpGeneric = async () => {
-    setCleaningUp(true);
-    try {
-      const { deleted } = await deleteGenericRecipes();
-      if (deleted > 0) {
-        const updated = await getRecipes();
-        setRecipes(updated);
-        showToast(`Removed ${deleted} generic recipe${deleted !== 1 ? "s" : ""}`);
-      } else {
-        showToast("No generic recipes to remove");
-      }
-    } catch (err: any) {
-      showToast(err.message || "Failed to clean up");
-    } finally {
-      setCleaningUp(false);
-    }
-  };
-
-  const genericCount = useMemo(
-    () => recipes.filter((r) => !r.source_url).length,
-    [recipes],
-  );
 
   // Build lookup maps from history for sorting
   const { recencyMap, frequencyMap } = useMemo(() => {
@@ -333,23 +309,12 @@ export default function MyRecipes() {
     <div className="max-w-2xl mx-auto space-y-10 py-4">
       {/* ── Recipe Collection with Search/Filter/Sort ── */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-            My Recipe Collection
-            <span className="ml-2 text-gray-300 font-normal normal-case">
-              {recipes.length} recipes
-            </span>
-          </h2>
-          {genericCount > 0 && (
-            <button
-              onClick={handleCleanUpGeneric}
-              disabled={cleaningUp}
-              className="text-xs text-gray-400 hover:text-red-500 font-medium transition-colors disabled:opacity-50"
-            >
-              {cleaningUp ? "Cleaning up..." : `Clean up ${genericCount} generic recipe${genericCount !== 1 ? "s" : ""}`}
-            </button>
-          )}
-        </div>
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+          My Recipe Collection
+          <span className="ml-2 text-gray-300 font-normal normal-case">
+            {recipes.length} recipes
+          </span>
+        </h2>
 
         {/* Search bar */}
         <div className="relative">

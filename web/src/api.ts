@@ -122,12 +122,6 @@ export async function deleteRecipe(id: number): Promise<void> {
   }
 }
 
-export async function deleteGenericRecipes(): Promise<{ deleted: number }> {
-  const res = await fetch(`${BASE}/recipes/bulk/generic`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to delete generic recipes");
-  return res.json();
-}
-
 export async function createRecipe(data: RecipeInput): Promise<Recipe> {
   return json(
     await fetch(`${BASE}/recipes`, {
