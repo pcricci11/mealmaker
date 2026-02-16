@@ -114,6 +114,16 @@ export async function getRecipeById(id: number): Promise<Recipe> {
   return json(await fetch(`${BASE}/recipes/${id}`));
 }
 
+export async function renameRecipe(id: number, name: string): Promise<Recipe> {
+  return json(
+    await fetch(`${BASE}/recipes/${id}/rename`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }),
+  );
+}
+
 export async function deleteRecipe(id: number): Promise<void> {
   const res = await fetch(`${BASE}/recipes/${id}`, { method: "DELETE" });
   if (!res.ok) {

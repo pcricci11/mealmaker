@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   generateMealPlanV3,
   getFamilies,
@@ -49,6 +49,8 @@ const DAYS: { key: string; label: string }[] = [
 
 export default function Plan() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isMyPlan = location.pathname === "/my-plan";
   const [searchParams, setSearchParams] = useSearchParams();
   const [plan, setPlan] = useState<MealPlan | null>(null);
   const [loading, setLoading] = useState(false);
@@ -91,7 +93,7 @@ export default function Plan() {
   // Stored across the search flow for plan generation
   const [cookingSchedule, setCookingSchedule] = useState<any[]>([]);
 
-  // Load saved plan + family/members on mount
+  // Load family/members on mount; load saved plan only on /my-plan
   useEffect(() => {
     const loadFamilyData = async () => {
       try {
@@ -107,24 +109,39 @@ export default function Plan() {
     };
     loadFamilyData();
 
-    // Load plan from ?id= query param, or fall back to localStorage
-    const paramId = searchParams.get("id");
-    const planIdToLoad = paramId || localStorage.getItem("currentPlanId");
-    if (planIdToLoad) {
-      setLoading(true);
-      getMealPlan(Number(planIdToLoad))
-        .then((result) => {
-          setPlan(result);
-          localStorage.setItem("currentPlanId", String(result.id));
-          // Clean up the ?id= param so URL stays clean
-          if (paramId) {
-            setSearchParams({}, { replace: true });
-          }
-        })
-        .catch(() => {
-          localStorage.removeItem("currentPlanId");
-        })
-        .finally(() => setLoading(false));
+    // On /my-plan, load saved plan from query param or localStorage
+    if (isMyPlan) {
+      const paramId = searchParams.get("id");
+      const planIdToLoad = paramId || localStorage.getItem("currentPlanId");
+      if (planIdToLoad) {
+        setLoading(true);
+        getMealPlan(Number(planIdToLoad))
+          .then((result) => {
+            setPlan(result);
+            localStorage.setItem("currentPlanId", String(result.id));
+            if (paramId) {
+              setSearchParams({}, { replace: true });
+            }
+          })
+          .catch(() => {
+            localStorage.removeItem("currentPlanId");
+            navigate("/plan", { replace: true });
+          })
+          .finally(() => setLoading(false));
+      } else {
+        // No plan to show — redirect to planning page
+        navigate("/plan", { replace: true });
+      }
+    }
+
+    // On /plan, check for draft recipes passed via navigation state (from Edit Week)
+    if (!isMyPlan) {
+      const state = location.state as { draftRecipes?: Array<[DayOfWeek, Recipe]> } | null;
+      if (state?.draftRecipes) {
+        setDraftRecipes(new Map(state.draftRecipes));
+        // Clear the state so refreshing doesn't re-apply
+        window.history.replaceState({}, "");
+      }
     }
   }, []);
 
@@ -386,16 +403,14 @@ export default function Plan() {
   const handleEditWeek = async () => {
     if (!plan) return;
     const allFetchedRecipes = await getRecipes();
-    const newDraft = new Map<DayOfWeek, Recipe>();
+    const entries: Array<[DayOfWeek, Recipe]> = [];
     for (const item of plan.items) {
       if (item.meal_type === "main" && item.recipe_id) {
         const recipe = allFetchedRecipes.find((r) => r.id === item.recipe_id);
-        if (recipe) newDraft.set(item.day, recipe);
+        if (recipe) entries.push([item.day, recipe]);
       }
     }
-    setPlan(null);
-    localStorage.removeItem("currentPlanId");
-    setDraftRecipes(newDraft);
+    navigate("/plan", { state: { draftRecipes: entries } });
   };
 
   const handleLove = async (itemId: number) => {
@@ -476,31 +491,13 @@ export default function Plan() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-8 py-4">
-      {/* Welcome message + Conversational Planner (hidden when plan is loaded) */}
+      {/* Conversational Planner (hidden when plan is loaded) */}
       {!plan && !loading && !setupProgress && (
-        <>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 space-y-4 text-gray-700 leading-relaxed text-[15px]">
-            <p>
-              What are you thinking about this week? What nights are you thinking of
-              cooking? Do you already know what meals you want to make?
-            </p>
-            <p>
-              I can pull your favorite recipes from the web or pull from your own
-              recipes, or both! Based on your profile, I'll suggest meals you might
-              want to make. I'll keep track of the recipes you love, and keep a
-              record of all the meals you make.
-            </p>
-            <p className="font-semibold text-emerald-800">
-              Shall we get started?
-            </p>
-          </div>
-
-          <ConversationalPlanner
-            onSmartSetup={handleSmartSetup}
-            loading={setupProgress !== null}
-            onPickFromRecipes={() => setShowBuildFromRecipes(true)}
-          />
-        </>
+        <ConversationalPlanner
+          onSmartSetup={handleSmartSetup}
+          loading={setupProgress !== null}
+          onPickFromRecipes={() => setShowBuildFromRecipes(true)}
+        />
       )}
 
       {/* Error */}

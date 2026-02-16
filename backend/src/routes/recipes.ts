@@ -378,6 +378,20 @@ router.put("/:id", (req: Request, res: Response) => {
   res.json(rowToRecipe(updated));
 });
 
+// PATCH /api/recipes/:id/rename
+router.patch("/:id/rename", (req: Request, res: Response) => {
+  const { name } = req.body;
+  if (!name || typeof name !== "string" || !name.trim()) {
+    return res.status(400).json({ error: "name is required" });
+  }
+  const existing = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id) as any;
+  if (!existing) return res.status(404).json({ error: "Recipe not found" });
+
+  db.prepare("UPDATE recipes SET name = ? WHERE id = ?").run(name.trim(), req.params.id);
+  const updated = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id);
+  res.json(rowToRecipe(updated));
+});
+
 // DELETE /api/recipes/:id
 router.delete("/:id", (req: Request, res: Response) => {
   const existing = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id) as any;

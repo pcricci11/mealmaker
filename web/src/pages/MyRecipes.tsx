@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Recipe, FamilyFavoriteMeal } from "@shared/types";
 import {
   getFamilies, getFavoriteMeals, getMealPlanHistory, getRecipes,
   addMealToDay, deleteFavoriteMeal, getSideSuggestions, addSide,
-  deleteRecipe,
+  deleteRecipe, renameRecipe,
 } from "../api";
 import { CUISINE_COLORS } from "../components/SwapMainModal";
 
@@ -75,6 +75,9 @@ export default function MyRecipes() {
   const [removingLoved, setRemovingLoved] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Recipe | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   // Search & filter state
   const [search, setSearch] = useState("");
@@ -184,6 +187,29 @@ export default function MyRecipes() {
     } finally {
       setDeleting(false);
       setConfirmDelete(null);
+    }
+  };
+
+  const startRename = (recipe: Recipe) => {
+    setRenamingId(recipe.id);
+    setRenameValue(recipe.title);
+    setTimeout(() => renameInputRef.current?.select(), 0);
+  };
+
+  const handleRename = async (recipe: Recipe) => {
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === recipe.title) {
+      setRenamingId(null);
+      return;
+    }
+    try {
+      const updated = await renameRecipe(recipe.id, trimmed);
+      setRecipes((prev) => prev.map((r) => r.id === recipe.id ? updated : r));
+      showToast(`Renamed to "${trimmed}"`);
+    } catch (err: any) {
+      showToast(err.message || "Failed to rename");
+    } finally {
+      setRenamingId(null);
     }
   };
 
@@ -316,124 +342,98 @@ export default function MyRecipes() {
           </span>
         </h2>
 
-        {/* Search bar */}
-        <div className="relative">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search your recipes..."
-            className="w-full border border-gray-300 rounded-xl px-4 py-2.5 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-          />
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
-            fill="none" viewBox="0 0 24 24" stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+        {/* Search + Filters */}
+        <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+          {/* Search bar */}
+          <div className="relative">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search recipes..."
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            />
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
             >
-              ✕
-            </button>
-          )}
-        </div>
-
-        {/* Filter chips */}
-        <div className="space-y-2">
-          {/* Cuisine */}
-          <div className="flex flex-wrap gap-1.5">
-            {CUISINE_FILTERS.map((c) => (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {search && (
               <button
-                key={c}
-                onClick={() => setCuisineFilter(cuisineFilter === c ? null : c)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                  cuisineFilter === c
-                    ? (CUISINE_COLORS[c] || "bg-emerald-100 text-emerald-700")
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
               >
-                {c.replace("_", " ")}
+                ✕
               </button>
-            ))}
+            )}
           </div>
 
-          {/* Protein + Dietary */}
-          <div className="flex flex-wrap gap-1.5">
-            {PROTEIN_FILTERS.map((p) => (
-              <button
-                key={p.label}
-                onClick={() => setProteinFilter(
-                  proteinFilter === (p.value ?? "veggie") ? null : (p.value ?? "veggie"),
-                )}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                  proteinFilter === (p.value ?? "veggie")
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-            <button
-              onClick={() => setVegetarianOnly(!vegetarianOnly)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                vegetarianOnly
-                  ? "bg-green-100 text-green-700"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
+          {/* Filter dropdowns */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-gray-400">Filter:</span>
+            <select
+              value={cuisineFilter || ""}
+              onChange={(e) => setCuisineFilter(e.target.value || null)}
+              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
-              Vegetarian
-            </button>
-          </div>
-
-          {/* Cook time */}
-          <div className="flex flex-wrap gap-1.5">
-            {COOK_TIME_FILTERS.map((ct) => (
-              <button
-                key={ct.label}
-                onClick={() => setCookTimeFilter(cookTimeFilter === ct ? null : ct)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                  cookTimeFilter === ct
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {ct.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Sort + Clear filters */}
-        <div className="flex items-center justify-between">
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortOption)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="recent">Most recently made</option>
-            <option value="loved">Most loved / frequent</option>
-            <option value="alpha">Alphabetical</option>
-            <option value="cook_time">Shortest cook time</option>
-          </select>
-
-          {hasActiveFilters && (
-            <button
-              onClick={() => {
-                setSearch("");
-                setCuisineFilter(null);
-                setProteinFilter(null);
-                setVegetarianOnly(false);
-                setCookTimeFilter(null);
+              <option value="">All cuisines</option>
+              {CUISINE_FILTERS.map((c) => (
+                <option key={c} value={c}>{c.replace("_", " ")}</option>
+              ))}
+            </select>
+            <select
+              value={proteinFilter || ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                setProteinFilter(val || null);
+                setVegetarianOnly(val === "veggie");
               }}
-              className="text-xs text-gray-400 hover:text-gray-600"
+              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
-              Clear all filters
-            </button>
-          )}
+              <option value="">All proteins</option>
+              {PROTEIN_FILTERS.map((p) => (
+                <option key={p.label} value={p.value ?? "veggie"}>{p.label}</option>
+              ))}
+            </select>
+            <select
+              value={cookTimeFilter ? cookTimeFilter.label : ""}
+              onChange={(e) => {
+                const ct = COOK_TIME_FILTERS.find((f) => f.label === e.target.value);
+                setCookTimeFilter(ct || null);
+              }}
+              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">Any time</option>
+              {COOK_TIME_FILTERS.map((ct) => (
+                <option key={ct.label} value={ct.label}>{ct.label}</option>
+              ))}
+            </select>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortOption)}
+              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="recent">Recent</option>
+              <option value="loved">Loved</option>
+              <option value="alpha">A–Z</option>
+              <option value="cook_time">Fastest</option>
+            </select>
+            {hasActiveFilters && (
+              <button
+                onClick={() => {
+                  setSearch("");
+                  setCuisineFilter(null);
+                  setProteinFilter(null);
+                  setVegetarianOnly(false);
+                  setCookTimeFilter(null);
+                }}
+                className="text-xs text-gray-400 hover:text-gray-600"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Recipe list */}
@@ -466,10 +466,40 @@ export default function MyRecipes() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-900 truncate">
-                        {isLoved && <span className="mr-1">❤️</span>}
-                        {r.title}
-                      </p>
+                      {renamingId === r.id ? (
+                        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          {isLoved && <span className="mr-1">❤️</span>}
+                          <input
+                            ref={renameInputRef}
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleRename(r);
+                              if (e.key === "Escape") setRenamingId(null);
+                            }}
+                            className="font-medium text-gray-900 bg-white border border-emerald-300 rounded px-2 py-0.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleRename(r)}
+                            className="text-xs text-emerald-600 hover:text-emerald-700 font-medium shrink-0"
+                          >Save</button>
+                          <button
+                            onClick={() => setRenamingId(null)}
+                            className="text-xs text-gray-400 hover:text-gray-600 font-medium shrink-0"
+                          >Cancel</button>
+                        </div>
+                      ) : (
+                        <p className="font-medium text-gray-900 truncate group/name">
+                          {isLoved && <span className="mr-1">❤️</span>}
+                          {r.title}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); startRename(r); }}
+                            className="ml-1.5 text-gray-300 hover:text-gray-500 opacity-0 group-hover/name:opacity-100 transition-opacity"
+                            title="Rename recipe"
+                          >✏️</button>
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-1.5 mt-1.5">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${cuisineClass}`}>
                           {r.cuisine.replace("_", " ")}
