@@ -15,6 +15,7 @@ interface Props {
   onAddSide: (mainMealItemId: number) => void;
   onLoveMeal: (mealItemId: number) => void;
   onSwapMain: (mealItemId: number) => void;
+  onDeleteMain?: (mealItemId: number) => void;
   onRemoveSide?: (mealItemId: number) => void;
   onMealClick?: (item: MealPlanItemV3) => void;
 }
@@ -54,6 +55,7 @@ export default function MealDayCard({
   onAddSide,
   onLoveMeal,
   onSwapMain,
+  onDeleteMain,
   onRemoveSide,
   onMealClick,
 }: Props) {
@@ -129,6 +131,14 @@ export default function MealDayCard({
                     )}
                   </div>
                   <div className="flex items-center gap-2 ml-2">
+                    {onDeleteMain && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDeleteMain(main.id); }}
+                        className="text-lg hover:scale-110 transition-transform cursor-pointer text-gray-400 hover:text-red-500"
+                        title="Remove this meal"
+                        type="button"
+                      >✕</button>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

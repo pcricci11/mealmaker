@@ -6,6 +6,7 @@ import { useState, useRef, useCallback } from "react";
 interface Props {
   onSmartSetup: (text: string) => void;
   loading?: boolean;
+  onPickFromRecipes?: () => void;
 }
 
 // Browser Speech Recognition types
@@ -30,7 +31,7 @@ function getSpeechRecognition(): (new () => SpeechRecognitionInstance) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-export default function ConversationalPlanner({ onSmartSetup, loading }: Props) {
+export default function ConversationalPlanner({ onSmartSetup, loading, onPickFromRecipes }: Props) {
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -136,6 +137,15 @@ export default function ConversationalPlanner({ onSmartSetup, loading }: Props) 
           <span className="text-sm text-red-500 font-medium">Listening...</span>
         )}
       </div>
+
+      {onPickFromRecipes && (
+        <button
+          onClick={onPickFromRecipes}
+          className="mt-3 text-sm text-emerald-600 hover:text-emerald-700 transition-colors"
+        >
+          or pick from your saved recipes &rarr;
+        </button>
+      )}
     </div>
   );
 }

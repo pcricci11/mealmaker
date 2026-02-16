@@ -5,6 +5,7 @@ import {
   getFamilies,
   smartSetup,
   getRecipes,
+  getRecipeById,
   markMealAsLoved,
   swapMainRecipe,
   getMealPlan,
@@ -12,6 +13,7 @@ import {
   swapSide,
   addSide,
   removeSide,
+  removeMealItem,
   matchRecipeInDb,
   batchSearchRecipesWeb,
 } from "../api";
@@ -24,6 +26,7 @@ import MealDayCard from "../components/MealDayCard";
 import SwapSideModal from "../components/SwapSideModal";
 import AddSideModal from "../components/AddSideModal";
 import SwapMainModal from "../components/SwapMainModal";
+import BuildFromRecipesModal from "../components/BuildFromRecipesModal";
 import type {
   DayOfWeek,
   Recipe,
@@ -68,6 +71,8 @@ export default function Plan() {
     mealItemId: number;
     day: DayOfWeek;
   } | null>(null);
+  const [showBuildFromRecipes, setShowBuildFromRecipes] = useState(false);
+  const [draftRecipes, setDraftRecipes] = useState<Map<DayOfWeek, Recipe>>(new Map());
 
   // Recipe search state for specific meal requests
   const [pendingSearchMeals, setPendingSearchMeals] = useState<
@@ -142,59 +147,6 @@ export default function Plan() {
     return nextMonday.toISOString().split("T")[0];
   };
 
-  const generatePlanAfterSearch = async (
-    schedule: any[],
-    locks: Array<{ day: string; recipe_id: number }>,
-    recipes: Recipe[],
-  ) => {
-    console.log("[Plan] generatePlanAfterSearch called", { locks, recipesCount: recipes.length });
-    setLoading(true);
-    setError(null);
-    try {
-      const families = await getFamilies();
-      const fam = families[0];
-      if (!fam?.id) throw new Error("No family found. Please create a family first.");
-
-      const weekStart = getWeekStart();
-
-      const specificMealsForPlan = locks.length > 0
-        ? locks.map((m) => {
-            const recipe = recipes.find((r) => r.id === m.recipe_id);
-            console.log("[Plan] lock mapping", { day: m.day, recipe_id: m.recipe_id, foundTitle: recipe?.title });
-            return { day: m.day, description: recipe?.title || "" };
-          })
-        : undefined;
-
-      const locksObj = locks.length > 0
-        ? Object.fromEntries(locks.map((m) => [m.day, m.recipe_id]))
-        : undefined;
-
-      console.log("[Plan] calling generateMealPlanV3", { specificMealsForPlan, locksObj });
-
-      const result = await generateMealPlanV3({
-        family_id: fam.id,
-        week_start: weekStart,
-        cooking_schedule: schedule,
-        lunch_needs: [],
-        max_cook_minutes_weekday: fam.max_cook_minutes_weekday ?? 45,
-        max_cook_minutes_weekend: fam.max_cook_minutes_weekend ?? 90,
-        vegetarian_ratio: fam.vegetarian_ratio ?? 0,
-        specific_meals: specificMealsForPlan,
-        locks: locksObj,
-      });
-
-      console.log("[Plan] generateMealPlanV3 result", { id: result.id, itemCount: result.items?.length });
-      setPlan(result);
-      localStorage.setItem("currentPlanId", String(result.id));
-      localStorage.setItem("lastPlanId", String(result.id));
-      localStorage.setItem("lastMealPlanId", String(result.id));
-    } catch (err: any) {
-      console.error("[Plan] generatePlanAfterSearch error", err);
-      setError(err.message || "Failed to generate plan");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const staggerRevealResults = async (
     queries: Array<{ query: string; status: "searching" | "found" | "not_found" }>,
@@ -310,15 +262,21 @@ export default function Plan() {
           setPendingSearchMeals(unmatched);
           setCurrentSearchIndex(0);
         } else {
+          // All specific meals matched — populate draft
+          const newDraft = new Map(draftRecipes);
+          for (const lock of autoResolved) {
+            const recipe = fetchedRecipes.find((r) => r.id === lock.recipe_id);
+            if (recipe) newDraft.set(lock.day as DayOfWeek, recipe);
+          }
+          setDraftRecipes(newDraft);
           setSetupProgress(null);
-          generatePlanAfterSearch(schedule, autoResolved, fetchedRecipes);
           return;
         }
       } else {
-        // No specific meals — generate immediately
-        console.log("[Plan] no specific meals, generating immediately");
+        // No specific meals — just store cooking schedule, user fills manually
+        setSetupProgress({ phase: "done", message: "Schedule set! Now pick your meals.", searchQueries: [] });
+        await new Promise((r) => setTimeout(r, 1200));
         setSetupProgress(null);
-        generatePlanAfterSearch(schedule, [], []);
         return;
       }
     } catch (err: any) {
@@ -334,12 +292,15 @@ export default function Plan() {
       console.log("[Plan] finishSearchFlow", { finalResolved, recipesCount: recipes.length });
       setPendingSearchMeals([]);
       setCurrentSearchIndex(0);
-      if (shouldAutoGenerate.current) {
-        shouldAutoGenerate.current = false;
-        generatePlanAfterSearch(cookingSchedule, finalResolved, recipes);
+      const newDraft = new Map(draftRecipes);
+      for (const lock of finalResolved) {
+        const recipe = recipes.find((r) => r.id === lock.recipe_id);
+        if (recipe) newDraft.set(lock.day as DayOfWeek, recipe);
       }
+      setDraftRecipes(newDraft);
+      shouldAutoGenerate.current = false;
     },
-    [cookingSchedule],
+    [cookingSchedule, draftRecipes],
   );
 
   const handleRecipeSelected = (recipe: Recipe) => {
@@ -367,6 +328,74 @@ export default function Plan() {
     } else {
       finishSearchFlow(resolvedSpecificMeals, allRecipes);
     }
+  };
+
+  const handleRecipesSelected = (assignments: Map<DayOfWeek, Recipe>) => {
+    setShowBuildFromRecipes(false);
+    const merged = new Map(draftRecipes);
+    for (const [day, recipe] of assignments) {
+      merged.set(day, recipe);
+    }
+    setDraftRecipes(merged);
+  };
+
+  const handleLockPlan = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const families = await getFamilies();
+      const fam = families[0];
+      if (!fam?.id) throw new Error("No family found.");
+      const weekStart = getWeekStart();
+
+      const days: DayOfWeek[] = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
+      const schedule = cookingSchedule.length > 0
+        ? cookingSchedule
+        : days.map((day) => ({
+            family_id: fam.id, week_start: weekStart, day,
+            is_cooking: draftRecipes.has(day), meal_mode: "one_main" as const,
+          }));
+
+      const locks = draftRecipes.size > 0
+        ? Object.fromEntries(Array.from(draftRecipes.entries()).map(([day, r]) => [day, r.id]))
+        : undefined;
+      const specificMeals = draftRecipes.size > 0
+        ? Array.from(draftRecipes.entries()).map(([day, r]) => ({ day, description: r.title }))
+        : undefined;
+
+      const result = await generateMealPlanV3({
+        family_id: fam.id, week_start: weekStart, cooking_schedule: schedule,
+        lunch_needs: [], max_cook_minutes_weekday: fam.max_cook_minutes_weekday ?? 45,
+        max_cook_minutes_weekend: fam.max_cook_minutes_weekend ?? 90,
+        vegetarian_ratio: fam.vegetarian_ratio ?? 0, locks, specific_meals: specificMeals,
+      });
+
+      setPlan(result);
+      setDraftRecipes(new Map());
+      localStorage.setItem("currentPlanId", String(result.id));
+      localStorage.setItem("lastPlanId", String(result.id));
+      localStorage.setItem("lastMealPlanId", String(result.id));
+      navigate("/grocery");
+    } catch (err: any) {
+      setError(err.message || "Failed to lock plan");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditWeek = async () => {
+    if (!plan) return;
+    const allFetchedRecipes = await getRecipes();
+    const newDraft = new Map<DayOfWeek, Recipe>();
+    for (const item of plan.items) {
+      if (item.meal_type === "main" && item.recipe_id) {
+        const recipe = allFetchedRecipes.find((r) => r.id === item.recipe_id);
+        if (recipe) newDraft.set(item.day, recipe);
+      }
+    }
+    setPlan(null);
+    localStorage.removeItem("currentPlanId");
+    setDraftRecipes(newDraft);
   };
 
   const handleLove = async (itemId: number) => {
@@ -469,6 +498,7 @@ export default function Plan() {
           <ConversationalPlanner
             onSmartSetup={handleSmartSetup}
             loading={setupProgress !== null}
+            onPickFromRecipes={() => setShowBuildFromRecipes(true)}
           />
         </>
       )}
@@ -508,59 +538,134 @@ export default function Plan() {
         </div>
       )}
 
-      {/* Empty grid (no plan yet, not loading) */}
+      {/* Interactive draft grid (no plan yet, not loading) */}
       {!plan && !loading && !setupProgress && (
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-            Your Week
-          </h3>
-          <div className="grid grid-cols-7 gap-2">
-            {DAYS.map(({ label }) => (
-              <div
-                key={label}
-                className="bg-white border border-dashed border-gray-300 rounded-xl p-4 text-center min-h-[120px] flex flex-col items-center justify-center"
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {draftRecipes.size > 0 && (
+                <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Editing</span>
+              )}
+              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+                Your Week
+              </h3>
+            </div>
+            {draftRecipes.size > 0 && (
+              <button
+                onClick={() => setShowBuildFromRecipes(true)}
+                className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
               >
-                <span className="text-xs font-semibold text-gray-400 uppercase">
-                  {label}
-                </span>
-                <span className="text-gray-300 text-2xl mt-2">+</span>
-              </div>
-            ))}
+                + Add Recipes
+              </button>
+            )}
           </div>
-          <p className="text-center text-sm text-gray-400">
-            Tell me about your week and hit Generate to fill this in
-          </p>
+          <div className="grid grid-cols-7 gap-2">
+            {DAYS.map(({ key, label }) => {
+              const recipe = draftRecipes.get(key as DayOfWeek);
+              return recipe ? (
+                <div
+                  key={key}
+                  className="bg-emerald-50 border border-emerald-300 rounded-xl p-3 text-center min-h-[120px] flex flex-col items-center justify-center relative cursor-pointer hover:border-emerald-400 transition-colors"
+                  onClick={() => {
+                    const fakeItem: MealPlanItemV3 = {
+                      id: 0, meal_plan_id: 0, day: key as DayOfWeek,
+                      recipe_id: recipe.id, recipe: recipe, locked: false,
+                      lunch_leftover_label: null, leftover_lunch_recipe_id: null,
+                      notes: null, meal_type: "main", main_number: null,
+                      assigned_member_ids: null, parent_meal_item_id: null,
+                      is_custom: false, recipe_name: recipe.title,
+                    };
+                    setSelectedItem(fakeItem);
+                  }}
+                >
+                  <span className="text-xs font-semibold text-emerald-700 uppercase">
+                    {label}
+                  </span>
+                  <span className="text-xs text-gray-700 mt-1 line-clamp-2 leading-tight font-medium">
+                    {recipe.title}
+                  </span>
+                  {recipe.cuisine && (
+                    <span className="text-[10px] text-emerald-600 mt-0.5">
+                      {recipe.cuisine.replace("_", " ")}
+                    </span>
+                  )}
+                  {recipe.cook_minutes && (
+                    <span className="text-[10px] text-gray-400">
+                      {recipe.cook_minutes} min
+                    </span>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const next = new Map(draftRecipes);
+                      next.delete(key as DayOfWeek);
+                      setDraftRecipes(next);
+                    }}
+                    className="absolute top-1 right-1 text-gray-400 hover:text-red-500 text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  key={key}
+                  onClick={() => setShowBuildFromRecipes(true)}
+                  className="bg-white border border-dashed border-gray-300 rounded-xl p-4 text-center min-h-[120px] flex flex-col items-center justify-center hover:border-emerald-400 hover:bg-emerald-50/30 transition-colors"
+                >
+                  <span className="text-xs font-semibold text-gray-400 uppercase">
+                    {label}
+                  </span>
+                  <span className="text-gray-300 text-2xl mt-2">+</span>
+                </button>
+              );
+            })}
+          </div>
+          {draftRecipes.size > 0 ? (
+            <div className="flex flex-col items-center gap-2">
+              <button
+                onClick={handleLockPlan}
+                className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2"
+              >
+                Lock Plan & Build Grocery List
+              </button>
+              <p className="text-xs text-gray-400">
+                {draftRecipes.size} recipe{draftRecipes.size !== 1 ? "s" : ""} assigned — remaining days will be auto-filled
+              </p>
+            </div>
+          ) : (
+            <p className="text-center text-sm text-gray-400">
+              Tell me about your week above, or click + to pick from your recipes
+            </p>
+          )}
         </div>
       )}
 
-      {/* Generated plan — MealDayCard layout */}
+      {/* Locked plan — MealDayCard layout */}
       {plan && !loading && dayData && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Locked</span>
               <h2 className="text-2xl font-bold text-gray-900">Your Meal Plan</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Week of {plan.week_start || "this week"}
-              </p>
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => {
-                  setPlan(null);
-                  localStorage.removeItem("currentPlanId");
-                }}
+                onClick={handleEditWeek}
                 className="text-sm font-medium text-gray-500 hover:text-gray-700"
               >
-                Generate New Plan
+                Edit Week
               </button>
               <button
                 onClick={() => navigate("/grocery")}
                 className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
               >
-                View Grocery List →
+                Grocery List →
               </button>
             </div>
           </div>
+          <p className="text-sm text-gray-500">
+            Week of {plan.week_start || "this week"}
+          </p>
 
           <div className="space-y-4">
             {dayData.map(({ key, mains, lunches, sides, hasMeals }) => {
@@ -579,6 +684,11 @@ export default function Plan() {
                   onAddSide={(mainMealItemId) => setAddSideModal(mainMealItemId)}
                   onLoveMeal={handleLove}
                   onRemoveSide={handleRemoveSide}
+                  onDeleteMain={async (mealItemId) => {
+                    if (!confirm("Remove this meal?")) return;
+                    try { await removeMealItem(mealItemId); await refreshPlan(); }
+                    catch (err) { console.error("Failed to remove meal:", err); }
+                  }}
                   onSwapMain={(mealItemId) =>
                     setSwapMainModal({ mealItemId, day: key as DayOfWeek })
                   }
@@ -615,11 +725,21 @@ export default function Plan() {
         <MealDetailModal
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
-          onLove={handleLove}
-          isLoved={lovedIds.has(selectedItem.id)}
+          onLove={plan ? handleLove : () => {}}
+          isLoved={plan ? lovedIds.has(selectedItem.id) : false}
           onSwap={async (newRecipeId) => {
-            await swapMainRecipe(selectedItem.id, newRecipeId);
-            await refreshPlan();
+            if (!plan) {
+              // Draft mode — update local state
+              const recipe = await getRecipeById(newRecipeId);
+              const day = selectedItem.day as DayOfWeek;
+              const next = new Map(draftRecipes);
+              next.set(day, recipe);
+              setDraftRecipes(next);
+            } else {
+              // Locked mode — API call
+              await swapMainRecipe(selectedItem.id, newRecipeId);
+              await refreshPlan();
+            }
             setSelectedItem(null);
           }}
         />
@@ -649,6 +769,15 @@ export default function Plan() {
           day={swapMainModal.day}
           onSwap={handleSwapMain}
           onClose={() => setSwapMainModal(null)}
+        />
+      )}
+
+      {showBuildFromRecipes && family && (
+        <BuildFromRecipesModal
+          familyId={family.id}
+          initialAssignments={draftRecipes}
+          onSelect={handleRecipesSelected}
+          onClose={() => setShowBuildFromRecipes(false)}
         />
       )}
     </div>
