@@ -342,4 +342,57 @@ router.delete("/items/:id", (req, res) => {
   }
 });
 
+// Add a recipe to a specific day on an existing meal plan
+router.post("/:planId/items", async (req: Request, res: Response) => {
+  try {
+    const planId = parseInt(req.params.planId);
+    const { day, recipe_id, meal_type } = req.body;
+    const type = meal_type || "main";
+
+    if (!day || !recipe_id) {
+      return res.status(400).json({ error: "day and recipe_id are required" });
+    }
+
+    // Validate plan exists
+    const plan: any = db.prepare("SELECT id FROM meal_plans WHERE id = ?").get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: "Meal plan not found" });
+    }
+
+    // Validate recipe exists
+    const recipe: any = db.prepare("SELECT id, name FROM recipes WHERE id = ?").get(recipe_id);
+    if (!recipe) {
+      return res.status(404).json({ error: "Recipe not found" });
+    }
+
+    // Calculate next main_number for this day
+    const maxRow: any = db
+      .prepare(
+        "SELECT MAX(main_number) as max_num FROM meal_plan_items WHERE meal_plan_id = ? AND day = ? AND meal_type = ?"
+      )
+      .get(planId, day, type);
+    const mainNumber = (maxRow?.max_num ?? 0) + 1;
+
+    const result = db
+      .prepare(
+        `INSERT INTO meal_plan_items (meal_plan_id, day, recipe_id, meal_type, main_number)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .run(planId, day, recipe_id, type, mainNumber);
+
+    res.status(201).json({
+      id: result.lastInsertRowid,
+      meal_plan_id: planId,
+      day,
+      recipe_id,
+      meal_type: type,
+      main_number: mainNumber,
+      recipe_name: recipe.name,
+    });
+  } catch (error: any) {
+    console.error("Add meal to day error:", error);
+    res.status(500).json({ error: error.message || "Failed to add meal to day" });
+  }
+});
+
 export default router;

@@ -274,6 +274,21 @@ export async function removeMealItem(mealItemId: number): Promise<void> {
   if (!res.ok) throw new Error("Failed to remove meal item");
 }
 
+export async function addMealToDay(
+  planId: number,
+  day: string,
+  recipeId: number,
+  mealType?: string,
+): Promise<{ id: number }> {
+  return json(
+    await fetch(`${BASE}/meal-plans/${planId}/items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ day, recipe_id: recipeId, meal_type: mealType }),
+    }),
+  );
+}
+
 // ── Grocery List ──
 export async function suggestIngredients(recipeId: number): Promise<Ingredient[]> {
   return json(
