@@ -218,7 +218,7 @@ export default function DayConfigModal({
                     onClick={() => handleNumMainsChange(n)}
                     className={`px-4 py-2 rounded-full border-2 text-sm font-medium transition-colors ${
                       numMains === n
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                        ? "border-orange-500 bg-orange-50 text-orange-600"
                         : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                     }`}
                   >
@@ -275,13 +275,13 @@ export default function DayConfigModal({
                       {main.recipeHints.map((hint) => (
                         <span
                           key={hint}
-                          className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm flex items-center gap-1"
+                          className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-sm flex items-center gap-1"
                         >
                           {hint}
                           <button
                             type="button"
                             onClick={() => removeRecipeHint(idx, hint)}
-                            className="ml-1 hover:text-emerald-900"
+                            className="ml-1 hover:text-orange-900"
                           >
                             ✕
                           </button>
@@ -304,7 +304,7 @@ export default function DayConfigModal({
                         onClick={() => toggleDietaryTag(idx, tag)}
                         className={`px-3 py-1 rounded-full text-sm transition-colors ${
                           main.dietaryTags.includes(tag)
-                            ? "bg-emerald-100 text-emerald-700 border-2 border-emerald-500"
+                            ? "bg-orange-100 text-orange-600 border-2 border-orange-500"
                             : "bg-gray-100 text-gray-600 border-2 border-transparent hover:border-gray-300"
                         }`}
                       >
@@ -330,7 +330,7 @@ export default function DayConfigModal({
                         maxCookMinutes: Number(e.target.value),
                       })
                     }
-                    className="w-full accent-emerald-600"
+                    className="w-full accent-orange-500"
                   />
                   <div className="flex justify-between text-xs text-gray-400 mt-1">
                     <span>15 min</span>
@@ -349,7 +349,7 @@ export default function DayConfigModal({
                           needsLeftovers: e.target.checked,
                         })
                       }
-                      className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                      className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
                     />
                     <span className="text-sm font-medium text-gray-700">
                       Need leftovers
@@ -377,7 +377,7 @@ export default function DayConfigModal({
                       onClick={() => setNumSides(n)}
                       className={`px-4 py-2 rounded-full border-2 text-sm font-medium transition-colors ${
                         numSides === n
-                          ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                          ? "border-orange-500 bg-orange-50 text-orange-600"
                           : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                       }`}
                     >
@@ -423,13 +423,13 @@ export default function DayConfigModal({
                       .map((hint) => (
                         <span
                           key={hint}
-                          className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm flex items-center gap-1"
+                          className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-sm flex items-center gap-1"
                         >
                           {hint}
                           <button
                             type="button"
                             onClick={() => removeSideHint(hint)}
-                            className="ml-1 hover:text-emerald-900"
+                            className="ml-1 hover:text-orange-900"
                           >
                             ✕
                           </button>
@@ -452,7 +452,7 @@ export default function DayConfigModal({
                       onClick={() => toggleCommonSide(side)}
                       className={`px-3 py-1 rounded-full text-sm transition-colors ${
                         sideHints.includes(side)
-                          ? "bg-emerald-100 text-emerald-700 border-2 border-emerald-500"
+                          ? "bg-orange-100 text-orange-600 border-2 border-orange-500"
                           : "bg-gray-100 text-gray-600 border-2 border-transparent hover:border-gray-300"
                       }`}
                     >

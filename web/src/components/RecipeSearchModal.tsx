@@ -71,11 +71,11 @@ export default function RecipeSearchModal({
       const data = await searchRecipesWeb(trimmed, controller.signal);
       setResults(data);
       if (data.length === 0) {
-        setError("No recipes found. Try a different search.");
+        setError("Sorry Chef, nothing matched your search! Try tweaking the words or searching for something different.");
       }
     } catch (err: any) {
       if (isAbortError(err)) return;
-      setError(err.message || "Search failed. Please try again.");
+      setError("Sorry Chef, that search didn't work out! Give it another try or tweak your search terms.");
     } finally {
       setSearching(false);
     }
@@ -114,6 +114,7 @@ export default function RecipeSearchModal({
         difficulty: result.difficulty,
         seasonal_tags: [],
         frequency_cap_per_month: null,
+        notes: null,
       }, controller.signal);
       console.log("[RecipeSearchModal] recipe saved to DB", { id: saved.id, title: saved.title });
       if (savingTimerRef.current) clearTimeout(savingTimerRef.current);
@@ -144,7 +145,7 @@ export default function RecipeSearchModal({
           {(dayLabel || stepLabel) && (
             <div className="flex items-center gap-2 mt-1">
               {dayLabel && (
-                <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                <span className="text-xs font-semibold uppercase tracking-wide text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
                   {dayLabel}
                 </span>
               )}
@@ -187,7 +188,7 @@ export default function RecipeSearchModal({
         <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4">
           {searching ? (
             <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-200 border-t-emerald-600 mb-3" />
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-orange-200 border-t-orange-500 mb-3" />
               <p className="text-gray-500 text-sm">
                 Sizzling up some recipe ideas...
               </p>
@@ -208,7 +209,7 @@ export default function RecipeSearchModal({
             </div>
           ) : saving ? (
             <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-200 border-t-emerald-600 mb-3" />
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-orange-200 border-t-orange-500 mb-3" />
               {savingPhase === "ingredients" ? (
                 <>
                   <p className="text-gray-500 text-sm">Chopping through the ingredient list...</p>
@@ -236,8 +237,17 @@ export default function RecipeSearchModal({
           ) : (
             <>
               {error && (
-                <div className="mt-2 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-600 text-sm">{error}</p>
+                <div className="mt-2 mb-2 px-4 py-3 bg-orange-50 border border-orange-200 rounded-lg text-center">
+                  <p className="text-gray-700 text-sm">{error}</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSearch}
+                    disabled={!query.trim()}
+                    className="mt-2 text-orange-600 hover:text-orange-700"
+                  >
+                    Try Again
+                  </Button>
                 </div>
               )}
               {results.length > 0 ? (
@@ -253,7 +263,7 @@ export default function RecipeSearchModal({
                         key={i}
                         onClick={() => handleSelect(result)}
                         disabled={saving}
-                        className="w-full border border-gray-200 rounded-lg p-4 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left disabled:opacity-50"
+                        className="w-full border border-gray-200 rounded-lg p-4 hover:border-orange-500 hover:bg-orange-50 transition-colors text-left disabled:opacity-50"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="font-medium text-gray-900">
@@ -265,7 +275,7 @@ export default function RecipeSearchModal({
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="text-emerald-600 hover:text-emerald-700 shrink-0"
+                              className="text-orange-500 hover:text-orange-600 shrink-0"
                               title="View original recipe"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

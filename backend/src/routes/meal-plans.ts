@@ -4,6 +4,7 @@ import { rowToRecipe } from "../helpers";
 import { generatePlan, normalizeToMonday, deriveSeed } from "../planner/index";
 import type { PlannerContext } from "../planner/types";
 import { validateGeneratePlanRequest, validateSwapRequest } from "../validation";
+import { estimateSideIngredients } from "../services/ingredientExtractor";
 import type { Family, FamilyMember, DayOfWeek, ReasonCodeValue, GroceryItem, GroceryCategory } from "../../../shared/types";
 import { VALID_DAYS } from "../../../shared/types";
 
@@ -343,67 +344,181 @@ router.post("/items/:itemId/swap-recipe", (req: Request, res: Response) => {
 });
 
 // GET /api/meal-plans/:id/grocery-list
-router.get("/:id/grocery-list", (req: Request, res: Response) => {
-  const plan = db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(req.params.id);
-  if (!plan) return res.status(404).json({ error: "Meal plan not found" });
+router.get("/:id/grocery-list", async (req: Request, res: Response) => {
+  try {
+    const plan = db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(req.params.id) as any;
+    if (!plan) return res.status(404).json({ error: "Meal plan not found" });
 
-  // Query recipe_ingredients via join through meal_plan_items
-  const rows = db.prepare(`
-    SELECT ri.item, ri.quantity, ri.unit, ri.category
-    FROM meal_plan_items mpi
-    JOIN recipe_ingredients ri ON ri.recipe_id = mpi.recipe_id
-    WHERE mpi.meal_plan_id = ?
-  `).all(req.params.id) as Array<{ item: string; quantity: number; unit: string; category: string }>;
+    // Query recipe_ingredients via join through meal_plan_items (mains)
+    const rows = db.prepare(`
+      SELECT ri.item, ri.quantity, ri.unit, ri.category
+      FROM meal_plan_items mpi
+      JOIN recipe_ingredients ri ON ri.recipe_id = mpi.recipe_id
+      WHERE mpi.meal_plan_id = ?
+    `).all(req.params.id) as Array<{ item: string; quantity: number; unit: string; category: string }>;
 
-  // Consolidate by item+unit with SUM
-  const consolidated = new Map<string, { total_quantity: number; unit: string; category: GroceryCategory }>();
+    // Consolidate by item+unit with SUM
+    const consolidated = new Map<string, { total_quantity: number; unit: string; category: GroceryCategory }>();
 
-  for (const row of rows) {
-    const key = `${row.item.toLowerCase()}|${row.unit}`;
-    const existing = consolidated.get(key);
-    if (existing) {
-      existing.total_quantity += row.quantity;
-    } else {
-      consolidated.set(key, {
-        total_quantity: row.quantity,
-        unit: row.unit,
-        category: row.category as GroceryCategory,
+    for (const row of rows) {
+      const key = `${row.item.toLowerCase()}|${row.unit}`;
+      const existing = consolidated.get(key);
+      if (existing) {
+        existing.total_quantity += row.quantity;
+      } else {
+        consolidated.set(key, {
+          total_quantity: row.quantity,
+          unit: row.unit,
+          category: row.category as GroceryCategory,
+        });
+      }
+    }
+
+    // ── Side ingredient handling ──
+    // Find sides in this meal plan (meal_type = 'side', recipe_id IS NULL)
+    const sideItems = db.prepare(`
+      SELECT mpi.id, mpi.notes
+      FROM meal_plan_items mpi
+      WHERE mpi.meal_plan_id = ? AND mpi.meal_type = 'side' AND mpi.recipe_id IS NULL
+    `).all(req.params.id) as Array<{ id: number; notes: string | null }>;
+
+    if (sideItems.length > 0) {
+      // Get family member count and serving multiplier for scaled serving size
+      const memberCount = (db.prepare(
+        "SELECT COUNT(*) as c FROM family_members WHERE family_id = ?",
+      ).get(plan.family_id) as { c: number }).c;
+      const familyRow = db.prepare(
+        "SELECT serving_multiplier FROM families WHERE id = ?",
+      ).get(plan.family_id) as { serving_multiplier: number } | undefined;
+      const multiplier = familyRow?.serving_multiplier ?? 1.0;
+      const servings = Math.max(Math.round(memberCount * multiplier), 2); // minimum 2 servings
+
+      const insertSideIngredient = db.prepare(`
+        INSERT INTO side_ingredients (side_library_id, side_name, item, quantity, unit, category, servings)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const side of sideItems) {
+        let sideLibraryId: number | null = null;
+        let sideName: string | null = null;
+
+        // Parse notes JSON to get side info
+        if (side.notes) {
+          try {
+            const notes = JSON.parse(side.notes);
+            sideLibraryId = notes.side_library_id || null;
+            sideName = notes.side_name || notes.name || null;
+          } catch {
+            continue; // skip unparseable notes
+          }
+        }
+
+        if (!sideLibraryId && !sideName) continue;
+
+        // Check cache in side_ingredients table
+        let cached: Array<{ item: string; quantity: number; unit: string; category: string }>;
+        if (sideLibraryId) {
+          cached = db.prepare(
+            "SELECT item, quantity, unit, category FROM side_ingredients WHERE side_library_id = ?",
+          ).all(sideLibraryId) as typeof cached;
+        } else {
+          cached = db.prepare(
+            "SELECT item, quantity, unit, category FROM side_ingredients WHERE side_name = ?",
+          ).all(sideName!) as typeof cached;
+        }
+
+        let sideIngredients: Array<{ item: string; quantity: number; unit: string; category: string }>;
+
+        if (cached.length > 0) {
+          sideIngredients = cached;
+        } else {
+          // Resolve the display name for Claude
+          let displayName = sideName;
+          if (sideLibraryId && !displayName) {
+            const libRow = db.prepare("SELECT name FROM sides_library WHERE id = ?").get(sideLibraryId) as { name: string } | undefined;
+            displayName = libRow?.name || null;
+          }
+          if (!displayName) continue;
+
+          // Call Claude to estimate ingredients
+          const estimated = await estimateSideIngredients(displayName, servings);
+          if (estimated.length === 0) continue;
+
+          // Cache results
+          for (const ing of estimated) {
+            insertSideIngredient.run(
+              sideLibraryId,
+              sideName || displayName,
+              ing.name,
+              ing.quantity,
+              ing.unit,
+              ing.category,
+              servings,
+            );
+          }
+
+          sideIngredients = estimated.map((ing) => ({
+            item: ing.name,
+            quantity: ing.quantity,
+            unit: ing.unit,
+            category: ing.category,
+          }));
+        }
+
+        // Consolidate side ingredients into the main map
+        for (const ing of sideIngredients) {
+          const key = `${ing.item.toLowerCase()}|${ing.unit}`;
+          const existing = consolidated.get(key);
+          if (existing) {
+            existing.total_quantity += ing.quantity;
+          } else {
+            consolidated.set(key, {
+              total_quantity: ing.quantity,
+              unit: ing.unit,
+              category: ing.category as GroceryCategory,
+            });
+          }
+        }
+      }
+    }
+
+    // Build final grocery list
+    const groceryItems: GroceryItem[] = [];
+    for (const [key, val] of consolidated) {
+      const name = key.split("|")[0];
+      groceryItems.push({
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        total_quantity: Math.round(val.total_quantity * 100) / 100,
+        unit: val.unit,
+        category: val.category,
+        checked: false,
       });
     }
-  }
 
-  const groceryItems: GroceryItem[] = [];
-  for (const [key, val] of consolidated) {
-    const name = key.split("|")[0];
-    groceryItems.push({
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      total_quantity: Math.round(val.total_quantity * 100) / 100,
-      unit: val.unit,
-      category: val.category,
-      checked: false,
+    // Sort by category then name
+    groceryItems.sort((a, b) => {
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+      return a.name.localeCompare(b.name);
     });
+
+    // Find recipes in this plan that have no ingredients
+    const missingRecipes = db.prepare(`
+      SELECT DISTINCT mpi.recipe_id, r.name
+      FROM meal_plan_items mpi
+      JOIN recipes r ON r.id = mpi.recipe_id
+      LEFT JOIN recipe_ingredients ri ON ri.recipe_id = mpi.recipe_id
+      WHERE mpi.meal_plan_id = ? AND ri.id IS NULL AND mpi.recipe_id IS NOT NULL
+    `).all(req.params.id) as Array<{ recipe_id: number; name: string }>;
+
+    res.json({
+      meal_plan_id: Number(req.params.id),
+      items: groceryItems,
+      missing_recipes: missingRecipes,
+    });
+  } catch (error: any) {
+    console.error("[grocery-list] Error:", error);
+    res.status(500).json({ error: "Failed to generate grocery list" });
   }
-
-  // Sort by category then name
-  groceryItems.sort((a, b) => {
-    if (a.category !== b.category) return a.category.localeCompare(b.category);
-    return a.name.localeCompare(b.name);
-  });
-
-  // Find recipes in this plan that have no ingredients
-  const missingRecipes = db.prepare(`
-    SELECT DISTINCT mpi.recipe_id, r.name
-    FROM meal_plan_items mpi
-    JOIN recipes r ON r.id = mpi.recipe_id
-    LEFT JOIN recipe_ingredients ri ON ri.recipe_id = mpi.recipe_id
-    WHERE mpi.meal_plan_id = ? AND ri.id IS NULL AND mpi.recipe_id IS NOT NULL
-  `).all(req.params.id) as Array<{ recipe_id: number; name: string }>;
-
-  res.json({
-    meal_plan_id: Number(req.params.id),
-    items: groceryItems,
-    missing_recipes: missingRecipes,
-  });
 });
 
 export default router;

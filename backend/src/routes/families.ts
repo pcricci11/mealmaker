@@ -19,7 +19,7 @@ function rowToFamily(row: any): Family {
     leftovers_nights_per_week: row.leftovers_nights_per_week,
     picky_kid_mode: !!row.picky_kid_mode,
     planning_mode: row.planning_mode || "strictest_household",
-    serving_multiplier: row.serving_multiplier || undefined,
+    serving_multiplier: row.serving_multiplier ?? 1.0,
     created_at: row.created_at,
   };
 }
@@ -75,8 +75,12 @@ router.put("/:id", (req: Request, res: Response) => {
 
   // If this is just a serving_multiplier update, skip full validation
   if (updates.serving_multiplier !== undefined && Object.keys(updates).length === 1) {
+    const multiplier = Number(updates.serving_multiplier);
+    if (isNaN(multiplier) || multiplier <= 0) {
+      return res.status(400).json({ error: "serving_multiplier must be a positive number" });
+    }
     db.prepare("UPDATE families SET serving_multiplier = ? WHERE id = ?")
-      .run(updates.serving_multiplier, req.params.id);
+      .run(multiplier, req.params.id);
     const updated = db.prepare("SELECT * FROM families WHERE id = ?").get(req.params.id);
     return res.json(rowToFamily(updated));
   }
@@ -112,7 +116,7 @@ router.put("/:id", (req: Request, res: Response) => {
     f.leftovers_nights_per_week || 1,
     f.picky_kid_mode ? 1 : 0,
     f.planning_mode || "strictest_household",
-    f.serving_multiplier || "normal",
+    f.serving_multiplier ?? 1.0,
     req.params.id,
   );
   const updated = db.prepare("SELECT * FROM families WHERE id = ?").get(req.params.id);

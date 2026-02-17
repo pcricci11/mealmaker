@@ -285,7 +285,7 @@ export default function GroceryList() {
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => toggleSuggestion(recipe.recipe_id, i)}
-                              className="accent-emerald-600 w-3.5 h-3.5"
+                              className="accent-orange-500 w-3.5 h-3.5"
                             />
                             <span className={isSelected ? "text-gray-900" : "text-gray-400 line-through"}>
                               {ing.quantity} {ing.unit} {ing.name}
@@ -345,7 +345,7 @@ export default function GroceryList() {
                       type="checkbox"
                       checked={isChecked}
                       onChange={() => toggleCheck(key)}
-                      className="accent-emerald-600 w-5 h-5 md:w-4 md:h-4"
+                      className="accent-orange-500 w-5 h-5 md:w-4 md:h-4"
                     />
                     <span className={`flex-1 ${isChecked ? "line-through text-gray-400" : "text-gray-900"} ${isCustom ? "italic" : ""}`}>
                       {item.name}
@@ -372,10 +372,10 @@ export default function GroceryList() {
       </div>
 
       {/* Add custom item section */}
-      <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-5 space-y-3">
+      <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-5 space-y-3">
         <div>
-          <h3 className="font-semibold text-emerald-900">Add Your Own Items</h3>
-          <p className="text-sm text-emerald-700 mt-0.5">
+          <h3 className="font-semibold text-orange-900">Add Your Own Items</h3>
+          <p className="text-sm text-orange-600 mt-0.5">
             Lunches, snacks, desserts, drinks, or anything else you need
           </p>
         </div>
@@ -386,7 +386,7 @@ export default function GroceryList() {
             <button
               key={pill.key}
               onClick={() => openAddForm(pill.key)}
-              className="text-xs px-3 py-1.5 bg-white border border-emerald-200 rounded-full text-emerald-800 font-medium hover:bg-emerald-100 hover:border-emerald-300 transition-colors shadow-sm"
+              className="text-xs px-3 py-1.5 bg-white border border-orange-200 rounded-full text-orange-800 font-medium hover:bg-orange-100 hover:border-orange-300 transition-colors shadow-sm"
             >
               {pill.emoji} {pill.label}
             </button>
@@ -395,7 +395,7 @@ export default function GroceryList() {
 
         {/* Add form */}
         {showAddForm && (
-          <div className="bg-white rounded-lg border border-emerald-200 p-3 space-y-3">
+          <div className="bg-white rounded-lg border border-orange-200 p-3 space-y-3">
             <div className="flex flex-col md:flex-row gap-2">
               <Input
                 type="text"
@@ -409,7 +409,7 @@ export default function GroceryList() {
               <select
                 value={newItemCategory}
                 onChange={(e) => setNewItemCategory(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
                 {CATEGORY_ORDER.map((cat) => (
                   <option key={cat} value={cat}>

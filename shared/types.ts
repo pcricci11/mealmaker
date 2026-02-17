@@ -104,9 +104,10 @@ export interface Recipe {
   difficulty: Difficulty;
   seasonal_tags: string[];
   frequency_cap_per_month: number | null;
+  notes: string | null;
 }
 
-export type RecipeInput = Omit<Recipe, "id">;
+export type RecipeInput = Omit<Recipe, "id" | "notes"> & { notes?: string | null };
 
 export interface WebSearchRecipeResult {
   name: string;

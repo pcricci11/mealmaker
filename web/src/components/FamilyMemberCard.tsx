@@ -19,7 +19,7 @@ export default function FamilyMemberCard({ member, onEdit, onDelete }: Props) {
   const dietaryStyleColor: Record<string, string> = {
     omnivore: "bg-gray-100 text-gray-700",
     vegetarian: "bg-green-100 text-green-700",
-    vegan: "bg-emerald-100 text-emerald-700",
+    vegan: "bg-green-100 text-green-700",
   };
 
   return (
@@ -61,7 +61,7 @@ export default function FamilyMemberCard({ member, onEdit, onDelete }: Props) {
             {member.favorites && member.favorites.length > 0 && (
               <div className="flex items-start gap-2">
                 <span className="text-gray-500 shrink-0">Favorites:</span>
-                <span className="text-emerald-600 font-medium">
+                <span className="text-orange-500 font-medium">
                   {member.favorites.join(", ")}
                 </span>
               </div>

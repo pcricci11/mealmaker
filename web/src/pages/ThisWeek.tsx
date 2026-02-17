@@ -328,7 +328,7 @@ export default function ThisWeek() {
         </p>
         <button
           onClick={() => navigate("/family")}
-          className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700"
+          className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600"
         >
           Go to My Family
         </button>
@@ -398,7 +398,7 @@ export default function ThisWeek() {
         <button
           onClick={handleGeneratePlan}
           disabled={generating || saving}
-          className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors text-lg"
+          className="flex-1 px-6 py-3 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors text-lg"
         >
           {generating ? "Generating..." : "🎯 Generate Meal Plan"}
         </button>

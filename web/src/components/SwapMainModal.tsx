@@ -125,7 +125,7 @@ export default function SwapMainModal({
                     key={recipe.id}
                     onClick={() => handleSelect(recipe.id)}
                     disabled={swapping}
-                    className="w-full border border-gray-200 rounded-lg p-4 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left disabled:opacity-50"
+                    className="w-full border border-gray-200 rounded-lg p-4 hover:border-orange-500 hover:bg-orange-50 transition-colors text-left disabled:opacity-50"
                   >
                     <div className="font-medium text-gray-900">
                       {recipe.title}
@@ -134,18 +134,11 @@ export default function SwapMainModal({
                       <Badge variant="outline" className={cn("border-0", cuisineClass)}>
                         {recipe.cuisine.replace("_", " ")}
                       </Badge>
-                      {recipe.vegetarian ? (
+                      {recipe.vegetarian && (
                         <Badge variant="outline" className="bg-green-100 text-green-700 border-0">
                           Vegetarian
                         </Badge>
-                      ) : (
-                        <Badge variant="secondary">
-                          {recipe.protein_type}
-                        </Badge>
                       )}
-                      <Badge variant="secondary">
-                        {recipe.cook_minutes} min
-                      </Badge>
                       {recipe.difficulty && (
                         <Badge variant="secondary">
                           {recipe.difficulty}

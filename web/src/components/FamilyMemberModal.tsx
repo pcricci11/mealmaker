@@ -146,7 +146,7 @@ export default function FamilyMemberModal({ member, onSave, onClose }: Props) {
                     onClick={() => setDietaryStyle(style)}
                     className={`flex-1 px-4 py-2 rounded-lg border-2 transition-colors ${
                       dietaryStyle === style
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                        ? "border-orange-500 bg-orange-50 text-orange-600"
                         : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                     }`}
                   >
@@ -229,7 +229,7 @@ export default function FamilyMemberModal({ member, onSave, onClose }: Props) {
                   type="checkbox"
                   checked={noSpicy}
                   onChange={(e) => setNoSpicy(e.target.checked)}
-                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                  className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
                 />
                 <span className="text-sm font-medium text-gray-700">
                   No Spicy Food
@@ -309,13 +309,13 @@ export default function FamilyMemberModal({ member, onSave, onClose }: Props) {
                   {favorites.map((item) => (
                     <span
                       key={item}
-                      className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm flex items-center gap-1"
+                      className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-sm flex items-center gap-1"
                     >
                       {item}
                       <button
                         type="button"
                         onClick={() => removeFavorite(item)}
-                        className="ml-1 hover:text-emerald-900"
+                        className="ml-1 hover:text-orange-900"
                       >
                         ✕
                       </button>

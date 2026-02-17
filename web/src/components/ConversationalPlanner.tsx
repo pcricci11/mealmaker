@@ -108,8 +108,17 @@ export default function ConversationalPlanner({ onSmartSetup, loading, onPickFro
           disabled={loading || !text.trim()}
           className="px-5 py-3 md:py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? "Setting up..." : "Smart Setup"}
+          {loading ? "Setting up..." : "Plan The Week"}
         </button>
+
+        {onQuickDinner && (
+          <button
+            onClick={onQuickDinner}
+            className="px-5 py-3 md:py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
+          >
+            Cook Tonight
+          </button>
+        )}
 
         <button
           onClick={toggleListening}
@@ -141,15 +150,7 @@ export default function ConversationalPlanner({ onSmartSetup, loading, onPickFro
           onClick={onPickFromRecipes}
           className="mt-3 text-sm text-orange-500 hover:text-orange-600 transition-colors"
         >
-          or pick from your saved recipes &rarr;
-        </button>
-      )}
-      {onQuickDinner && (
-        <button
-          onClick={onQuickDinner}
-          className="mt-1 block text-sm text-gray-400 hover:text-orange-500 transition-colors"
-        >
-          Just need dinner tonight? &rarr;
+          Start with My Recipes
         </button>
       )}
     </div>

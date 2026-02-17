@@ -139,7 +139,7 @@ export default function FavoritesList({
           />
           <button
             onClick={handleAddChef}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
           >
             Add
           </button>
@@ -174,7 +174,7 @@ export default function FavoritesList({
               setEditingMeal(null);
               setShowMealModal(true);
             }}
-            className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+            className="text-sm text-orange-500 hover:text-orange-600 font-medium"
           >
             + Add Meal
           </button>
@@ -209,7 +209,7 @@ export default function FavoritesList({
                         </span>
                       )}
                       {meal.frequency_preference && (
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded">
+                        <span className="px-2 py-0.5 bg-orange-100 text-orange-600 rounded">
                           {meal.frequency_preference.replace("_", " ")}
                         </span>
                       )}
@@ -258,7 +258,7 @@ export default function FavoritesList({
               setEditingSide(null);
               setShowSideModal(true);
             }}
-            className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+            className="text-sm text-orange-500 hover:text-orange-600 font-medium"
           >
             + Add Side
           </button>

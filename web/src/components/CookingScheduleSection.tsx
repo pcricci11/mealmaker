@@ -70,7 +70,7 @@ export default function CookingScheduleSection({
                 onClick={() => toggleCooking(day)}
                 className={`w-12 h-12 rounded-full border-2 text-sm font-semibold transition-colors ${
                   isCooking
-                    ? "border-emerald-500 bg-emerald-100 text-emerald-700"
+                    ? "border-orange-500 bg-orange-100 text-orange-600"
                     : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-500"
                 }`}
               >
@@ -81,7 +81,7 @@ export default function CookingScheduleSection({
                   onClick={() => setConfigModalDay(day)}
                   className={`text-[11px] font-medium ${
                     hasConfig
-                      ? "text-emerald-600 hover:text-emerald-700"
+                      ? "text-orange-500 hover:text-orange-600"
                       : "text-gray-400 hover:text-gray-600"
                   }`}
                 >

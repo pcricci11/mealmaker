@@ -36,7 +36,7 @@ export default function WeekPreferencesSection({
               step="5"
               value={maxCookMinutesWeekday}
               onChange={(e) => onChangeWeekday(parseInt(e.target.value))}
-              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
             />
             <div className="flex items-center gap-2">
               <input
@@ -68,7 +68,7 @@ export default function WeekPreferencesSection({
               step="5"
               value={maxCookMinutesWeekend}
               onChange={(e) => onChangeWeekend(parseInt(e.target.value))}
-              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
             />
             <div className="flex items-center gap-2">
               <input
@@ -100,7 +100,7 @@ export default function WeekPreferencesSection({
               step="10"
               value={vegetarianRatio}
               onChange={(e) => onChangeVegRatio(parseInt(e.target.value))}
-              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
             />
             <div className="flex items-center gap-2">
               <input

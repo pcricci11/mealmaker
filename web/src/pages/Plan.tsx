@@ -6,7 +6,6 @@ import {
   getFamilies,
   smartSetup,
   getRecipes,
-  getRecipeById,
   markMealAsLoved,
   swapMainRecipe,
   getMealPlan,
@@ -20,9 +19,9 @@ import {
   batchSearchRecipesWeb,
   isAbortError,
 } from "../api";
-import MealDetailModal from "../components/MealDetailModal";
 import ConversationalPlanner from "../components/ConversationalPlanner";
 import RecipeSearchModal from "../components/RecipeSearchModal";
+import QuickDinnerModal from "../components/QuickDinnerModal";
 import SmartSetupProgressModal from "../components/SmartSetupProgressModal";
 import type { SmartSetupProgress } from "../components/SmartSetupProgressModal";
 import MealDayCard from "../components/MealDayCard";
@@ -36,7 +35,6 @@ import type {
   Recipe,
   Family,
   MealPlan,
-  MealPlanItemV3,
   FamilyMemberV3,
   WebSearchRecipeResult,
 } from "@shared/types";
@@ -44,6 +42,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 const DAYS: { key: string; label: string }[] = [
   { key: "monday", label: "Mon" },
@@ -70,7 +69,6 @@ export default function Plan() {
   const [lockProgress, setLockProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lovedIds, setLovedIds] = useState<Set<number>>(new Set());
-  const [selectedItem, setSelectedItem] = useState<MealPlanItemV3 | null>(null);
   const [setupProgress, setSetupProgress] = useState<SmartSetupProgress | null>(null);
 
   // Family & members
@@ -472,12 +470,12 @@ export default function Plan() {
     }
   };
 
-  const handleRecipesSelected = (assignments: Map<DayOfWeek, Recipe>) => {
+  const handleRecipesSelected = (assignments: Map<DayOfWeek, Recipe[]>) => {
     setShowBuildFromRecipes(false);
     const merged = new Map(draftRecipes);
-    for (const [day, recipe] of assignments) {
+    for (const [day, recipes] of assignments) {
       const existing = merged.get(day) || [];
-      existing.push(recipe);
+      existing.push(...recipes);
       merged.set(day, existing);
     }
     setDraftRecipes(merged);
@@ -747,17 +745,14 @@ export default function Plan() {
                   {recipes.map((recipe, idx) => (
                     <div
                       key={recipe.id}
-                      className="w-full cursor-pointer hover:bg-orange-100/50 rounded px-1 py-0.5 relative group"
+                      className={cn(
+                        "w-full rounded px-1 py-0.5 relative group",
+                        recipe.source_url && "cursor-pointer hover:bg-orange-100/50"
+                      )}
                       onClick={() => {
-                        const fakeItem: MealPlanItemV3 = {
-                          id: 0, meal_plan_id: 0, day: key as DayOfWeek,
-                          recipe_id: recipe.id, recipe: recipe, locked: false,
-                          lunch_leftover_label: null, leftover_lunch_recipe_id: null,
-                          notes: null, meal_type: "main", main_number: idx + 1,
-                          assigned_member_ids: null, parent_meal_item_id: null,
-                          is_custom: false, recipe_name: recipe.title,
-                        };
-                        setSelectedItem(fakeItem);
+                        if (recipe.source_url) {
+                          window.open(recipe.source_url, "_blank", "noopener,noreferrer");
+                        }
                       }}
                     >
                       <span className="text-xs text-gray-700 line-clamp-2 leading-tight font-medium">
@@ -894,7 +889,6 @@ export default function Plan() {
                     setMainModal({ mode: "add", day: day as DayOfWeek, step: "choose" });
                     setMainModalSearchQuery("");
                   }}
-                  onMealClick={(item) => setSelectedItem(item)}
                 />
               );
             })}
@@ -937,15 +931,16 @@ export default function Plan() {
         />
       )}
 
-      {/* Quick Dinner search modal */}
+      {/* Quick Dinner wizard modal */}
       {quickDinnerOpen && (
-        <RecipeSearchModal
-          onRecipeSelected={(recipe) => {
+        <QuickDinnerModal
+          familyId={family?.id}
+          onRecipesSelected={(recipes) => {
             setQuickDinnerOpen(false);
             const today = getTodayDay();
             const next = new Map(draftRecipes);
             const existing = next.get(today) || [];
-            existing.push(recipe);
+            existing.push(...recipes);
             next.set(today, existing);
             setDraftRecipes(next);
           }}
@@ -953,37 +948,6 @@ export default function Plan() {
         />
       )}
 
-      {/* Meal detail modal */}
-      {selectedItem && (
-        <MealDetailModal
-          item={selectedItem}
-          onClose={() => setSelectedItem(null)}
-          onLove={plan ? handleLove : () => {}}
-          isLoved={plan ? lovedIds.has(selectedItem.id) : false}
-          onSwap={async (newRecipeId) => {
-            if (!plan) {
-              // Draft mode — replace the specific recipe in the array
-              const recipe = await getRecipeById(newRecipeId);
-              const day = selectedItem.day as DayOfWeek;
-              const next = new Map(draftRecipes);
-              const arr = [...(next.get(day) || [])];
-              const idx = arr.findIndex((r) => r.id === selectedItem.recipe_id);
-              if (idx >= 0) {
-                arr[idx] = recipe;
-              } else {
-                arr.push(recipe);
-              }
-              next.set(day, arr);
-              setDraftRecipes(next);
-            } else {
-              // Locked mode — API call
-              await swapMainRecipe(selectedItem.id, newRecipeId);
-              await refreshPlan();
-            }
-            setSelectedItem(null);
-          }}
-        />
-      )}
 
       {/* Side/Main swap modals */}
       {swapSideModal && (
@@ -1078,14 +1042,6 @@ export default function Plan() {
       {showBuildFromRecipes && family && (
         <BuildFromRecipesModal
           familyId={family.id}
-          initialAssignments={(() => {
-            // Convert Recipe[] map to single Recipe map for the modal (takes first per day)
-            const single = new Map<DayOfWeek, Recipe>();
-            for (const [day, recipes] of draftRecipes) {
-              if (recipes.length > 0) single.set(day, recipes[0]);
-            }
-            return single;
-          })()}
           onSelect={handleRecipesSelected}
           onClose={() => setShowBuildFromRecipes(false)}
         />

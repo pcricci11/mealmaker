@@ -45,7 +45,7 @@ export default function DbMatchConfirmModal({
         <div className="px-4 md:px-6 pt-6 pb-3">
           <div className="flex items-center gap-2">
             {day && (
-              <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+              <span className="text-xs font-semibold uppercase tracking-wide text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
                 {DAY_LABELS[day] || day}
               </span>
             )}
@@ -64,7 +64,7 @@ export default function DbMatchConfirmModal({
         <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-lg">📖</span>
-            <span className="text-sm font-medium text-emerald-800">
+            <span className="text-sm font-medium text-orange-800">
               Found these in your collection:
             </span>
           </div>
@@ -77,11 +77,11 @@ export default function DbMatchConfirmModal({
                 <button
                   key={recipe.id}
                   onClick={() => onSelectRecipe(recipe)}
-                  className="w-full bg-white rounded-lg border border-emerald-200 p-4 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left"
+                  className="w-full bg-white rounded-lg border border-orange-200 p-4 hover:border-orange-500 hover:bg-orange-50 transition-colors text-left"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="font-semibold text-gray-900">{recipe.title}</div>
-                    <span className="text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
+                    <span className="text-xs font-medium text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
                       {pct}% match
                     </span>
                   </div>

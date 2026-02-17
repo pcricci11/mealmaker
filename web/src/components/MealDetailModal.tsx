@@ -152,7 +152,7 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
                     href={recipe.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xl font-bold text-emerald-700 hover:text-emerald-800 underline decoration-emerald-300 underline-offset-2 leading-tight"
+                    className="text-xl font-bold text-orange-600 hover:text-orange-800 underline decoration-orange-300 underline-offset-2 leading-tight"
                   >
                     {recipe.title}
                   </a>
@@ -216,7 +216,7 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
                   href={recipe.source_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+                  className="inline-block text-sm text-orange-500 hover:text-orange-600 font-medium"
                 >
                   View Full Recipe
                 </a>
@@ -250,7 +250,7 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
                 <div className="border-t border-gray-200 pt-4 space-y-2">
                   <button
                     onClick={() => loadSuggestions("similar")}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg text-left hover:border-emerald-500 hover:bg-emerald-50 transition-colors"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg text-left hover:border-orange-500 hover:bg-orange-50 transition-colors"
                   >
                     <span className="font-medium text-gray-900">
                       Other {keyword} Recipes
@@ -258,7 +258,7 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
                   </button>
                   <button
                     onClick={() => loadSuggestions("random")}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg text-left hover:border-emerald-500 hover:bg-emerald-50 transition-colors"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg text-left hover:border-orange-500 hover:bg-orange-50 transition-colors"
                   >
                     <span className="font-medium text-gray-900">
                       Completely Different Meals
@@ -293,7 +293,7 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
                           key={r.id}
                           onClick={() => handleSelect(r.id)}
                           disabled={swapping}
-                          className="w-full border border-gray-200 rounded-lg p-4 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left disabled:opacity-50"
+                          className="w-full border border-gray-200 rounded-lg p-4 hover:border-orange-500 hover:bg-orange-50 transition-colors text-left disabled:opacity-50"
                         >
                           <div className="font-medium text-gray-900">{r.title}</div>
                           <div className="flex flex-wrap gap-2 mt-1">

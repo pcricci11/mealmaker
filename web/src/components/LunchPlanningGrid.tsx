@@ -102,7 +102,7 @@ export default function LunchPlanningGrid({ members, lunchNeeds, onChange }: Pro
                             type="checkbox"
                             checked={needsLunch}
                             onChange={() => toggleNeedsLunch(member.id, day)}
-                            className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                            className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
                           />
                           <span className="text-xs text-gray-600">Lunch</span>
                         </label>
@@ -136,7 +136,7 @@ export default function LunchPlanningGrid({ members, lunchNeeds, onChange }: Pro
             type="checkbox"
             checked={true}
             readOnly
-            className="w-4 h-4 text-emerald-600 border-gray-300 rounded pointer-events-none"
+            className="w-4 h-4 text-orange-500 border-gray-300 rounded pointer-events-none"
           />
           <span>Needs Lunch</span>
         </div>

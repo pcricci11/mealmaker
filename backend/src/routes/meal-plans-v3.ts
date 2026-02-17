@@ -71,10 +71,14 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
     `).all(mealPlan.id) as Array<{ id: number; name: string; source_url: string; ingredients: string }>;
 
     if (assignedRecipes.length > 0) {
-      console.log(`[generate-v3] Lazy backfill: ${assignedRecipes.length} assigned recipes have no ingredients`);
+      // Look up serving multiplier for scaled extraction
+      const familyRow = db.prepare("SELECT serving_multiplier FROM families WHERE id = ?").get(family_id) as { serving_multiplier: number } | undefined;
+      const servings = Math.round((familyRow?.serving_multiplier ?? 1.0) * 4);
+
+      console.log(`[generate-v3] Lazy backfill: ${assignedRecipes.length} assigned recipes have no ingredients (${servings} servings)`);
       for (const recipe of assignedRecipes) {
         console.log(`[generate-v3] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
-        const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url);
+        const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url, servings);
         if (extracted.length > 0) {
           db.prepare("UPDATE recipes SET ingredients = ? WHERE id = ?").run(
             JSON.stringify(extracted),
@@ -403,10 +407,13 @@ router.post("/lock", async (req: Request, res: Response) => {
     `).all(mealPlanId) as Array<{ id: number; name: string; source_url: string; ingredients: string }>;
 
     if (assignedRecipes.length > 0) {
-      console.log(`[lock] Backfill: ${assignedRecipes.length} recipes need ingredients`);
+      const familyRow = db.prepare("SELECT serving_multiplier FROM families WHERE id = ?").get(family_id) as { serving_multiplier: number } | undefined;
+      const servings = Math.round((familyRow?.serving_multiplier ?? 1.0) * 4);
+
+      console.log(`[lock] Backfill: ${assignedRecipes.length} recipes need ingredients (${servings} servings)`);
       for (const recipe of assignedRecipes) {
         console.log(`[lock] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
-        const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url);
+        const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url, servings);
         if (extracted.length > 0) {
           db.prepare("UPDATE recipes SET ingredients = ? WHERE id = ?").run(
             JSON.stringify(extracted),

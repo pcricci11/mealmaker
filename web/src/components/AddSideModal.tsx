@@ -108,7 +108,7 @@ export default function AddSideModal({
             className={cn(
               "px-3 py-1 rounded-lg text-sm font-medium",
               mode === "library"
-                ? "bg-emerald-100 text-emerald-700"
+                ? "bg-orange-100 text-orange-600"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             )}
           >
@@ -119,7 +119,7 @@ export default function AddSideModal({
             className={cn(
               "px-3 py-1 rounded-lg text-sm font-medium",
               mode === "favorites"
-                ? "bg-emerald-100 text-emerald-700"
+                ? "bg-orange-100 text-orange-600"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             )}
           >
@@ -130,7 +130,7 @@ export default function AddSideModal({
             className={cn(
               "px-3 py-1 rounded-lg text-sm font-medium",
               mode === "custom"
-                ? "bg-emerald-100 text-emerald-700"
+                ? "bg-orange-100 text-orange-600"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             )}
           >
@@ -151,7 +151,7 @@ export default function AddSideModal({
                       key={side.id}
                       disabled={adding}
                       onClick={() => handleAddFromLibrary(side.id)}
-                      className="w-full border border-gray-200 rounded-lg p-3 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left disabled:opacity-50"
+                      className="w-full border border-gray-200 rounded-lg p-3 hover:border-orange-500 hover:bg-orange-50 transition-colors text-left disabled:opacity-50"
                     >
                       <div className="font-medium text-gray-900">{side.name}</div>
                       <div className="flex gap-2 mt-1">
@@ -184,7 +184,7 @@ export default function AddSideModal({
                       key={side.id}
                       disabled={adding}
                       onClick={() => handleAddFromLibrary(side.id)}
-                      className="w-full border border-gray-200 rounded-lg p-3 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left disabled:opacity-50"
+                      className="w-full border border-gray-200 rounded-lg p-3 hover:border-orange-500 hover:bg-orange-50 transition-colors text-left disabled:opacity-50"
                     >
                       <div className="font-medium text-gray-900">{side.name}</div>
                       {side.category && (

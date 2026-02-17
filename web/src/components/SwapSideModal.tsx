@@ -95,7 +95,7 @@ export default function SwapSideModal({
                 <button
                   key={side.id}
                   onClick={() => handleSelect(side.id)}
-                  className="w-full border border-gray-200 rounded-lg p-4 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left"
+                  className="w-full border border-gray-200 rounded-lg p-4 hover:border-orange-500 hover:bg-orange-50 transition-colors text-left"
                 >
                   <div className="font-medium text-gray-900">{side.name}</div>
                   <div className="flex gap-2 mt-1">
@@ -126,7 +126,7 @@ export default function SwapSideModal({
             >
               {refreshing ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-emerald-200 border-t-emerald-600" />
+                  <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-orange-200 border-t-orange-500" />
                   Loading...
                 </span>
               ) : (

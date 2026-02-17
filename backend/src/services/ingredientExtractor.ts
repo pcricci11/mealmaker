@@ -21,12 +21,17 @@ const VALID_CATEGORIES = new Set([
 export async function extractIngredientsFromUrl(
   recipeName: string,
   sourceUrl: string,
+  servings?: number,
 ): Promise<Ingredient[]> {
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return [];
 
     const client = new Anthropic({ apiKey });
+
+    const servingsInstruction = servings
+      ? `\n- Scale all quantities to serve ${servings} people. If the recipe's original serving size differs, adjust proportionally.`
+      : "";
 
     const message = await createWithRetry(client, {
       model: "claude-sonnet-4-5-20250929",
@@ -43,7 +48,7 @@ Return ONLY a JSON array of ingredients with this structure:
 
 Rules:
 - Extract the ACTUAL ingredients from the recipe page, do not guess or make up ingredients
-- quantity must be a positive number
+- quantity must be a positive number${servingsInstruction}
 - Valid units: lb, oz, cup, cups, tbsp, tsp, count, cloves, can, bag, bunch, inch, box, slices, head, pint
 - Valid categories: produce, dairy, pantry, protein, spices, grains, frozen, other
 - For items like "salt and pepper to taste", use quantity 1 and unit "tsp"
@@ -114,7 +119,7 @@ Rules:
 }
 
 /** Parse ingredient JSON from Claude response content blocks */
-function parseIngredientsFromResponse(contentBlocks: any[]): Ingredient[] {
+export function parseIngredientsFromResponse(contentBlocks: any[]): Ingredient[] {
   let lastText = "";
   for (const block of contentBlocks) {
     if (block.type === "text") {
@@ -151,6 +156,62 @@ function parseIngredientsFromResponse(contentBlocks: any[]): Ingredient[] {
       category: ing.category as GroceryCategory,
     }));
   } catch {
+    return [];
+  }
+}
+
+/**
+ * Estimate typical ingredients for a side dish using Claude.
+ * No web search needed — these are common/generic sides Claude knows well.
+ * Returns [] on any failure so callers are never blocked.
+ */
+export async function estimateSideIngredients(
+  sideName: string,
+  servings: number,
+): Promise<Ingredient[]> {
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return [];
+
+    const client = new Anthropic({ apiKey });
+
+    const message = await createWithRetry(client, {
+      model: "claude-sonnet-4-5-20250929",
+      max_tokens: 1024,
+      system: `You are a grocery list assistant. Given a side dish name and serving count, return the typical ingredients needed to make it.
+
+Return ONLY a JSON array of ingredients with this structure:
+[
+  { "name": "ingredient name", "quantity": 1.5, "unit": "lb", "category": "produce" }
+]
+
+Rules:
+- List the real, typical ingredients for this side dish
+- quantity must be a positive number scaled for the requested number of servings
+- Valid units: lb, oz, cup, cups, tbsp, tsp, count, cloves, can, bag, bunch, inch, box, slices, head, pint
+- Valid categories: produce, dairy, pantry, protein, spices, grains, frozen, other
+- For items like "salt and pepper to taste", use quantity 1 and unit "tsp"
+- For items counted by number (e.g. "3 eggs"), use unit "count"
+- Return ONLY valid JSON, no markdown fences, no explanation.`,
+      messages: [
+        {
+          role: "user",
+          content: `What ingredients are typically needed for "${sideName}" serving ${servings} people?`,
+        },
+      ],
+    });
+
+    const ingredients = parseIngredientsFromResponse(message.content);
+
+    if (ingredients.length === 0) {
+      console.warn(`[estimateSideIngredients] Got 0 ingredients for "${sideName}"`);
+    } else {
+      console.log(`[estimateSideIngredients] Estimated ${ingredients.length} ingredients for "${sideName}" (${servings} servings)`);
+    }
+
+    return ingredients;
+  } catch (error) {
+    console.error(`[estimateSideIngredients] Failed for "${sideName}" (non-fatal):`, error);
     return [];
   }
 }

@@ -271,13 +271,14 @@ router.post("/add/:meal_item_id", (req, res) => {
   // Create new meal_plan_item for the side
   const result = db
     .prepare(
-      `INSERT INTO meal_plan_items 
-      (meal_plan_id, day, meal_type, parent_meal_item_id, is_custom, notes)
-      VALUES (?, ?, 'side', ?, 1, ?)`
+      `INSERT INTO meal_plan_items
+      (meal_plan_id, day, meal_type, main_number, parent_meal_item_id, is_custom, notes)
+      VALUES (?, ?, 'side', ?, ?, 1, ?)`
     )
     .run(
       mainMeal.meal_plan_id,
       mainMeal.day,
+      mainMeal.main_number || null,
       mealItemId,
       JSON.stringify(sideData)
     );

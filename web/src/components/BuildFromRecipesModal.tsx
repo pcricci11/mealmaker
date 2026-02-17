@@ -18,16 +18,19 @@ const DAYS: { key: DayOfWeek; label: string }[] = [
   { key: "sunday", label: "Sun" },
 ];
 
+interface Assignment {
+  recipe: Recipe;
+  day: DayOfWeek;
+}
+
 interface BuildFromRecipesModalProps {
   familyId: number;
-  initialAssignments?: Map<DayOfWeek, Recipe>;
-  onSelect: (assignments: Map<DayOfWeek, Recipe>) => void;
+  onSelect: (assignments: Map<DayOfWeek, Recipe[]>) => void;
   onClose: () => void;
 }
 
 export default function BuildFromRecipesModal({
   familyId,
-  initialAssignments,
   onSelect,
   onClose,
 }: BuildFromRecipesModalProps) {
@@ -35,19 +38,8 @@ export default function BuildFromRecipesModal({
   const [lovedMeals, setLovedMeals] = useState<FamilyFavoriteMeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [assignments, setAssignments] = useState<
-    Map<DayOfWeek, { day: DayOfWeek; recipe: Recipe }>
-  >(() => {
-    if (!initialAssignments || initialAssignments.size === 0) return new Map();
-    const m = new Map<DayOfWeek, { day: DayOfWeek; recipe: Recipe }>();
-    for (const [day, recipe] of initialAssignments) {
-      m.set(day, { day, recipe });
-    }
-    return m;
-  });
-  const [pickingDayForRecipe, setPickingDayForRecipe] = useState<Recipe | null>(
-    null,
-  );
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [pickingDayForRecipe, setPickingDayForRecipe] = useState<Recipe | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -72,11 +64,6 @@ export default function BuildFromRecipesModal({
     [lovedMeals],
   );
 
-  const assignedRecipeIds = useMemo(
-    () => new Set(Array.from(assignments.values()).map((a) => a.recipe.id)),
-    [assignments],
-  );
-
   const displayRecipes = useMemo(() => {
     const term = search.toLowerCase();
     const filtered = recipes.filter(
@@ -94,16 +81,18 @@ export default function BuildFromRecipesModal({
     });
   }, [recipes, search, lovedTitles]);
 
+  // Get all day labels for a recipe
+  const daysForRecipe = (recipeId: number): DayOfWeek[] =>
+    assignments.filter((a) => a.recipe.id === recipeId).map((a) => a.day);
+
+  const dayLabel = (day: DayOfWeek) =>
+    DAYS.find((d) => d.key === day)?.label ?? day;
+
   const handleRecipeClick = (recipe: Recipe) => {
-    if (assignedRecipeIds.has(recipe.id)) {
-      const next = new Map(assignments);
-      for (const [day, val] of next) {
-        if (val.recipe.id === recipe.id) {
-          next.delete(day);
-          break;
-        }
-      }
-      setAssignments(next);
+    const existing = daysForRecipe(recipe.id);
+    if (existing.length > 0) {
+      // Remove all assignments for this recipe
+      setAssignments((prev) => prev.filter((a) => a.recipe.id !== recipe.id));
       return;
     }
     setPickingDayForRecipe(recipe);
@@ -111,35 +100,19 @@ export default function BuildFromRecipesModal({
 
   const handleDayPick = (day: DayOfWeek) => {
     if (!pickingDayForRecipe) return;
-    const next = new Map(assignments);
-    next.set(day, { day, recipe: pickingDayForRecipe });
-    setAssignments(next);
+    setAssignments((prev) => [...prev, { recipe: pickingDayForRecipe, day }]);
     setPickingDayForRecipe(null);
   };
 
-  const handleRemoveAssignment = (day: DayOfWeek) => {
-    const next = new Map(assignments);
-    next.delete(day);
-    setAssignments(next);
-  };
-
   const handleDone = () => {
-    const result = new Map<DayOfWeek, Recipe>();
-    for (const [day, val] of assignments) {
-      result.set(day, val.recipe);
+    const result = new Map<DayOfWeek, Recipe[]>();
+    for (const { recipe, day } of assignments) {
+      const existing = result.get(day) || [];
+      existing.push(recipe);
+      result.set(day, existing);
     }
     onSelect(result);
   };
-
-  const dayForRecipe = (recipeId: number): DayOfWeek | null => {
-    for (const [day, val] of assignments) {
-      if (val.recipe.id === recipeId) return day;
-    }
-    return null;
-  };
-
-  const dayLabel = (day: DayOfWeek) =>
-    DAYS.find((d) => d.key === day)?.label ?? day;
 
   return (
     <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -150,48 +123,9 @@ export default function BuildFromRecipesModal({
           <DialogDescription className="sr-only">Select recipes and assign them to days</DialogDescription>
         </DialogHeader>
 
-        {/* Assignment summary strip */}
-        <div className="border-b border-gray-200 px-4 md:px-6 py-3">
-          <div className="flex gap-1 md:gap-2 overflow-x-auto hide-scrollbar">
-            {DAYS.map(({ key, label }) => {
-              const assigned = assignments.get(key);
-              return (
-                <div
-                  key={key}
-                  className={`flex-1 rounded-lg p-1.5 text-center text-xs min-w-0 ${
-                    assigned
-                      ? "bg-emerald-100 border border-emerald-300"
-                      : "bg-gray-50 border border-gray-200"
-                  }`}
-                >
-                  <div className="font-semibold text-gray-500">{label}</div>
-                  {assigned ? (
-                    <div className="mt-0.5">
-                      <div
-                        className="text-emerald-800 truncate text-[10px] leading-tight"
-                        title={assigned.recipe.title}
-                      >
-                        {assigned.recipe.title}
-                      </div>
-                      <button
-                        onClick={() => handleRemoveAssignment(key)}
-                        className="text-emerald-400 hover:text-red-500 text-[10px] mt-0.5"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="text-gray-300 mt-0.5">&mdash;</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
         {/* Day picker (shown when picking a day for a recipe) */}
         {pickingDayForRecipe && (
-          <div className="border-b border-gray-200 bg-emerald-50 px-4 md:px-6 py-3">
+          <div className="border-b border-gray-200 bg-orange-50 px-4 md:px-6 py-3">
             <div className="text-sm text-gray-700 mb-2">
               Assign{" "}
               <span className="font-semibold">
@@ -204,7 +138,7 @@ export default function BuildFromRecipesModal({
                 <button
                   key={key}
                   onClick={() => handleDayPick(key)}
-                  className="px-3 py-1 rounded-full text-xs font-medium bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-600 hover:text-white transition-colors"
+                  className="px-3 py-1 rounded-full text-xs font-medium bg-white border border-orange-300 text-orange-600 hover:bg-orange-500 hover:text-white transition-colors"
                 >
                   {label}
                 </button>
@@ -242,7 +176,8 @@ export default function BuildFromRecipesModal({
           ) : (
             displayRecipes.map((recipe) => {
               const isLoved = lovedTitles.has(recipe.title.toLowerCase());
-              const assignedDay = dayForRecipe(recipe.id);
+              const assignedDays = daysForRecipe(recipe.id);
+              const isAssigned = assignedDays.length > 0;
               const cuisineClass =
                 CUISINE_COLORS[recipe.cuisine] || "bg-gray-100 text-gray-700";
               return (
@@ -250,9 +185,9 @@ export default function BuildFromRecipesModal({
                   key={recipe.id}
                   onClick={() => handleRecipeClick(recipe)}
                   className={`w-full border rounded-lg p-4 transition-colors text-left ${
-                    assignedDay
-                      ? "border-emerald-500 bg-emerald-50"
-                      : "border-gray-200 hover:border-emerald-400 hover:bg-emerald-50/50"
+                    isAssigned
+                      ? "border-orange-500 bg-orange-50"
+                      : "border-gray-200 hover:border-orange-400 hover:bg-orange-50/50"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -262,10 +197,17 @@ export default function BuildFromRecipesModal({
                       )}
                       {recipe.title}
                     </div>
-                    {assignedDay && (
-                      <span className="shrink-0 text-xs px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800 font-medium">
-                        {dayLabel(assignedDay)}
-                      </span>
+                    {isAssigned && (
+                      <div className="flex gap-1 shrink-0">
+                        {assignedDays.map((day) => (
+                          <span
+                            key={day}
+                            className="text-xs px-2 py-0.5 rounded-full bg-orange-200 text-orange-800 font-medium"
+                          >
+                            {dayLabel(day)}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
@@ -280,17 +222,6 @@ export default function BuildFromRecipesModal({
                         {recipe.difficulty}
                       </Badge>
                     )}
-                    {recipe.source_url && (
-                      <a
-                        href={recipe.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-xs text-emerald-600 hover:text-emerald-700 font-medium ml-auto"
-                      >
-                        View Recipe
-                      </a>
-                    )}
                   </div>
                 </button>
               );
@@ -303,10 +234,10 @@ export default function BuildFromRecipesModal({
           <Button
             className="w-full"
             onClick={handleDone}
-            disabled={assignments.size === 0}
+            disabled={assignments.length === 0}
           >
-            Add to Week ({assignments.size} recipe
-            {assignments.size !== 1 ? "s" : ""})
+            Add to Week ({assignments.length} recipe
+            {assignments.length !== 1 ? "s" : ""})
           </Button>
           <Button variant="ghost" className="w-full" onClick={onClose}>
             Cancel

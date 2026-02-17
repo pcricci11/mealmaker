@@ -96,14 +96,14 @@ export default function MealDayCard({
         className={cn(
           "px-4 md:px-6 py-3 border-b",
           isWeekend
-            ? "bg-emerald-50 border-emerald-200"
+            ? "bg-amber-50 border-amber-200"
             : "bg-gray-50 border-gray-200"
         )}
       >
         <h3
           className={cn(
             "font-bold",
-            isWeekend ? "text-emerald-700" : "text-gray-900"
+            isWeekend ? "text-amber-700" : "text-gray-900"
           )}
         >
           {DAY_LABELS[day]}
@@ -124,16 +124,36 @@ export default function MealDayCard({
               <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 relative">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
-                    <div
-                      className={cn(
-                        "font-semibold text-lg text-gray-900",
-                        onMealClick && "cursor-pointer hover:text-emerald-600 transition-colors"
+                    <div className="font-semibold text-lg flex items-center gap-2">
+                      {main.recipe?.source_url ? (
+                        <a
+                          href={main.recipe.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-gray-900 hover:underline cursor-pointer"
+                        >
+                          {main.recipe_name || "Unknown Recipe"}
+                        </a>
+                      ) : (
+                        <span className="text-gray-900">
+                          {main.recipe_name || "Unknown Recipe"}
+                        </span>
                       )}
-                      onClick={onMealClick ? () => onMealClick(main) : undefined}
-                    >
-                      {main.recipe_name || "Unknown Recipe"}
+                      {main.recipe?.source_url && (
+                        <a
+                          href={main.recipe.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-orange-500 hover:text-orange-600 shrink-0"
+                          title="View Recipe"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
                       {main.main_number && (
-                        <span className="ml-2 text-sm text-gray-500">
+                        <span className="text-sm text-gray-500">
                           (Main {main.main_number})
                         </span>
                       )}
@@ -190,18 +210,11 @@ export default function MealDayCard({
                   <Badge variant="outline" className={cn("border-0", cuisineClass)}>
                     {main.recipe?.cuisine.replace("_", " ")}
                   </Badge>
-                  {main.recipe?.vegetarian ? (
+                  {main.recipe?.vegetarian && (
                     <Badge variant="outline" className="bg-green-100 text-green-700 border-0">
                       Vegetarian
                     </Badge>
-                  ) : (
-                    <Badge variant="secondary">
-                      {main.recipe?.protein_type}
-                    </Badge>
                   )}
-                  <Badge variant="secondary">
-                    {main.recipe?.cook_minutes} min
-                  </Badge>
                   {main.recipe?.difficulty && (
                     <Badge variant="secondary">
                       {main.recipe.difficulty}

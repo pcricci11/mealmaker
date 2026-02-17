@@ -6,7 +6,7 @@ import {
   getFamilies, getFavoriteMeals, getMealPlanHistory, getRecipes,
   addMealToDay, swapMainRecipe, deleteFavoriteMeal, createFavoriteMeal,
   getSideSuggestions, addSide,
-  deleteRecipe, renameRecipe, createRecipe, importRecipeFromUrl,
+  deleteRecipe, renameRecipe, createRecipe, importRecipeFromUrl, updateRecipeNotes,
 } from "../api";
 import { CUISINE_COLORS } from "../components/SwapMainModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -91,6 +91,9 @@ export default function MyRecipes() {
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const [notesOpenId, setNotesOpenId] = useState<number | null>(null);
+  const [notesValue, setNotesValue] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
 
   // Add recipe modal state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -280,6 +283,7 @@ export default function MyRecipes() {
         difficulty: addForm.difficulty,
         seasonal_tags: [],
         frequency_cap_per_month: null,
+        notes: null,
       };
       const created = await createRecipe(data);
       setRecipes((prev) => [created, ...prev]);
@@ -311,6 +315,21 @@ export default function MyRecipes() {
         setLoved((prev) => [...prev, created]);
         showToast(`Loved "${recipe.title}"`);
       } catch { showToast("Failed to update"); }
+    }
+  };
+
+  const handleSaveNotes = async (recipe: Recipe, overrideValue?: string) => {
+    setSavingNotes(true);
+    try {
+      const trimmed = (overrideValue ?? notesValue).trim();
+      const updated = await updateRecipeNotes(recipe.id, trimmed || null);
+      setRecipes((prev) => prev.map((r) => r.id === recipe.id ? updated : r));
+      setNotesOpenId(null);
+      showToast(trimmed ? "Notes saved" : "Notes cleared");
+    } catch (err: any) {
+      showToast(err.message || "Failed to save notes");
+    } finally {
+      setSavingNotes(false);
     }
   };
 
@@ -448,13 +467,13 @@ export default function MyRecipes() {
   return (
     <div className="max-w-2xl mx-auto space-y-10 py-4">
       {pickDayParam && (
-        <div className="bg-emerald-50 border border-emerald-300 rounded-xl px-5 py-3 flex items-center justify-between">
-          <p className="text-sm font-medium text-emerald-800">
+        <div className="bg-orange-50 border border-orange-300 rounded-xl px-5 py-3 flex items-center justify-between">
+          <p className="text-sm font-medium text-orange-800">
             Select a recipe to {pickMode === "swap" ? "swap on" : "add to"} <span className="font-bold">{pickDayParam.charAt(0).toUpperCase() + pickDayParam.slice(1)}</span>
           </p>
           <button
             onClick={() => navigate("/my-plan")}
-            className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
+            className="text-sm font-medium text-orange-500 hover:text-orange-600"
           >
             Cancel
           </button>
@@ -472,14 +491,14 @@ export default function MyRecipes() {
           <div className="flex items-center gap-3">
             <Button
               variant="link"
-              className="h-auto p-0 text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
+              className="h-auto p-0 text-sm font-medium text-orange-500 hover:text-orange-600 transition-colors"
               onClick={() => setShowAddModal(true)}
             >
               + Personal Recipe
             </Button>
             <Button
               variant="link"
-              className="h-auto p-0 text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
+              className="h-auto p-0 text-sm font-medium text-orange-500 hover:text-orange-600 transition-colors"
               onClick={() => setShowUrlModal(true)}
             >
               + URL Recipe
@@ -495,8 +514,8 @@ export default function MyRecipes() {
               onClick={() => setQuickFilter("all")}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 quickFilter === "all"
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "text-gray-500 hover:bg-gray-100"
+                  ? "bg-orange-500 text-white"
+                  : "bg-white text-gray-700 hover:bg-orange-50"
               }`}
             >
               All Recipes
@@ -505,8 +524,8 @@ export default function MyRecipes() {
               onClick={() => setQuickFilter("loved")}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 quickFilter === "loved"
-                  ? "bg-red-50 text-red-600"
-                  : "text-gray-500 hover:bg-gray-100"
+                  ? "bg-orange-500 text-white"
+                  : "bg-white text-gray-700 hover:bg-orange-50"
               }`}
             >
               Loved
@@ -543,7 +562,7 @@ export default function MyRecipes() {
             <select
               value={cuisineFilter || ""}
               onChange={(e) => setCuisineFilter(e.target.value || null)}
-              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="">All cuisines</option>
               {CUISINE_FILTERS.map((c) => (
@@ -557,7 +576,7 @@ export default function MyRecipes() {
                 setProteinFilter(val || null);
                 setVegetarianOnly(val === "veggie");
               }}
-              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="">All proteins</option>
               {PROTEIN_FILTERS.map((p) => (
@@ -570,7 +589,7 @@ export default function MyRecipes() {
                 const ct = COOK_TIME_FILTERS.find((f) => f.label === e.target.value);
                 setCookTimeFilter(ct || null);
               }}
-              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="">Any time</option>
               {COOK_TIME_FILTERS.map((ct) => (
@@ -580,7 +599,7 @@ export default function MyRecipes() {
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortOption)}
-              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="recent">Recent</option>
               <option value="loved">Loved</option>
@@ -623,15 +642,14 @@ export default function MyRecipes() {
               const cuisineClass =
                 CUISINE_COLORS[r.cuisine] || "bg-gray-100 text-gray-700";
               const isLoved = lovedNames.has(r.title.toLowerCase());
-              const lastMade = recencyMap.get(r.title);
               const isExpanded = expandedRecipeId === r.id;
               return (
                 <Card
                   key={r.id}
                   className={cn(
                     "px-5 py-4 transition-shadow cursor-pointer",
-                    pickDayParam ? "hover:border-emerald-500 hover:bg-emerald-50" :
-                    isExpanded ? "border-emerald-300 shadow-sm" : "border-gray-200 hover:shadow-sm",
+                    pickDayParam ? "hover:border-orange-500 hover:bg-orange-50" :
+                    isExpanded ? "border-orange-300 shadow-sm" : "border-gray-200 hover:shadow-sm",
                     addingToDay && "opacity-50 pointer-events-none"
                   )}
                   onClick={() => pickDayParam ? handlePickForDay(r) : setExpandedRecipeId(isExpanded ? null : r.id)}
@@ -648,12 +666,12 @@ export default function MyRecipes() {
                               if (e.key === "Enter") handleRename(r);
                               if (e.key === "Escape") setRenamingId(null);
                             }}
-                            className="font-medium text-gray-900 bg-white border border-emerald-300 rounded px-2 py-0.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="font-medium text-gray-900 bg-white border border-orange-300 rounded px-2 py-0.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-orange-500"
                             autoFocus
                           />
                           <button
                             onClick={() => handleRename(r)}
-                            className="text-xs text-emerald-600 hover:text-emerald-700 font-medium shrink-0"
+                            className="text-xs text-orange-500 hover:text-orange-600 font-medium shrink-0"
                           >Save</button>
                           <button
                             onClick={() => setRenamingId(null)}
@@ -661,7 +679,7 @@ export default function MyRecipes() {
                           >Cancel</button>
                         </div>
                       ) : (
-                        <p className="font-medium text-gray-900 truncate group/name flex items-center">
+                        <p className="font-medium truncate group/name flex items-center">
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleLoved(r); }}
                             className="mr-1.5 hover:scale-125 transition-transform shrink-0"
@@ -669,7 +687,19 @@ export default function MyRecipes() {
                           >
                             {isLoved ? "❤️" : "♡"}
                           </button>
-                          {r.title}
+                          {r.source_url ? (
+                            <a
+                              href={r.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-blue-600 hover:underline cursor-pointer"
+                            >
+                              {r.title}
+                            </a>
+                          ) : (
+                            <span className="text-gray-900">{r.title}</span>
+                          )}
                           <button
                             onClick={(e) => { e.stopPropagation(); startRename(r); }}
                             className="ml-1.5 text-gray-300 hover:text-gray-500 opacity-0 group-hover/name:opacity-100 transition-opacity"
@@ -692,23 +722,11 @@ export default function MyRecipes() {
                             Vegetarian
                           </Badge>
                         )}
-                        {r.protein_type && (
-                          <Badge variant="secondary">
-                            {r.protein_type}
-                          </Badge>
-                        )}
                       </div>
                     </div>
-                    <div className="flex flex-col items-end shrink-0 gap-1">
-                      {lastMade && (
-                        <span className="text-xs text-gray-400">
-                          {timeAgo(lastMade)}
-                        </span>
-                      )}
-                      <span className="text-xs text-gray-400">
-                        {isExpanded ? "▲" : "▼"}
-                      </span>
-                    </div>
+                    <span className="text-xs text-gray-400 shrink-0">
+                      {isExpanded ? "▲" : "▼"}
+                    </span>
                   </div>
 
                   {isExpanded && (
@@ -727,8 +745,8 @@ export default function MyRecipes() {
                               onClick={() => handleAddToDay(r, key)}
                               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                                 addingToDay === key
-                                  ? "bg-emerald-200 text-emerald-800 animate-pulse"
-                                  : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                  ? "bg-orange-200 text-orange-800 animate-pulse"
+                                  : "bg-orange-100 text-orange-600 hover:bg-orange-200"
                               } disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
                               {addingToDay === key ? "Plating up! 🍽️" : label}
@@ -737,18 +755,68 @@ export default function MyRecipes() {
                         </div>
                       </div>
 
+                      {/* Notes section */}
+                      <div>
+                        {notesOpenId === r.id ? (
+                          <div className="space-y-2">
+                            <label className="block text-xs font-medium text-gray-500">Notes</label>
+                            <textarea
+                              value={notesValue}
+                              onChange={(e) => setNotesValue(e.target.value)}
+                              placeholder="Tips, tweaks, what the family thought..."
+                              rows={3}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+                              autoFocus
+                            />
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveNotes(r)}
+                                disabled={savingNotes}
+                              >
+                                {savingNotes ? "Saving..." : "Save Notes"}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setNotesOpenId(null)}
+                                disabled={savingNotes}
+                              >
+                                Cancel
+                              </Button>
+                              {r.notes && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-500 hover:text-red-600 ml-auto"
+                                  onClick={() => handleSaveNotes(r, "")}
+                                  disabled={savingNotes}
+                                >
+                                  Clear
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ) : r.notes ? (
+                          <div
+                            className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-amber-100 transition-colors"
+                            onClick={() => { setNotesOpenId(r.id); setNotesValue(r.notes || ""); }}
+                          >
+                            <p className="text-xs font-medium text-amber-700 mb-0.5">Notes</p>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{r.notes}</p>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setNotesOpenId(r.id); setNotesValue(""); }}
+                            className="text-xs text-orange-500 hover:text-orange-600 font-medium"
+                          >
+                            + Add Notes
+                          </button>
+                        )}
+                      </div>
+
                       {/* Actions row */}
                       <div className="flex items-center gap-3">
-                        {r.source_url && (
-                          <a
-                            href={r.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
-                          >
-                            View Recipe
-                          </a>
-                        )}
                         {isLoved && (
                           <button
                             disabled={removingLoved === r.id}
@@ -813,7 +881,7 @@ export default function MyRecipes() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="shrink-0 ml-4 text-sm font-medium text-emerald-600 hover:text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                    className="shrink-0 ml-4 text-sm font-medium text-orange-500 hover:text-orange-600 border-orange-200 hover:bg-orange-50"
                     onClick={() => {
                       const mainItems = (plan.items ?? [])
                         .filter((i) => i.meal_type === "main" && i.recipe_name)
@@ -901,7 +969,7 @@ export default function MyRecipes() {
                   <select
                     value={addForm.cuisine}
                     onChange={(e) => setAddForm({ ...addForm, cuisine: e.target.value as Cuisine })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   >
                     {VALID_CUISINES.map((c) => (
                       <option key={c} value={c}>{c.replace("_", " ")}</option>
@@ -928,7 +996,7 @@ export default function MyRecipes() {
                     value={addForm.cook_minutes}
                     onChange={(e) => setAddForm({ ...addForm, cook_minutes: parseInt(e.target.value) || 0 })}
                     min={0}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
                 <div>
@@ -936,7 +1004,7 @@ export default function MyRecipes() {
                   <select
                     value={addForm.difficulty}
                     onChange={(e) => setAddForm({ ...addForm, difficulty: e.target.value as Difficulty })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   >
                     {VALID_DIFFICULTIES.map((d) => (
                       <option key={d} value={d}>{d}</option>
@@ -950,7 +1018,7 @@ export default function MyRecipes() {
                   type="checkbox"
                   checked={addForm.vegetarian}
                   onChange={(e) => setAddForm({ ...addForm, vegetarian: e.target.checked, protein_type: e.target.checked ? "" : addForm.protein_type })}
-                  className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
                 />
                 <span className="text-sm text-gray-700">Vegetarian</span>
               </label>
@@ -987,7 +1055,7 @@ export default function MyRecipes() {
                 <p className="text-sm text-gray-700 font-medium">{urlProgress}</p>
                 {!urlProgress.startsWith("✅") && (
                   <div className="flex justify-center">
-                    <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
               </div>

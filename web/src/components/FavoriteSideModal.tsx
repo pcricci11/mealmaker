@@ -103,7 +103,7 @@ export default function FavoriteSideModal({ side, onSave, onClose }: Props) {
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
               >
                 <option value="">Not specified</option>
                 {SIDE_CATEGORIES.map((cat) => (
@@ -122,7 +122,7 @@ export default function FavoriteSideModal({ side, onSave, onClose }: Props) {
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                 rows={3}
                 placeholder="Pairs well with..., great for..."
               />

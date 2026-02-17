@@ -70,14 +70,12 @@ export function validateFrequencyPreference(value: string): FrequencyPreference 
 }
 
 // Validate serving multiplier
-export function validateServingMultiplier(value: string): ServingMultiplier {
-  const valid: ServingMultiplier[] = ["normal", "hearty", "extra_large"];
-
-  if (!valid.includes(value as ServingMultiplier)) {
-    throw new Error(`serving_multiplier must be one of: ${valid.join(", ")}`);
+export function validateServingMultiplier(value: number): ServingMultiplier {
+  if (typeof value !== "number" || isNaN(value) || value <= 0) {
+    throw new Error("serving_multiplier must be a positive number");
   }
 
-  return value as ServingMultiplier;
+  return value;
 }
 
 // Validate day of week

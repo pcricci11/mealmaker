@@ -173,7 +173,7 @@ export default function MealPlan() {
         <p className="text-gray-500 mb-4">No family profile found.</p>
         <button
           onClick={() => navigate("/family")}
-          className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700"
+          className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600"
         >
           Create Profile
         </button>
@@ -187,7 +187,7 @@ export default function MealPlan() {
         <p className="text-gray-500 mb-4">No meal plan found.</p>
         <button
           onClick={() => navigate("/plan")}
-          className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700"
+          className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600"
         >
           Generate a Plan
         </button>
@@ -244,7 +244,7 @@ export default function MealPlan() {
       <div className="flex gap-3 sticky bottom-0 bg-white border-t border-gray-200 py-4 -mx-4 px-4">
         <button
           onClick={() => navigate("/grocery")}
-          className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors text-lg"
+          className="flex-1 px-6 py-3 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors text-lg"
         >
           📋 View Grocery List
         </button>

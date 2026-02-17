@@ -23,6 +23,7 @@ const defaultRecipe: RecipeInput = {
   difficulty: "medium",
   seasonal_tags: [],
   frequency_cap_per_month: null,
+  notes: null,
 };
 
 const emptyIngredient: Ingredient = { name: "", quantity: 1, unit: "count", category: "produce" };
@@ -87,7 +88,7 @@ export default function Recipes() {
         <h2 className="text-2xl font-bold">Recipes</h2>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
+          className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
         >
           {showForm ? "Cancel" : "Add Recipe"}
         </button>
@@ -162,7 +163,7 @@ export default function Recipes() {
                 type="checkbox"
                 checked={form.vegetarian}
                 onChange={(e) => setForm({ ...form, vegetarian: e.target.checked })}
-                className="accent-emerald-600"
+                className="accent-orange-500"
               />
               Vegetarian
             </label>
@@ -171,7 +172,7 @@ export default function Recipes() {
                 type="checkbox"
                 checked={form.kid_friendly}
                 onChange={(e) => setForm({ ...form, kid_friendly: e.target.checked })}
-                className="accent-emerald-600"
+                className="accent-orange-500"
               />
               Kid Friendly
             </label>
@@ -180,7 +181,7 @@ export default function Recipes() {
                 type="checkbox"
                 checked={form.makes_leftovers}
                 onChange={(e) => setForm({ ...form, makes_leftovers: e.target.checked })}
-                className="accent-emerald-600"
+                className="accent-orange-500"
               />
               Makes Leftovers
             </label>
@@ -224,7 +225,7 @@ export default function Recipes() {
               <label className="text-xs font-medium">Ingredients</label>
               <button
                 onClick={addIngredientRow}
-                className="text-xs text-emerald-600 hover:underline"
+                className="text-xs text-orange-500 hover:underline"
               >
                 + Add Row
               </button>
@@ -279,7 +280,7 @@ export default function Recipes() {
           <button
             onClick={handleSubmit}
             disabled={saving || !form.title.trim()}
-            className="bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            className="bg-orange-500 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors"
           >
             {saving ? "Creating..." : "Create Recipe"}
           </button>
@@ -307,7 +308,7 @@ export default function Recipes() {
                 {r.source_type === "user" && (
                   <>
                     <span className="text-xs text-gray-400">&middot;</span>
-                    <span className="text-xs text-emerald-600">custom</span>
+                    <span className="text-xs text-orange-500">custom</span>
                   </>
                 )}
               </div>

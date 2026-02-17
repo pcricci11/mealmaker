@@ -77,7 +77,10 @@ Constraints:
 - difficulty must be one of: ${VALID_DIFFICULTIES.join(", ")}
 - protein_type should be null for vegetarian dishes
 - cook_minutes should be total time (prep + cook)
-- Return ONLY the JSON array, no markdown fences, no explanation.` + sourceConstraint,
+
+YOU MUST RETURN ONLY JSON. DO NOT INCLUDE ANY TEXT BEFORE OR AFTER THE JSON.
+NO EXPLANATIONS. NO PREAMBLES. NO MARKDOWN.
+YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH [ AND ENDING WITH ].` + sourceConstraint,
       messages: [
         { role: "user", content: `Search for recipes: "${query.trim()}"` },
       ],
@@ -92,15 +95,31 @@ Constraints:
     }
 
     if (!lastText) {
-      return res.status(500).json({ error: "No text response from Claude" });
+      return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
     }
 
     // Strip markdown fences if present
-    const cleaned = lastText
+    let cleaned = lastText
       .replace(/^```(?:json)?\s*\n?/, "")
       .replace(/\n?```\s*$/, "")
       .trim();
+
+    // Extract JSON array between first [ and last ]
+    const firstBracket = cleaned.indexOf("[");
+    const lastBracket = cleaned.lastIndexOf("]");
+    if (firstBracket === -1 || lastBracket === -1 || lastBracket <= firstBracket) {
+      console.error("Recipe search: no JSON array found in response:", cleaned.slice(0, 200));
+      return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
+    }
+    cleaned = cleaned.slice(firstBracket, lastBracket + 1);
+
     const results = JSON.parse(cleaned);
+
+    // Validate structure: must be an array of objects with at least a name field
+    if (!Array.isArray(results) || results.length === 0 || !results[0].name) {
+      console.error("Recipe search: unexpected response structure:", JSON.stringify(results).slice(0, 200));
+      return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
+    }
 
     res.json({ results });
   } catch (error: any) {
@@ -109,9 +128,9 @@ Constraints:
       return res.status(429).json({ error: error.message });
     }
     if (error instanceof SyntaxError) {
-      return res.status(500).json({ error: "Failed to parse Claude response" });
+      return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
     }
-    res.status(500).json({ error: error.message || "Failed to search recipes" });
+    res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
   }
 });
 
@@ -140,9 +159,10 @@ router.post("/batch-search", async (req: Request, res: Response) => {
       ],
       system: `Search the web for each recipe query. Return a JSON object: keys are the EXACT original query strings, values are arrays of 3-5 results. Each result: { "name": string, "source_name": string, "source_url": string, "cook_minutes": number, "cuisine": string, "vegetarian": boolean, "protein_type": string|null, "difficulty": string, "kid_friendly": boolean, "description": string (1 sentence max) }. cuisine: one of ${VALID_CUISINES.join(", ")}. difficulty: one of ${VALID_DIFFICULTIES.join(", ")}. protein_type: null if vegetarian.
 
-CRITICAL: Return ONLY the JSON object. No explanation, no preamble, no markdown.
+YOU MUST RETURN ONLY JSON. DO NOT INCLUDE ANY TEXT BEFORE OR AFTER THE JSON.
+NO EXPLANATIONS. NO PREAMBLES. NO MARKDOWN.
 Do not write "Based on" or "Here are" or any other text.
-Your entire response must be valid JSON that starts with { and ends with }.` + sourceConstraint,
+YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH { AND ENDING WITH }.` + sourceConstraint,
       messages: [
         {
           role: "user",
@@ -160,7 +180,7 @@ Your entire response must be valid JSON that starts with { and ends with }.` + s
     }
 
     if (!lastText) {
-      return res.status(500).json({ error: "No text response from Claude" });
+      return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
     }
 
     // Strip markdown fences if present, then extract JSON object
@@ -169,14 +189,22 @@ Your entire response must be valid JSON that starts with { and ends with }.` + s
       .replace(/\n?```\s*$/, "")
       .trim();
 
-    // If Claude added preamble text, extract the JSON between first { and last }
+    // Extract JSON object between first { and last }
     const firstBrace = cleaned.indexOf("{");
     const lastBrace = cleaned.lastIndexOf("}");
-    if (firstBrace > 0 && lastBrace > firstBrace) {
-      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      console.error("Batch search: no JSON object found in response:", cleaned.slice(0, 200));
+      return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
     }
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
 
     const parsed = JSON.parse(cleaned);
+
+    // Validate structure: must be an object with array values
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      console.error("Batch search: unexpected response structure:", JSON.stringify(parsed).slice(0, 200));
+      return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
+    }
 
     res.json({ results: parsed });
   } catch (error: any) {
@@ -185,9 +213,9 @@ Your entire response must be valid JSON that starts with { and ends with }.` + s
       return res.status(429).json({ error: error.message });
     }
     if (error instanceof SyntaxError) {
-      return res.status(500).json({ error: "Failed to parse Claude response" });
+      return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
     }
-    res.status(500).json({ error: error.message || "Failed to batch search recipes" });
+    res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
   }
 });
 
@@ -444,6 +472,21 @@ router.patch("/:id/rename", (req: Request, res: Response) => {
   res.json(rowToRecipe(updated));
 });
 
+// PATCH /api/recipes/:id/notes
+router.patch("/:id/notes", (req: Request, res: Response) => {
+  const { notes } = req.body;
+  if (notes !== null && typeof notes !== "string") {
+    return res.status(400).json({ error: "notes must be a string or null" });
+  }
+  const existing = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id) as any;
+  if (!existing) return res.status(404).json({ error: "Recipe not found" });
+
+  const value = notes === null ? null : notes.trim() || null;
+  db.prepare("UPDATE recipes SET notes = ? WHERE id = ?").run(value, req.params.id);
+  const updated = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id);
+  res.json(rowToRecipe(updated));
+});
+
 // DELETE /api/recipes/:id
 router.delete("/:id", (req: Request, res: Response) => {
   const existing = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id) as any;
@@ -500,7 +543,7 @@ Return ONLY valid JSON, no markdown fences, no explanation.`,
   } catch (error: any) {
     console.error("Suggest ingredients error:", error);
     if (error instanceof SyntaxError) {
-      return res.status(500).json({ error: "Failed to parse Claude response" });
+      return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
     }
     res.status(500).json({ error: error.message || "Failed to suggest ingredients" });
   }

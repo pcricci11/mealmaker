@@ -4,14 +4,8 @@
 
 // ── Serving Multiplier ──
 
-export const VALID_SERVING_MULTIPLIERS = ["normal", "hearty", "extra_large"] as const;
-export type ServingMultiplier = (typeof VALID_SERVING_MULTIPLIERS)[number];
-
-export const SERVING_MULTIPLIER_VALUES: Record<ServingMultiplier, number> = {
-  normal: 1.0,
-  hearty: 1.5,
-  extra_large: 2.0,
-};
+export const VALID_SERVING_MULTIPLIERS = [1.0, 1.5, 2.0] as const;
+export type ServingMultiplier = number;
 
 // ── Frequency Preferences ──
 

@@ -52,7 +52,7 @@ export default function History() {
         </p>
         <button
           onClick={() => navigate("/plan")}
-          className="bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-emerald-700"
+          className="bg-orange-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-orange-600"
         >
           Plan This Week
         </button>
@@ -75,7 +75,7 @@ export default function History() {
         {plans.map((plan) => (
           <div
             key={plan.id}
-            className="bg-white rounded-xl border border-gray-200 p-6 hover:border-emerald-300 transition-colors cursor-pointer"
+            className="bg-white rounded-xl border border-gray-200 p-6 hover:border-orange-300 transition-colors cursor-pointer"
             onClick={() => navigate(`/plan?id=${plan.id}`)}
           >
             <div className="flex items-start justify-between">
@@ -120,7 +120,7 @@ export default function History() {
                   e.stopPropagation();
                   navigate(`/plan?id=${plan.id}`);
                 }}
-                className="ml-4 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+                className="ml-4 text-sm text-orange-500 hover:text-orange-600 font-medium"
               >
                 View Plan →
               </button>
@@ -133,7 +133,7 @@ export default function History() {
       <div className="text-center pt-4">
         <button
           onClick={() => navigate("/plan")}
-          className="bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-emerald-700"
+          className="bg-orange-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-orange-600"
         >
           + Generate New Plan
         </button>

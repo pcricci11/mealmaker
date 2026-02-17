@@ -162,7 +162,7 @@ export default function FamilyProfile() {
           type="text"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className="w-full max-w-md border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+          className="w-full max-w-md border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
           placeholder="The Smiths"
         />
       </div>
@@ -199,7 +199,7 @@ export default function FamilyProfile() {
           step={10}
           value={form.vegetarian_ratio}
           onChange={(e) => setForm({ ...form, vegetarian_ratio: Number(e.target.value) })}
-          className="w-full max-w-md accent-emerald-600"
+          className="w-full max-w-md accent-orange-500"
         />
         <div className="flex justify-between text-xs text-gray-400 max-w-md">
           <span>All Meat</span>
@@ -221,7 +221,7 @@ export default function FamilyProfile() {
                 type="checkbox"
                 checked={form[key]}
                 onChange={(e) => setForm({ ...form, [key]: e.target.checked })}
-                className="accent-emerald-600"
+                className="accent-orange-500"
               />
               {label}
             </label>
@@ -272,7 +272,7 @@ export default function FamilyProfile() {
           max={4}
           value={form.leftovers_nights_per_week}
           onChange={(e) => setForm({ ...form, leftovers_nights_per_week: Number(e.target.value) })}
-          className="w-full max-w-md accent-emerald-600"
+          className="w-full max-w-md accent-orange-500"
         />
         <div className="flex justify-between text-xs text-gray-400 max-w-md">
           <span>0</span>
@@ -287,7 +287,7 @@ export default function FamilyProfile() {
             type="checkbox"
             checked={form.picky_kid_mode}
             onChange={(e) => setForm({ ...form, picky_kid_mode: e.target.checked })}
-            className="accent-emerald-600"
+            className="accent-orange-500"
           />
           Picky Kid Mode
           <span className="text-gray-400 font-normal">(biases toward mild, familiar recipes)</span>
@@ -299,17 +299,17 @@ export default function FamilyProfile() {
         <button
           onClick={handleSave}
           disabled={saving || !form.name.trim()}
-          className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+          className="bg-orange-500 text-white px-6 py-2 rounded-lg font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors"
         >
           {saving ? "Saving..." : family ? "Update Profile" : "Create Profile"}
         </button>
         {saved && (
-          <span className="text-emerald-600 text-sm font-medium">Saved!</span>
+          <span className="text-orange-500 text-sm font-medium">Saved!</span>
         )}
         {family && (
           <button
             onClick={() => navigate("/plan")}
-            className="text-emerald-600 text-sm font-medium hover:underline"
+            className="text-orange-500 text-sm font-medium hover:underline"
           >
             Go to Plan &rarr;
           </button>
@@ -323,7 +323,7 @@ export default function FamilyProfile() {
             <h3 className="text-xl font-bold">Family Members</h3>
             <button
               onClick={startAddMember}
-              className="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
+              className="bg-orange-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
             >
               Add Member
             </button>
@@ -454,7 +454,7 @@ export default function FamilyProfile() {
                 <button
                   onClick={handleSaveMember}
                   disabled={memberSaving || !editingMember.name.trim()}
-                  className="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                  className="bg-orange-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors"
                 >
                   {memberSaving ? "Saving..." : "Save"}
                 </button>
