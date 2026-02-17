@@ -1,3 +1,6 @@
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+
 interface SearchQueryProgress {
   query: string;
   status: "searching" | "found" | "not_found";
@@ -17,18 +20,25 @@ export default function SmartSetupProgressModal({
   onCancel?: () => void;
 }) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
-      <div className="bg-white rounded-none md:rounded-2xl max-w-md w-full h-full md:h-auto flex items-center justify-center p-8">
+    <Dialog open={true} onOpenChange={() => {}}>
+      <DialogContent
+        fullScreenMobile={false}
+        onInteractOutside={(e) => e.preventDefault()}
+        className="max-w-md"
+      >
+        <DialogTitle className="sr-only">Setup Progress</DialogTitle>
+        <DialogDescription className="sr-only">Smart setup is in progress</DialogDescription>
+
         {progress.phase === "done" ? (
-          <div className="text-center space-y-3">
-            <div className="text-3xl">✨</div>
+          <div className="text-center space-y-3 py-8">
+            <div className="text-3xl">&#10024;</div>
             <p className="text-gray-700 font-medium">{progress.message}</p>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-6 py-4">
             <div className="flex flex-col items-center space-y-3">
               {progress.phase === "searching" ? (
-                <div className="text-3xl">🔍</div>
+                <div className="text-3xl">&#128269;</div>
               ) : (
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-200 border-t-emerald-600" />
               )}
@@ -47,15 +57,15 @@ export default function SmartSetupProgressModal({
                         <div className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-emerald-200 border-t-emerald-600 shrink-0" />
                       )}
                       {q.status === "found" && (
-                        <span className="text-emerald-600 shrink-0">✓</span>
+                        <span className="text-emerald-600 shrink-0">&#10003;</span>
                       )}
                       {q.status === "not_found" && (
-                        <span className="text-orange-500 shrink-0">—</span>
+                        <span className="text-orange-500 shrink-0">&mdash;</span>
                       )}
                       <span className="text-gray-700 truncate">{q.query}</span>
                       {q.status === "found" && (
                         <span className="text-emerald-600 text-xs ml-auto shrink-0">
-                          Looks delicious! 🤤
+                          Looks delicious!
                         </span>
                       )}
                       {q.status === "not_found" && (
@@ -70,17 +80,14 @@ export default function SmartSetupProgressModal({
 
             {onCancel && (
               <div className="flex justify-center pt-2">
-                <button
-                  onClick={onCancel}
-                  className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 font-medium"
-                >
+                <Button variant="ghost" onClick={onCancel}>
                   Cancel
-                </button>
+                </Button>
               </div>
             )}
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

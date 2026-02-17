@@ -5,7 +5,6 @@ import type {
   FamilyMemberInput,
   FamilyFavoriteChef,
   FamilyFavoriteWebsite,
-  ServingMultiplier,
 } from "@shared/types";
 import {
   getFamilies,
@@ -24,11 +23,14 @@ import {
 } from "../api";
 import FamilyMemberCard from "../components/FamilyMemberCard";
 import FamilyMemberModal from "../components/FamilyMemberModal";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 
-const SERVING_OPTIONS: { value: ServingMultiplier; label: string; desc: string }[] = [
-  { value: "normal", label: "1x", desc: "Standard" },
-  { value: "hearty", label: "1.5x", desc: "Hearty" },
-  { value: "extra_large", label: "2x", desc: "Extra Large" },
+const SERVING_OPTIONS: { value: number; label: string; desc: string }[] = [
+  { value: 1.0, label: "1x", desc: "Standard" },
+  { value: 1.5, label: "1.5x", desc: "Hearty" },
+  { value: 2.0, label: "2x", desc: "Extra Large" },
 ];
 
 export default function MyFamily() {
@@ -47,7 +49,7 @@ export default function MyFamily() {
   const [editingMember, setEditingMember] = useState<FamilyMember | null>(null);
 
   // Preferences (local state, saved on slider release)
-  const [servingMultiplier, setServingMultiplier] = useState<ServingMultiplier>("normal");
+  const [servingMultiplier, setServingMultiplier] = useState<number>(1.0);
   const [maxCookWeekday, setMaxCookWeekday] = useState(45);
   const [maxCookWeekend, setMaxCookWeekend] = useState(90);
   const [vegRatio, setVegRatio] = useState(0);
@@ -75,7 +77,7 @@ export default function MyFamily() {
         const f = families[0];
         setFamily(f);
         setNameDraft(f.name);
-        setServingMultiplier(f.serving_multiplier || "normal");
+        setServingMultiplier(f.serving_multiplier ?? 1.0);
         setMaxCookWeekday(f.max_cook_minutes_weekday);
         setMaxCookWeekend(f.max_cook_minutes_weekend);
         setVegRatio(f.vegetarian_ratio);
@@ -201,7 +203,7 @@ export default function MyFamily() {
       <div className="max-w-2xl mx-auto py-8 text-center space-y-4">
         <h2 className="text-2xl font-bold text-gray-900">Welcome to Yes Chef</h2>
         <p className="text-gray-500">Create a family profile to get started.</p>
-        <button
+        <Button
           onClick={async () => {
             const created = await createFamily({
               name: "My Family",
@@ -219,10 +221,10 @@ export default function MyFamily() {
             setFamily(created);
             setNameDraft(created.name);
           }}
-          className="px-6 py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
+          size="lg"
         >
           Create Family Profile
-        </button>
+        </Button>
       </div>
     );
   }
@@ -239,7 +241,7 @@ export default function MyFamily() {
       {/* ────────────────────────────────────── */}
       {/* SECTION 1: FAMILY INFO                 */}
       {/* ────────────────────────────────────── */}
-      <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="px-4 md:px-6 py-4 bg-gray-50 border-b border-gray-200">
           <h2 className="text-lg font-bold text-gray-900">Family Info</h2>
         </div>
@@ -262,21 +264,19 @@ export default function MyFamily() {
                 autoFocus
                 className="text-2xl font-bold text-gray-900 border-b-2 border-emerald-500 outline-none bg-transparent py-1 w-full max-w-sm"
               />
-              <button
-                onClick={saveFamilyName}
-                className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
-              >
+              <Button variant="link" onClick={saveFamilyName} className="h-auto p-0">
                 Save
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => {
                   setEditingName(false);
                   setNameDraft(family.name);
                 }}
-                className="text-sm text-gray-400 hover:text-gray-600"
+                className="h-auto p-0 text-gray-400 hover:text-gray-600"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -310,12 +310,13 @@ export default function MyFamily() {
               <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
                 Members ({members.length})
               </h4>
-              <button
+              <Button
+                variant="link"
                 onClick={() => {
                   setEditingMember(null);
                   setMemberModalOpen(true);
                 }}
-                className="text-sm font-medium text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                className="h-auto p-0 text-sm flex items-center gap-1"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -332,21 +333,22 @@ export default function MyFamily() {
                   />
                 </svg>
                 Add Member
-              </button>
+              </Button>
             </div>
 
             {members.length === 0 ? (
               <div className="text-center py-8 border border-dashed border-gray-300 rounded-lg">
                 <p className="text-gray-400 text-sm">No family members yet.</p>
-                <button
+                <Button
+                  variant="link"
                   onClick={() => {
                     setEditingMember(null);
                     setMemberModalOpen(true);
                   }}
-                  className="mt-2 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+                  className="mt-2 h-auto p-0 text-sm"
                 >
                   Add your first member
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="space-y-3">
@@ -365,12 +367,12 @@ export default function MyFamily() {
             )}
           </div>
         </div>
-      </section>
+      </Card>
 
       {/* ────────────────────────────────────── */}
       {/* SECTION 2: PREFERENCES                 */}
       {/* ────────────────────────────────────── */}
-      <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="px-4 md:px-6 py-4 bg-gray-50 border-b border-gray-200">
           <h2 className="text-lg font-bold text-gray-900">Preferences</h2>
         </div>
@@ -494,12 +496,12 @@ export default function MyFamily() {
             </div>
           </div>
         </div>
-      </section>
+      </Card>
 
       {/* ────────────────────────────────────── */}
       {/* SECTION 3: FAVORITE CHEFS              */}
       {/* ────────────────────────────────────── */}
-      <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="px-4 md:px-6 py-4 bg-gray-50 border-b border-gray-200">
           <h2 className="text-lg font-bold text-gray-900">Favorite Chefs</h2>
           <p className="text-sm text-gray-500 mt-0.5">
@@ -510,24 +512,22 @@ export default function MyFamily() {
         <div className="p-4 md:p-6 space-y-4">
           {/* Add chef */}
           <div className="flex gap-2">
-            <input
-              type="text"
+            <Input
               value={newChefName}
               onChange={(e) => setNewChefName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && newChefName.trim()) handleAddChef();
               }}
               placeholder="e.g., Ina Garten, J. Kenji Lopez-Alt"
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               disabled={addingChef}
             />
-            <button
+            <Button
               onClick={handleAddChef}
               disabled={addingChef || !newChefName.trim()}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              size="sm"
             >
               {addingChef ? "Adding..." : "Add"}
-            </button>
+            </Button>
           </div>
 
           {/* Chef list */}
@@ -568,12 +568,12 @@ export default function MyFamily() {
             </div>
           )}
         </div>
-      </section>
+      </Card>
 
       {/* ────────────────────────────────────── */}
       {/* SECTION 4: FAVORITE WEBSITES            */}
       {/* ────────────────────────────────────── */}
-      <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="px-4 md:px-6 py-4 bg-gray-50 border-b border-gray-200">
           <h2 className="text-lg font-bold text-gray-900">Favorite Websites</h2>
           <p className="text-sm text-gray-500 mt-0.5">
@@ -584,24 +584,22 @@ export default function MyFamily() {
         <div className="p-4 md:p-6 space-y-4">
           {/* Add website */}
           <div className="flex gap-2">
-            <input
-              type="text"
+            <Input
               value={newWebsiteName}
               onChange={(e) => setNewWebsiteName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && newWebsiteName.trim()) handleAddWebsite();
               }}
               placeholder="e.g., NYT Cooking, Serious Eats, Bon Appetit"
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               disabled={addingWebsite}
             />
-            <button
+            <Button
               onClick={handleAddWebsite}
               disabled={addingWebsite || !newWebsiteName.trim()}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              size="sm"
             >
               {addingWebsite ? "Adding..." : "Add"}
-            </button>
+            </Button>
           </div>
 
           {/* Website list */}
@@ -642,7 +640,7 @@ export default function MyFamily() {
             </div>
           )}
         </div>
-      </section>
+      </Card>
 
       {/* Member Modal */}
       {memberModalOpen && (

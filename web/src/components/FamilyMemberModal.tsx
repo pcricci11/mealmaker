@@ -3,6 +3,9 @@
 
 import { useState, useEffect } from "react";
 import type { FamilyMemberV3, DietaryStyle } from "@shared/types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface Props {
   member: FamilyMemberV3 | null;
@@ -102,34 +105,29 @@ export default function FamilyMemberModal({ member, onSave, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
-      <div className="bg-white rounded-none md:rounded-xl max-w-2xl w-full h-full md:h-auto md:max-h-[90vh] overflow-y-auto">
-        <form onSubmit={handleSubmit}>
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="flex flex-col">
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
           {/* Header */}
-          <div className="sticky top-0 bg-white border-b border-gray-200 px-4 md:px-6 py-4 flex items-center justify-between">
-            <h3 className="text-xl font-bold">
+          <DialogHeader className="border-b border-gray-200 px-4 md:px-6 py-4">
+            <DialogTitle className="text-xl font-bold">
               {member ? "Edit Family Member" : "Add Family Member"}
-            </h3>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          </div>
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              {member ? "Edit family member preferences" : "Add a new family member and their preferences"}
+            </DialogDescription>
+          </DialogHeader>
 
-          <div className="p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Name <span className="text-red-500">*</span>
               </label>
-              <input
+              <Input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 placeholder="e.g., John"
                 required
               />
@@ -182,21 +180,22 @@ export default function FamilyMemberModal({ member, onSave, onClose }: Props) {
 
               {/* Custom allergen */}
               <div className="flex gap-2">
-                <input
+                <Input
                   type="text"
                   value={customAllergyInput}
                   onChange={(e) => setCustomAllergyInput(e.target.value)}
                   onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addCustomAllergen())}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                   placeholder="Add other allergy..."
                 />
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   onClick={addCustomAllergen}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-300"
+                  className="h-10"
                 >
                   Add
-                </button>
+                </Button>
               </div>
 
               {/* Custom allergies */}
@@ -233,7 +232,7 @@ export default function FamilyMemberModal({ member, onSave, onClose }: Props) {
                   className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
                 />
                 <span className="text-sm font-medium text-gray-700">
-                  🌶️ No Spicy Food
+                  No Spicy Food
                 </span>
               </label>
             </div>
@@ -244,21 +243,22 @@ export default function FamilyMemberModal({ member, onSave, onClose }: Props) {
                 Dislikes (Foods to Avoid)
               </label>
               <div className="flex gap-2 mb-2">
-                <input
+                <Input
                   type="text"
                   value={customDislikeInput}
                   onChange={(e) => setCustomDislikeInput(e.target.value)}
                   onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addDislike())}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                   placeholder="e.g., mushrooms, olives..."
                 />
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   onClick={addDislike}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-300"
+                  className="h-10"
                 >
                   Add
-                </button>
+                </Button>
               </div>
               {dislikes.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -287,21 +287,22 @@ export default function FamilyMemberModal({ member, onSave, onClose }: Props) {
                 Favorite Foods
               </label>
               <div className="flex gap-2 mb-2">
-                <input
+                <Input
                   type="text"
                   value={customFavoriteInput}
                   onChange={(e) => setCustomFavoriteInput(e.target.value)}
                   onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addFavorite())}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                   placeholder="e.g., pasta, chicken..."
                 />
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   onClick={addFavorite}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-300"
+                  className="h-10"
                 >
                   Add
-                </button>
+                </Button>
               </div>
               {favorites.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -326,23 +327,16 @@ export default function FamilyMemberModal({ member, onSave, onClose }: Props) {
           </div>
 
           {/* Footer */}
-          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 md:px-6 py-4 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
-            >
+          <DialogFooter className="border-t border-gray-200 bg-gray-50 px-4 md:px-6 py-4 flex items-center justify-end gap-3">
+            <Button type="button" variant="ghost" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
-            >
+            </Button>
+            <Button type="submit">
               {member ? "Save Changes" : "Add Member"}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

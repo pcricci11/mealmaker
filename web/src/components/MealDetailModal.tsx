@@ -2,6 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import { getRecipeById, getRecipes } from "../api";
 import { CUISINE_COLORS } from "./SwapMainModal";
 import type { Recipe, MealPlanItemV3 } from "@shared/types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface Props {
   item: MealPlanItemV3;
@@ -123,23 +127,15 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
       : null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="bg-white rounded-none md:rounded-xl max-w-lg w-full h-full md:h-auto md:max-h-[85vh] overflow-hidden flex flex-col">
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="flex flex-col">
         {/* Header */}
-        <div className="border-b border-gray-200 px-4 md:px-6 py-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-gray-900">
+        <DialogHeader className="border-b border-gray-200 px-4 md:px-6 py-4">
+          <DialogTitle className="text-lg font-bold text-gray-900">
             {DAY_LABELS[item.day] || item.day}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl"
-          >
-            ✕
-          </button>
-        </div>
+          </DialogTitle>
+          <DialogDescription className="sr-only">Meal details and swap options</DialogDescription>
+        </DialogHeader>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -173,46 +169,46 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
                       : "hover:bg-gray-100 text-gray-400"
                   }`}
                 >
-                  {isLoved ? "❤️" : "🤍"}
+                  {isLoved ? "\u2764\uFE0F" : "\U0001F90D"}
                 </button>
               </div>
 
               {/* Tags row: cuisine, difficulty, vegetarian */}
               <div className="flex flex-wrap gap-2">
                 {cuisineClass && (
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${cuisineClass}`}>
+                  <Badge variant="outline" className={cn("border-0", cuisineClass)}>
                     {(recipe?.cuisine || itemCuisine || "").replace("_", " ")}
-                  </span>
+                  </Badge>
                 )}
                 {recipe?.difficulty && (
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 font-medium capitalize">
+                  <Badge variant="secondary" className="capitalize">
                     {recipe.difficulty}
-                  </span>
+                  </Badge>
                 )}
                 {(recipe?.vegetarian ?? item.recipe?.vegetarian ?? false) && (
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-green-100 text-green-700 font-medium">
-                    🌿 Vegetarian
-                  </span>
+                  <Badge variant="outline" className="bg-green-100 text-green-700 border-0">
+                    Vegetarian
+                  </Badge>
                 )}
               </div>
 
               {/* Metadata pills */}
               <div className="flex flex-wrap gap-3 text-sm text-gray-600">
                 {(recipe?.cook_minutes || item.recipe?.cook_minutes) && (
-                  <span>⏱ {recipe?.cook_minutes || item.recipe?.cook_minutes} min</span>
+                  <span>{recipe?.cook_minutes || item.recipe?.cook_minutes} min</span>
                 )}
                 {(recipe?.makes_leftovers ?? item.recipe?.makes_leftovers ?? false) && (
-                  <span>📦 Makes leftovers</span>
+                  <span>Makes leftovers</span>
                 )}
                 {(recipe?.kid_friendly ?? item.recipe?.kid_friendly ?? false) && (
-                  <span>👶 Kid friendly</span>
+                  <span>Kid friendly</span>
                 )}
               </div>
 
               {/* Source info */}
               {recipe?.source_name && (
                 <div className="text-sm text-gray-600">
-                  <span>👨‍🍳 {recipe.source_name}</span>
+                  <span>{recipe.source_name}</span>
                 </div>
               )}
               {recipe?.source_url && (
@@ -222,7 +218,7 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
                   rel="noopener noreferrer"
                   className="inline-block text-sm text-emerald-600 hover:text-emerald-700 font-medium"
                 >
-                  🔗 View Full Recipe
+                  View Full Recipe
                 </a>
               )}
 
@@ -235,7 +231,7 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
                   <ul className="space-y-1">
                     {recipe.ingredients.map((ing, i) => (
                       <li key={i} className="text-sm text-gray-700">
-                        • {ing.quantity} {ing.unit} {ing.name}
+                        {ing.quantity} {ing.unit} {ing.name}
                       </li>
                     ))}
                   </ul>
@@ -257,7 +253,7 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
                     className="w-full px-4 py-3 border border-gray-200 rounded-lg text-left hover:border-emerald-500 hover:bg-emerald-50 transition-colors"
                   >
                     <span className="font-medium text-gray-900">
-                      🔄 Other {keyword} Recipes
+                      Other {keyword} Recipes
                     </span>
                   </button>
                   <button
@@ -265,7 +261,7 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
                     className="w-full px-4 py-3 border border-gray-200 rounded-lg text-left hover:border-emerald-500 hover:bg-emerald-50 transition-colors"
                   >
                     <span className="font-medium text-gray-900">
-                      🔀 Completely Different Meals
+                      Completely Different Meals
                     </span>
                   </button>
                 </div>
@@ -301,33 +297,34 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
                         >
                           <div className="font-medium text-gray-900">{r.title}</div>
                           <div className="flex flex-wrap gap-2 mt-1">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${cc}`}>
+                            <Badge variant="outline" className={cn("border-0", cc)}>
                               {r.cuisine.replace("_", " ")}
-                            </span>
-                            <span
-                              className={`text-xs px-2 py-0.5 rounded-full ${
-                                r.vegetarian
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-gray-100 text-gray-600"
-                              }`}
-                            >
-                              {r.vegetarian ? "Vegetarian" : r.protein_type}
-                            </span>
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                            </Badge>
+                            {r.vegetarian ? (
+                              <Badge variant="outline" className="bg-green-100 text-green-700 border-0">
+                                Vegetarian
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary">
+                                {r.protein_type}
+                              </Badge>
+                            )}
+                            <Badge variant="secondary">
                               {r.cook_minutes} min
-                            </span>
+                            </Badge>
                           </div>
                         </button>
                       );
                     })
                   )}
 
-                  <button
+                  <Button
+                    variant="ghost"
+                    className="w-full"
                     onClick={() => { setSwapMode(null); setSuggestions([]); }}
-                    className="w-full px-4 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium"
                   >
-                    ← Back to options
-                  </button>
+                    &larr; Back to options
+                  </Button>
                 </div>
               )}
             </>
@@ -335,15 +332,12 @@ export default function MealDetailModal({ item, onClose, onLove, isLoved, onSwap
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-4 md:px-6 py-4">
-          <button
-            onClick={onClose}
-            className="w-full px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
-          >
+        <DialogFooter className="border-t border-gray-200 px-4 md:px-6 py-4">
+          <Button variant="ghost" className="w-full" onClick={onClose}>
             Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

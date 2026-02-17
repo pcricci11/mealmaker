@@ -40,6 +40,10 @@ import type {
   FamilyMemberV3,
   WebSearchRecipeResult,
 } from "@shared/types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 
 const DAYS: { key: string; label: string }[] = [
   { key: "monday", label: "Mon" },
@@ -675,7 +679,8 @@ export default function Plan() {
           </p>
           {lockProgress && (
             <div className="flex justify-center">
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => {
                   if (abortControllerRef.current) {
                     abortControllerRef.current.abort();
@@ -687,10 +692,9 @@ export default function Plan() {
                   setLockProgress(null);
                   showToast("Plan creation cancelled");
                 }}
-                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 font-medium"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -709,21 +713,22 @@ export default function Plan() {
               </h3>
             </div>
             {draftRecipes.size > 0 && (
-              <button
+              <Button
+                variant="link"
+                className="h-auto p-0 text-sm text-emerald-600 hover:text-emerald-700"
                 onClick={() => setShowBuildFromRecipes(true)}
-                className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
               >
                 + Add Recipes
-              </button>
+              </Button>
             )}
           </div>
           <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
             {DAYS.map(({ key, label }) => {
               const recipes = draftRecipes.get(key as DayOfWeek);
               return recipes && recipes.length > 0 ? (
-                <div
+                <Card
                   key={key}
-                  className="bg-emerald-50 border border-emerald-300 rounded-xl p-3 text-center min-h-[80px] md:min-h-[120px] flex flex-col items-center justify-center relative"
+                  className="bg-emerald-50 border-emerald-300 p-3 text-center min-h-[80px] md:min-h-[120px] flex flex-col items-center justify-center relative"
                 >
                   <span className="text-xs font-semibold text-emerald-700 uppercase">
                     {label}
@@ -771,7 +776,7 @@ export default function Plan() {
                       </button>
                     </div>
                   ))}
-                </div>
+                </Card>
               ) : (
                 <button
                   key={key}
@@ -788,21 +793,22 @@ export default function Plan() {
           </div>
           {draftRecipes.size > 0 ? (
             <div className="flex flex-col items-center gap-2">
-              <button
+              <Button
                 onClick={handleLockPlan}
-                className="w-full md:w-auto px-6 py-3 md:py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                className="w-full md:w-auto px-6 py-3 md:py-2.5"
               >
                 Adjust Plan & Build Grocery List
-              </button>
+              </Button>
               <p className="text-xs text-gray-400">
                 {Array.from(draftRecipes.values()).reduce((sum, arr) => sum + arr.length, 0)} recipe{Array.from(draftRecipes.values()).reduce((sum, arr) => sum + arr.length, 0) !== 1 ? "s" : ""} assigned — remaining days will be auto-filled
               </p>
-              <button
+              <Button
+                variant="ghost"
                 onClick={handleStartFresh}
-                className="text-xs text-gray-400 hover:text-red-500 mt-1"
+                className="text-xs text-gray-400 hover:text-red-500 mt-1 h-auto p-0"
               >
                 Start over
-              </button>
+              </Button>
             </div>
           ) : (
             <p className="text-center text-sm text-gray-400">
@@ -818,24 +824,29 @@ export default function Plan() {
           <div className="flex flex-col md:flex-row md:items-center gap-2 md:justify-between">
             <h2 className="text-xl md:text-2xl font-bold text-gray-900">Meal Plan</h2>
             <div className="flex items-center gap-3">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={handleStartFresh}
-                className="text-sm font-medium text-gray-400 hover:text-red-500 py-2"
+                className="text-gray-400 hover:text-red-500"
               >
                 Start over
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={handleEditWeek}
-                className="text-sm font-medium text-gray-500 hover:text-gray-700 py-2"
               >
                 Edit Week
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="link"
+                size="sm"
                 onClick={() => navigate("/grocery")}
-                className="text-sm font-medium text-emerald-600 hover:text-emerald-700 py-2"
+                className="text-emerald-600 hover:text-emerald-700"
               >
                 Grocery List →
-              </button>
+              </Button>
             </div>
           </div>
           <p className="text-sm text-gray-500">
@@ -966,15 +977,14 @@ export default function Plan() {
       )}
 
       {mainModal && plan && mainModal.step === "choose" && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-sm w-full overflow-hidden">
-            <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold">
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setMainModal(null); }}>
+          <DialogContent fullScreenMobile={false}>
+            <DialogHeader>
+              <DialogTitle>
                 {mainModal.mode === "swap" ? "Swap" : "Add"} a Main on {mainModal.day.charAt(0).toUpperCase() + mainModal.day.slice(1)}
-              </h3>
-              <button onClick={() => setMainModal(null)} className="text-gray-400 hover:text-gray-600">✕</button>
-            </div>
-            <div className="p-6 space-y-3">
+              </DialogTitle>
+            </DialogHeader>
+            <div className="px-6 pb-6 space-y-3">
               <button
                 onClick={() => {
                   const params = new URLSearchParams({ [mainModal.mode === "swap" ? "swapDay" : "addToDay"]: mainModal.day, planId: String(plan.id) });
@@ -995,19 +1005,18 @@ export default function Plan() {
                 <p className="text-sm text-gray-500 mt-1">Find a new recipe online</p>
               </button>
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {mainModal && plan && mainModal.step === "web-search" && !mainModalSearchQuery && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-sm w-full overflow-hidden">
-            <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold">Search for a Recipe</h3>
-              <button onClick={() => setMainModal(null)} className="text-gray-400 hover:text-gray-600">✕</button>
-            </div>
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setMainModal(null); }}>
+          <DialogContent fullScreenMobile={false}>
+            <DialogHeader>
+              <DialogTitle>Search for a Recipe</DialogTitle>
+            </DialogHeader>
             <form
-              className="p-6 space-y-3"
+              className="px-6 pb-6 space-y-3"
               onSubmit={(e) => {
                 e.preventDefault();
                 const input = (e.target as HTMLFormElement).elements.namedItem("q") as HTMLInputElement;
@@ -1015,21 +1024,17 @@ export default function Plan() {
               }}
             >
               <label className="text-sm font-medium text-gray-700">What are you looking for?</label>
-              <input
+              <Input
                 name="q"
                 autoFocus
                 placeholder='e.g. "Bobby Flay burger"'
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
-              <button
-                type="submit"
-                className="w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
-              >
+              <Button type="submit" className="w-full">
                 Search
-              </button>
+              </Button>
             </form>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {mainModal && plan && mainModal.step === "web-search" && mainModalSearchQuery && (

@@ -9,6 +9,12 @@ import {
   deleteRecipe, renameRecipe, createRecipe, importRecipeFromUrl,
 } from "../api";
 import { CUISINE_COLORS } from "../components/SwapMainModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface HistoryPlan {
   id: number;
@@ -464,18 +470,20 @@ export default function MyRecipes() {
             </span>
           </h2>
           <div className="flex items-center gap-3">
-            <button
+            <Button
+              variant="link"
+              className="h-auto p-0 text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
               onClick={() => setShowAddModal(true)}
-              className="text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
             >
               + Personal Recipe
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="link"
+              className="h-auto p-0 text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
               onClick={() => setShowUrlModal(true)}
-              className="text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
             >
               + URL Recipe
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -507,12 +515,12 @@ export default function MyRecipes() {
 
           {/* Search bar */}
           <div className="relative">
-            <input
+            <Input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search recipes..."
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              className="pl-9"
             />
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
@@ -618,12 +626,14 @@ export default function MyRecipes() {
               const lastMade = recencyMap.get(r.title);
               const isExpanded = expandedRecipeId === r.id;
               return (
-                <div
+                <Card
                   key={r.id}
-                  className={`bg-white border rounded-xl px-5 py-4 transition-shadow cursor-pointer ${
+                  className={cn(
+                    "px-5 py-4 transition-shadow cursor-pointer",
                     pickDayParam ? "hover:border-emerald-500 hover:bg-emerald-50" :
-                    isExpanded ? "border-emerald-300 shadow-sm" : "border-gray-200 hover:shadow-sm"
-                  }${addingToDay ? " opacity-50 pointer-events-none" : ""}`}
+                    isExpanded ? "border-emerald-300 shadow-sm" : "border-gray-200 hover:shadow-sm",
+                    addingToDay && "opacity-50 pointer-events-none"
+                  )}
                   onClick={() => pickDayParam ? handlePickForDay(r) : setExpandedRecipeId(isExpanded ? null : r.id)}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -668,24 +678,24 @@ export default function MyRecipes() {
                         </p>
                       )}
                       <div className="flex flex-wrap gap-1.5 mt-1.5">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${cuisineClass}`}>
+                        <Badge variant="outline" className={cn("border-0", cuisineClass)}>
                           {r.cuisine.replace("_", " ")}
-                        </span>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        </Badge>
+                        <Badge variant="secondary">
                           {r.cook_minutes} min
-                        </span>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        </Badge>
+                        <Badge variant="secondary">
                           {r.difficulty}
-                        </span>
+                        </Badge>
                         {r.vegetarian && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                          <Badge variant="outline" className="bg-green-100 text-green-700 border-0">
                             Vegetarian
-                          </span>
+                          </Badge>
                         )}
                         {r.protein_type && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          <Badge variant="secondary">
                             {r.protein_type}
-                          </span>
+                          </Badge>
                         )}
                       </div>
                     </div>
@@ -757,7 +767,7 @@ export default function MyRecipes() {
                       </div>
                     </div>
                   )}
-                </div>
+                </Card>
               );
             })}
           </div>
@@ -784,9 +794,9 @@ export default function MyRecipes() {
               const extra = mainNames.length > 3 ? ` +${mainNames.length - 3} more` : "";
 
               return (
-                <div
+                <Card
                   key={plan.id}
-                  className="bg-white border border-gray-200 rounded-xl px-5 py-4 flex items-center justify-between hover:shadow-sm transition-shadow"
+                  className="px-5 py-4 flex items-center justify-between hover:shadow-sm transition-shadow"
                 >
                   <div className="min-w-0">
                     <p className="font-medium text-gray-900">
@@ -800,7 +810,10 @@ export default function MyRecipes() {
                       </p>
                     )}
                   </div>
-                  <button
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 ml-4 text-sm font-medium text-emerald-600 hover:text-emerald-700 border-emerald-200 hover:bg-emerald-50"
                     onClick={() => {
                       const mainItems = (plan.items ?? [])
                         .filter((i) => i.meal_type === "main" && i.recipe_name)
@@ -814,11 +827,10 @@ export default function MyRecipes() {
                         `I want ${dayParts.join(", ")}.`;
                       navigate("/plan", { state: { prefill: description } });
                     }}
-                    className="shrink-0 ml-4 text-sm font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 rounded-lg px-3 py-1.5 hover:bg-emerald-50 transition-colors"
                   >
                     Reuse This Week
-                  </button>
-                </div>
+                  </Button>
+                </Card>
               );
             })}
           </div>
@@ -834,49 +846,50 @@ export default function MyRecipes() {
 
       {/* Delete confirmation modal */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/40">
-          <div className="bg-white rounded-none md:rounded-2xl shadow-xl max-w-sm w-full mx-0 md:mx-4 p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Delete {confirmDelete.title}?
-            </h3>
-            <p className="text-sm text-gray-500">
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setConfirmDelete(null); }}>
+          <DialogContent fullScreenMobile={false}>
+            <DialogHeader>
+              <DialogTitle>Delete {confirmDelete.title}?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground px-6">
               This will remove it from your collection and any future meal plans.
             </p>
-            <div className="flex justify-end gap-3">
-              <button
+            <DialogFooter>
+              <Button
+                variant="ghost"
                 onClick={() => setConfirmDelete(null)}
                 disabled={deleting}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="destructive"
                 onClick={() => handleDeleteRecipe(confirmDelete)}
                 disabled={deleting}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
               >
                 {deleting ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Add Recipe Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/40">
-          <div className="bg-white rounded-none md:rounded-2xl shadow-xl max-w-md w-full mx-0 md:mx-4 h-full md:h-auto overflow-y-auto p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900">Add Personal Recipe</h3>
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setShowAddModal(false); }}>
+          <DialogContent fullScreenMobile={false}>
+            <DialogHeader>
+              <DialogTitle>Add Personal Recipe</DialogTitle>
+            </DialogHeader>
 
-            <div className="space-y-3">
+            <div className="space-y-3 px-6">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Recipe name</label>
-                <input
+                <Input
                   type="text"
                   value={addForm.name}
                   onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
                   placeholder="e.g., Grandma's Meatballs"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   autoFocus
                   onKeyDown={(e) => { if (e.key === "Enter" && addForm.name.trim()) handleAddRecipe(); }}
                 />
@@ -897,13 +910,12 @@ export default function MyRecipes() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Protein</label>
-                  <input
+                  <Input
                     type="text"
                     value={addForm.protein_type}
                     onChange={(e) => setAddForm({ ...addForm, protein_type: e.target.value })}
                     placeholder="chicken, beef, etc."
                     disabled={addForm.vegetarian}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-400"
                   />
                 </div>
               </div>
@@ -942,36 +954,36 @@ export default function MyRecipes() {
                 />
                 <span className="text-sm text-gray-700">Vegetarian</span>
               </label>
-
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
-              <button
+            <DialogFooter>
+              <Button
+                variant="ghost"
                 onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleAddRecipe}
                 disabled={!addForm.name.trim() || addingSaving}
-                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50"
               >
                 {addingSaving ? "Adding..." : "Add Recipe"}
-              </button>
-            </div>
-          </div>
-        </div>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* URL Recipe Modal */}
       {showUrlModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/40">
-          <div className="bg-white rounded-none md:rounded-2xl shadow-xl max-w-md w-full mx-0 md:mx-4 p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900">Add Recipe from URL</h3>
+        <Dialog open={true} onOpenChange={(open) => { if (!open) { setShowUrlModal(false); setUrlInput(""); } }}>
+          <DialogContent fullScreenMobile={false}>
+            <DialogHeader>
+              <DialogTitle>Add Recipe from URL</DialogTitle>
+            </DialogHeader>
 
             {urlProgress ? (
-              <div className="py-8 text-center space-y-3">
+              <div className="py-8 text-center space-y-3 px-6">
                 <p className="text-sm text-gray-700 font-medium">{urlProgress}</p>
                 {!urlProgress.startsWith("✅") && (
                   <div className="flex justify-center">
@@ -981,38 +993,36 @@ export default function MyRecipes() {
               </div>
             ) : (
               <>
-                <div>
+                <div className="px-6">
                   <label className="block text-xs font-medium text-gray-500 mb-1">Paste recipe URL here</label>
-                  <input
+                  <Input
                     type="url"
                     value={urlInput}
                     onChange={(e) => setUrlInput(e.target.value)}
                     placeholder="https://www.bonappetit.com/recipe/..."
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     autoFocus
                     onKeyDown={(e) => { if (e.key === "Enter" && urlInput.trim()) handleImportFromUrl(); }}
                   />
                 </div>
 
-                <div className="flex justify-end gap-3 pt-2">
-                  <button
+                <DialogFooter>
+                  <Button
+                    variant="ghost"
                     onClick={() => { setShowUrlModal(false); setUrlInput(""); }}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={handleImportFromUrl}
                     disabled={!urlInput.trim()}
-                    className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50"
                   >
                     Add Recipe
-                  </button>
-                </div>
+                  </Button>
+                </DialogFooter>
               </>
             )}
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

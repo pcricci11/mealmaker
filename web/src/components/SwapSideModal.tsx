@@ -3,6 +3,10 @@
 
 import { useState, useEffect } from "react";
 import { getSideSuggestions } from "../api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 interface Props {
   mealItemId: number;
@@ -69,18 +73,11 @@ export default function SwapSideModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
-      <div className="bg-white rounded-none md:rounded-xl max-w-lg w-full h-full md:h-auto md:max-h-[80vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="border-b border-gray-200 px-4 md:px-6 py-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold">Swap Side</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            ✕
-          </button>
-        </div>
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Swap Side</DialogTitle>
+        </DialogHeader>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -101,17 +98,17 @@ export default function SwapSideModal({
                   className="w-full border border-gray-200 rounded-lg p-4 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left"
                 >
                   <div className="font-medium text-gray-900">{side.name}</div>
-                  <div className="flex gap-2 mt-1 text-xs text-gray-600">
-                    <span className="px-2 py-0.5 bg-gray-100 rounded capitalize">
+                  <div className="flex gap-2 mt-1">
+                    <Badge variant="secondary" className="capitalize">
                       {side.category}
-                    </span>
-                    <span className="px-2 py-0.5 bg-gray-100 rounded capitalize">
+                    </Badge>
+                    <Badge variant="secondary" className="capitalize">
                       {side.weight}
-                    </span>
+                    </Badge>
                     {side.prep_time_minutes && (
-                      <span className="px-2 py-0.5 bg-gray-100 rounded">
+                      <Badge variant="secondary">
                         {side.prep_time_minutes} min
-                      </span>
+                      </Badge>
                     )}
                   </div>
                 </button>
@@ -121,10 +118,11 @@ export default function SwapSideModal({
 
           {/* Show More Options */}
           {!loading && (
-            <button
+            <Button
+              variant="link"
               onClick={handleRefresh}
               disabled={refreshing}
-              className="w-full py-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
+              className="w-full"
             >
               {refreshing ? (
                 <span className="flex items-center justify-center gap-2">
@@ -134,7 +132,7 @@ export default function SwapSideModal({
               ) : (
                 "Show More Options"
               )}
-            </button>
+            </Button>
           )}
 
           {/* Custom Side */}
@@ -144,7 +142,7 @@ export default function SwapSideModal({
                 Or add your own custom side:
               </label>
               <div className="flex gap-2">
-                <input
+                <Input
                   type="text"
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
@@ -152,30 +150,27 @@ export default function SwapSideModal({
                     if (e.key === "Enter" && customName.trim()) handleCustomSwap();
                   }}
                   placeholder="e.g., garlic bread, roasted vegetables"
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="flex-1"
                 />
-                <button
+                <Button
                   onClick={handleCustomSwap}
                   disabled={!customName.trim()}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+                  className="whitespace-nowrap"
                 >
                   Add Custom Side
-                </button>
+                </Button>
               </div>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-4 md:px-6 py-4">
-          <button
-            onClick={onClose}
-            className="w-full px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
-          >
+        <DialogFooter>
+          <Button variant="ghost" className="w-full" onClick={onClose}>
             Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

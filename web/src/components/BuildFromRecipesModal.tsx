@@ -2,6 +2,11 @@ import { useState, useEffect, useMemo } from "react";
 import { getRecipes, getFavoriteMeals } from "../api";
 import { CUISINE_COLORS } from "./SwapMainModal";
 import type { Recipe, DayOfWeek, FamilyFavoriteMeal } from "@shared/types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 const DAYS: { key: DayOfWeek; label: string }[] = [
   { key: "monday", label: "Mon" },
@@ -137,18 +142,13 @@ export default function BuildFromRecipesModal({
     DAYS.find((d) => d.key === day)?.label ?? day;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
-      <div className="bg-white rounded-none md:rounded-xl max-w-lg w-full h-full md:h-auto md:max-h-[80vh] overflow-hidden flex flex-col">
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="flex flex-col">
         {/* Header */}
-        <div className="border-b border-gray-200 px-4 md:px-6 py-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold">Pick from My Recipes</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            ✕
-          </button>
-        </div>
+        <DialogHeader className="border-b border-gray-200 px-4 md:px-6 py-4">
+          <DialogTitle className="text-lg font-bold">Pick from My Recipes</DialogTitle>
+          <DialogDescription className="sr-only">Select recipes and assign them to days</DialogDescription>
+        </DialogHeader>
 
         {/* Assignment summary strip */}
         <div className="border-b border-gray-200 px-4 md:px-6 py-3">
@@ -181,7 +181,7 @@ export default function BuildFromRecipesModal({
                       </button>
                     </div>
                   ) : (
-                    <div className="text-gray-300 mt-0.5">—</div>
+                    <div className="text-gray-300 mt-0.5">&mdash;</div>
                   )}
                 </div>
               );
@@ -221,12 +221,11 @@ export default function BuildFromRecipesModal({
 
         {/* Search bar */}
         <div className="px-4 md:px-6 py-3 border-b border-gray-100">
-          <input
+          <Input
             type="text"
             placeholder="Search recipes..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
           />
         </div>
 
@@ -269,19 +268,28 @@ export default function BuildFromRecipesModal({
                       </span>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${cuisineClass}`}
-                    >
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <Badge variant="outline" className={cn("border-0", cuisineClass)}>
                       {recipe.cuisine.replace("_", " ")}
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                    </Badge>
+                    <Badge variant="secondary">
                       {recipe.cook_minutes} min
-                    </span>
+                    </Badge>
                     {recipe.difficulty && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                      <Badge variant="secondary">
                         {recipe.difficulty}
-                      </span>
+                      </Badge>
+                    )}
+                    {recipe.source_url && (
+                      <a
+                        href={recipe.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-xs text-emerald-600 hover:text-emerald-700 font-medium ml-auto"
+                      >
+                        View Recipe
+                      </a>
                     )}
                   </div>
                 </button>
@@ -291,23 +299,20 @@ export default function BuildFromRecipesModal({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-4 md:px-6 py-4 space-y-2">
-          <button
+        <DialogFooter className="border-t border-gray-200 px-4 md:px-6 py-4 flex flex-col space-y-2">
+          <Button
+            className="w-full"
             onClick={handleDone}
             disabled={assignments.size === 0}
-            className="w-full px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Add to Week ({assignments.size} recipe
             {assignments.size !== 1 ? "s" : ""})
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full px-4 py-2 text-gray-700 hover:text-gray-900 font-medium text-sm"
-          >
+          </Button>
+          <Button variant="ghost" className="w-full" onClick={onClose}>
             Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

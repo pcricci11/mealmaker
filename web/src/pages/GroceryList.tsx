@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { GroceryItem, GroceryList as GroceryListType, Ingredient } from "@shared/types";
 import { getGroceryList, suggestIngredients } from "../api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const CATEGORY_LABELS: Record<string, string> = {
   produce: "Produce",
@@ -191,12 +193,9 @@ export default function GroceryList() {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 mb-4">No meal plan found. Generate a plan first.</p>
-        <button
-          onClick={() => navigate("/plan")}
-          className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700"
-        >
+        <Button onClick={() => navigate("/plan")}>
           Go to Plan
-        </button>
+        </Button>
       </div>
     );
   }
@@ -227,12 +226,9 @@ export default function GroceryList() {
         <h2 className="text-2xl font-bold">Grocery List</h2>
         <div className="flex items-center gap-3">
           {checkedCount > 0 && (
-            <button
-              onClick={clearAllChecks}
-              className="text-sm text-gray-500 hover:text-gray-700"
-            >
+            <Button variant="ghost" size="sm" onClick={clearAllChecks}>
               Clear checks
-            </button>
+            </Button>
           )}
           <span className="text-sm text-gray-500">
             {checkedCount} / {totalCount} checked
@@ -261,13 +257,15 @@ export default function GroceryList() {
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-gray-900 text-sm">{recipe.name}</span>
                   {!suggestedIngredients[recipe.recipe_id] && (
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => handleSuggest(recipe.recipe_id)}
                       disabled={suggestingFor === recipe.recipe_id}
-                      className="text-xs px-3 py-1.5 bg-amber-100 text-amber-800 rounded-lg font-medium hover:bg-amber-200 transition-colors disabled:opacity-50"
+                      className="text-xs bg-amber-100 text-amber-800 hover:bg-amber-200"
                     >
                       {suggestingFor === recipe.recipe_id ? "Thinking..." : "Suggest Ingredients"}
-                    </button>
+                    </Button>
                   )}
                 </div>
 
@@ -300,18 +298,21 @@ export default function GroceryList() {
                       })}
                     </div>
                     <div className="flex gap-2 pt-1">
-                      <button
+                      <Button
+                        size="sm"
+                        className="text-xs"
                         onClick={() => addSuggestedToList(recipe.recipe_id)}
-                        className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700"
                       >
                         Add Selected to List
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs"
                         onClick={() => setDismissedRecipes((prev) => new Set(prev).add(recipe.recipe_id))}
-                        className="text-xs px-3 py-1.5 text-gray-500 hover:text-gray-700"
                       >
                         Dismiss
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -396,14 +397,14 @@ export default function GroceryList() {
         {showAddForm && (
           <div className="bg-white rounded-lg border border-emerald-200 p-3 space-y-3">
             <div className="flex flex-col md:flex-row gap-2">
-              <input
+              <Input
                 type="text"
                 value={newItemName}
                 onChange={(e) => setNewItemName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") addCustomItem(); }}
                 placeholder="Item name..."
                 autoFocus
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="flex-1"
               />
               <select
                 value={newItemCategory}
@@ -418,19 +419,18 @@ export default function GroceryList() {
               </select>
             </div>
             <div className="flex gap-2">
-              <button
+              <Button
                 onClick={addCustomItem}
                 disabled={!newItemName.trim()}
-                className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50"
               >
                 Add
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => { setShowAddForm(false); setNewItemName(""); }}
-                className="px-4 py-2 text-gray-600 text-sm hover:text-gray-800"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         )}

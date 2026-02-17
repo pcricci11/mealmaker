@@ -3,6 +3,9 @@
 
 import { useState, useEffect } from "react";
 import type { DayOfWeek, FamilyMemberV3 } from "@shared/types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 // ── Types ──
 
@@ -191,20 +194,14 @@ export default function DayConfigModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
-      <div className="bg-white rounded-none md:rounded-xl max-w-lg w-full h-full md:h-auto md:max-h-[90vh] flex flex-col">
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="flex flex-col">
         <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
           {/* Header */}
-          <div className="border-b border-gray-200 px-4 md:px-6 py-4 flex items-center justify-between">
-            <h3 className="text-lg font-bold">{DAY_FULL_LABELS[day]}</h3>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          </div>
+          <DialogHeader className="border-b border-gray-200 px-4 md:px-6 py-4">
+            <DialogTitle className="text-lg font-bold">{DAY_FULL_LABELS[day]}</DialogTitle>
+            <DialogDescription className="sr-only">Configure meals for {DAY_FULL_LABELS[day]}</DialogDescription>
+          </DialogHeader>
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -245,7 +242,7 @@ export default function DayConfigModal({
                     Got something specific in mind?
                   </label>
                   <div className="flex gap-2 mb-2">
-                    <input
+                    <Input
                       type="text"
                       value={recipeHintInputs[idx] || ""}
                       onChange={(e) =>
@@ -261,16 +258,17 @@ export default function DayConfigModal({
                           addRecipeHint(idx);
                         }
                       }}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                       placeholder="tacos, salmon's on sale; cauliflower in the fridge..."
                     />
-                    <button
+                    <Button
                       type="button"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => addRecipeHint(idx)}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-300"
+                      className="h-10"
                     >
                       Add
-                    </button>
+                    </Button>
                   </div>
                   {main.recipeHints.length > 0 && (
                     <div className="flex flex-wrap gap-2">
@@ -395,7 +393,7 @@ export default function DayConfigModal({
                   Any specific sides?
                 </label>
                 <div className="flex gap-2 mb-2">
-                  <input
+                  <Input
                     type="text"
                     value={sideHintInput}
                     onChange={(e) => setSideHintInput(e.target.value)}
@@ -405,16 +403,17 @@ export default function DayConfigModal({
                         addSideHint();
                       }
                     }}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                     placeholder="e.g., Garlic bread..."
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={addSideHint}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-300"
+                    className="h-10"
                   >
                     Add
-                  </button>
+                  </Button>
                 </div>
                 {sideHints.filter((h) => !COMMON_SIDES.includes(h)).length >
                   0 && (
@@ -466,23 +465,16 @@ export default function DayConfigModal({
           </div>
 
           {/* Footer */}
-          <div className="border-t border-gray-200 px-4 md:px-6 py-4 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
-            >
+          <DialogFooter className="border-t border-gray-200 px-4 md:px-6 py-4 flex items-center justify-end gap-3">
+            <Button type="button" variant="ghost" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
-            >
+            </Button>
+            <Button type="submit">
               Save
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

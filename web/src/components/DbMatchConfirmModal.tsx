@@ -1,5 +1,9 @@
 import type { Recipe } from "@shared/types";
 import { CUISINE_COLORS } from "./SwapMainModal";
+import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface PendingConfirmation {
   day: string;
@@ -35,8 +39,8 @@ export default function DbMatchConfirmModal({
   const { day, description, matches } = confirmation;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
-      <div className="bg-white rounded-none md:rounded-xl max-w-md w-full h-full md:h-auto md:max-h-[80vh] mx-0 md:mx-4 flex flex-col overflow-hidden">
+    <Dialog open={true} onOpenChange={() => {}}>
+      <DialogContent className="flex flex-col">
         {/* Header */}
         <div className="px-4 md:px-6 pt-6 pb-3">
           <div className="flex items-center gap-2">
@@ -82,21 +86,21 @@ export default function DbMatchConfirmModal({
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${cuisineClass}`}>
+                    <Badge variant="outline" className={cn("border-0", cuisineClass)}>
                       {recipe.cuisine.replace("_", " ")}
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                    </Badge>
+                    <Badge variant="secondary">
                       {recipe.cook_minutes} min
-                    </span>
+                    </Badge>
                     {recipe.difficulty && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                      <Badge variant="secondary">
                         {recipe.difficulty}
-                      </span>
+                      </Badge>
                     )}
                     {recipe.vegetarian && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                      <Badge variant="outline" className="bg-green-100 text-green-700 border-0">
                         Vegetarian
-                      </span>
+                      </Badge>
                     )}
                   </div>
                   {recipe.source_name && (
@@ -111,15 +115,12 @@ export default function DbMatchConfirmModal({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-4 md:px-6 py-4">
-          <button
-            onClick={onSearchWeb}
-            className="w-full px-4 py-3 md:py-2.5 text-gray-600 hover:text-gray-900 font-medium text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
+        <DialogFooter>
+          <Button variant="outline" className="w-full" onClick={onSearchWeb}>
             None of These — Search Web
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

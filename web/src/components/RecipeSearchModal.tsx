@@ -5,6 +5,11 @@ import { useState, useEffect, useRef } from "react";
 import { searchRecipesWeb, createRecipe, isAbortError } from "../api";
 import type { Recipe, WebSearchRecipeResult } from "@shared/types";
 import { CUISINE_COLORS } from "./SwapMainModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface Props {
   initialQuery?: string;
@@ -130,19 +135,11 @@ export default function RecipeSearchModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
-      <div className="bg-white rounded-none md:rounded-xl max-w-lg w-full h-full md:h-auto md:max-h-[80vh] overflow-hidden flex flex-col">
+    <Dialog open={true} onOpenChange={(open) => { if (!open) { abortRef.current?.abort(); onClose(); } }}>
+      <DialogContent className="flex flex-col">
         {/* Header */}
-        <div className="border-b border-gray-200 px-4 md:px-6 py-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-gray-900">Find a Recipe</h3>
-            <button
-              onClick={() => { abortRef.current?.abort(); onClose(); }}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          </div>
+        <DialogHeader className="border-b border-gray-200 px-4 md:px-6 py-4 space-y-1.5">
+          <DialogTitle className="text-lg font-bold text-gray-900">Find a Recipe</DialogTitle>
           {/* Context: which day and what the user asked for */}
           {(dayLabel || stepLabel) && (
             <div className="flex items-center gap-2 mt-1">
@@ -159,31 +156,30 @@ export default function RecipeSearchModal({
             </div>
           )}
           {initialQuery && (
-            <p className="text-sm text-gray-500 mt-1">
+            <DialogDescription className="text-sm text-gray-500 mt-1">
               Searching for: <span className="font-medium text-gray-700">{initialQuery}</span>
-            </p>
+            </DialogDescription>
           )}
-        </div>
+        </DialogHeader>
 
         {/* Search Input */}
         <div className="px-4 md:px-6 pt-4 pb-2">
           <div className="flex gap-2">
-            <input
+            <Input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="e.g. Ina Garten mac and cheese"
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               disabled={searching || saving}
             />
-            <button
+            <Button
               onClick={handleSearch}
               disabled={searching || saving || !query.trim()}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 text-sm whitespace-nowrap"
+              className="whitespace-nowrap"
             >
               {searching ? "Searching..." : "Search"}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -193,28 +189,29 @@ export default function RecipeSearchModal({
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-200 border-t-emerald-600 mb-3" />
               <p className="text-gray-500 text-sm">
-                🔍 Sizzling up some recipe ideas...
+                Sizzling up some recipe ideas...
               </p>
               <p className="text-gray-400 text-xs mt-1">
-                Sautéing through the web for you
+                Sauteing through the web for you
               </p>
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => {
                   abortRef.current?.abort();
                   setSearching(false);
                   setResults([]);
                 }}
-                className="mt-3 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 font-medium"
+                className="mt-3"
               >
                 Cancel Search
-              </button>
+              </Button>
             </div>
           ) : saving ? (
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-200 border-t-emerald-600 mb-3" />
               {savingPhase === "ingredients" ? (
                 <>
-                  <p className="text-gray-500 text-sm">🥕 Chopping through the ingredient list...</p>
+                  <p className="text-gray-500 text-sm">Chopping through the ingredient list...</p>
                   <p className="text-gray-400 text-xs mt-1">Prepping ingredients for your grocery lists</p>
                 </>
               ) : (
@@ -223,17 +220,18 @@ export default function RecipeSearchModal({
                   <p className="text-gray-400 text-xs mt-1">Almost plated!</p>
                 </>
               )}
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => {
                   abortRef.current?.abort();
                   if (savingTimerRef.current) clearTimeout(savingTimerRef.current);
                   setSaving(false);
                   setSavingPhase(null);
                 }}
-                className="mt-3 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 font-medium"
+                className="mt-3"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           ) : (
             <>
@@ -280,26 +278,24 @@ export default function RecipeSearchModal({
                           {result.description}
                         </p>
                         <div className="flex flex-wrap gap-2 mt-2">
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full ${cuisineClass}`}
-                          >
+                          <Badge variant="outline" className={cn("border-0", cuisineClass)}>
                             {result.cuisine.replace("_", " ")}
-                          </span>
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          </Badge>
+                          <Badge variant="secondary">
                             {result.cook_minutes} min
-                          </span>
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          </Badge>
+                          <Badge variant="secondary">
                             {result.difficulty}
-                          </span>
+                          </Badge>
                           {result.vegetarian && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                            <Badge variant="outline" className="bg-green-100 text-green-700 border-0">
                               Vegetarian
-                            </span>
+                            </Badge>
                           )}
                           {result.kid_friendly && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                            <Badge variant="outline" className="bg-blue-100 text-blue-700 border-0">
                               Kid Friendly
-                            </span>
+                            </Badge>
                           )}
                         </div>
                         <div className="mt-2 text-xs text-gray-400">
@@ -319,15 +315,16 @@ export default function RecipeSearchModal({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-4 md:px-6 py-4">
-          <button
+        <DialogFooter className="border-t border-gray-200 px-4 md:px-6 py-4">
+          <Button
+            variant="ghost"
+            className="w-full"
             onClick={() => { abortRef.current?.abort(); onClose(); }}
-            className="w-full px-4 py-2 text-gray-600 hover:text-gray-900 font-medium text-sm"
           >
             {results.length > 0 ? "Skip this recipe" : "Cancel"}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

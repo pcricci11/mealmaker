@@ -4,6 +4,10 @@
 import { useState, useEffect, useRef } from "react";
 import { getRecipes } from "../api";
 import type { Recipe, DayOfWeek } from "@shared/types";
+import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface Props {
   mealItemId: number;
@@ -91,19 +95,11 @@ export default function SwapMainModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
-      <div className="bg-white rounded-none md:rounded-xl max-w-lg w-full h-full md:h-auto md:max-h-[80vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="border-b border-gray-200 px-4 md:px-6 py-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold">Swap Main Recipe</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-            disabled={swapping}
-          >
-            ✕
-          </button>
-        </div>
+    <Dialog open={true} onOpenChange={(open) => { if (!open && !swapping) onClose(); }}>
+      <DialogContent className="flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Swap Main Recipe</DialogTitle>
+        </DialogHeader>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
@@ -135,27 +131,25 @@ export default function SwapMainModal({
                       {recipe.title}
                     </div>
                     <div className="flex flex-wrap gap-2 mt-1">
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${cuisineClass}`}
-                      >
+                      <Badge variant="outline" className={cn("border-0", cuisineClass)}>
                         {recipe.cuisine.replace("_", " ")}
-                      </span>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          recipe.vegetarian
-                            ? "bg-green-100 text-green-700"
-                            : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {recipe.vegetarian ? "Vegetarian" : recipe.protein_type}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                      </Badge>
+                      {recipe.vegetarian ? (
+                        <Badge variant="outline" className="bg-green-100 text-green-700 border-0">
+                          Vegetarian
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">
+                          {recipe.protein_type}
+                        </Badge>
+                      )}
+                      <Badge variant="secondary">
                         {recipe.cook_minutes} min
-                      </span>
+                      </Badge>
                       {recipe.difficulty && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        <Badge variant="secondary">
                           {recipe.difficulty}
-                        </span>
+                        </Badge>
                       )}
                     </div>
                   </button>
@@ -166,23 +160,24 @@ export default function SwapMainModal({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-4 md:px-6 py-4 space-y-2">
-          <button
+        <DialogFooter className="flex flex-col space-y-2 sm:flex-col sm:space-x-0 sm:space-y-2">
+          <Button
             onClick={handleRefresh}
             disabled={loading || swapping}
-            className="w-full px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
+            className="w-full"
           >
             Cook Me Up New Options
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full"
             onClick={onClose}
             disabled={swapping}
-            className="w-full px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
           >
             Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

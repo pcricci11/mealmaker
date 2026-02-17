@@ -4,6 +4,10 @@
 import { useState } from "react";
 import type { MealPlanItemV3, FamilyMemberV3, DayOfWeek } from "@shared/types";
 import SideCard from "./SideCard";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface Props {
   day: string;
@@ -66,42 +70,47 @@ export default function MealDayCard({
 
   const getMembersForMain = (main: MealPlanItemV3) => {
     if (!main.assigned_member_ids) return "Everyone";
-    
+
     const assignedMembers = members.filter((m) =>
       main.assigned_member_ids?.includes(m.id)
     );
-    
+
     return assignedMembers.map((m) => m.name).join(", ");
   };
 
   const getSidesForMain = (main: MealPlanItemV3) => {
     return sides.filter(
       (side) =>
-        side.main_number === main.main_number ||
-        (side.main_number === null && main.main_number === null)
+        side.parent_meal_item_id === main.id ||
+        (side.parent_meal_item_id === null && (
+          side.main_number === main.main_number ||
+          (side.main_number === null && main.main_number === null)
+        ))
     );
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <Card className="overflow-hidden">
       {/* Day Header */}
-      <div
-        className={`px-4 md:px-6 py-3 border-b ${
+      <CardHeader
+        className={cn(
+          "px-4 md:px-6 py-3 border-b",
           isWeekend
             ? "bg-emerald-50 border-emerald-200"
             : "bg-gray-50 border-gray-200"
-        }`}
+        )}
       >
         <h3
-          className={`font-bold ${
+          className={cn(
+            "font-bold",
             isWeekend ? "text-emerald-700" : "text-gray-900"
-          }`}
+          )}
         >
           {DAY_LABELS[day]}
         </h3>
-      </div>
+      </CardHeader>
 
-      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+      <CardContent className="p-4 md:p-6 space-y-4 md:space-y-6">
         {/* Mains */}
         {mains.map((main) => {
           const cuisineClass =
@@ -116,7 +125,10 @@ export default function MealDayCard({
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
                     <div
-                      className={`font-semibold text-lg text-gray-900${onMealClick ? " cursor-pointer hover:text-emerald-600 transition-colors" : ""}`}
+                      className={cn(
+                        "font-semibold text-lg text-gray-900",
+                        onMealClick && "cursor-pointer hover:text-emerald-600 transition-colors"
+                      )}
                       onClick={onMealClick ? () => onMealClick(main) : undefined}
                     >
                       {main.recipe_name || "Unknown Recipe"}
@@ -175,25 +187,25 @@ export default function MealDayCard({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <span className={`text-xs px-2 py-1 rounded-full ${cuisineClass}`}>
+                  <Badge variant="outline" className={cn("border-0", cuisineClass)}>
                     {main.recipe?.cuisine.replace("_", " ")}
-                  </span>
-                  <span
-                    className={`text-xs px-2 py-1 rounded-full ${
-                      main.recipe?.vegetarian
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-600"
-                    }`}
-                  >
-                    {main.recipe?.vegetarian ? "Vegetarian" : main.recipe?.protein_type}
-                  </span>
-                  <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                  </Badge>
+                  {main.recipe?.vegetarian ? (
+                    <Badge variant="outline" className="bg-green-100 text-green-700 border-0">
+                      Vegetarian
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">
+                      {main.recipe?.protein_type}
+                    </Badge>
+                  )}
+                  <Badge variant="secondary">
                     {main.recipe?.cook_minutes} min
-                  </span>
+                  </Badge>
                   {main.recipe?.difficulty && (
-                    <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                    <Badge variant="secondary">
                       {main.recipe.difficulty}
-                    </span>
+                    </Badge>
                   )}
                 </div>
               </div>
@@ -219,12 +231,13 @@ export default function MealDayCard({
 
               {/* Add Side Button */}
               <div className="pl-4">
-                <button
+                <Button
+                  variant="link"
                   onClick={() => onAddSide(main.id)}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  className="h-auto p-0 text-sm text-blue-600 hover:text-blue-700"
                 >
                   + Add Another Side
-                </button>
+                </Button>
               </div>
             </div>
           );
@@ -232,12 +245,13 @@ export default function MealDayCard({
 
         {/* Add Another Main */}
         {onAddMain && (
-          <button
+          <Button
+            variant="link"
             onClick={() => onAddMain(day)}
-            className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+            className="h-auto p-0 text-sm"
           >
             + Add Another Main
-          </button>
+          </Button>
         )}
 
         {/* Lunches */}
@@ -256,9 +270,9 @@ export default function MealDayCard({
                     {lunch.recipe_name || "Lunch"}
                   </span>
                   {lunch.notes && lunch.notes.includes("Leftovers") && (
-                    <span className="text-xs px-2 py-0.5 bg-amber-200 text-amber-800 rounded">
+                    <Badge variant="secondary" className="bg-amber-200 text-amber-800">
                       Leftovers
-                    </span>
+                    </Badge>
                   )}
                   {lunch.assigned_member_ids && (
                     <span className="text-xs text-gray-600">
@@ -275,7 +289,7 @@ export default function MealDayCard({
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

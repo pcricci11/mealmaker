@@ -4,10 +4,15 @@
 import { useState, useEffect } from "react";
 import { getSidesLibrary, getFavoriteSides } from "../api";
 import type { FamilyFavoriteSide } from "@shared/types";
+import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 interface Props {
   mainMealItemId: number;
-  onAdd: (sideId?: number, customName?: string) => void;
+  onAdd: (sideId?: number, customName?: string) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -63,13 +68,15 @@ export default function AddSideModal({
     }
   };
 
+  const [adding, setAdding] = useState(false);
+
   const handleAddFromLibrary = async (sideId: number) => {
-    console.log('Attempting to add side:', sideId, undefined);
+    setAdding(true);
     try {
       await onAdd(sideId, undefined);
-      console.log('Add successful!');
     } catch (error) {
       console.error('Add failed:', error);
+      setAdding(false);
     }
   };
 
@@ -78,58 +85,54 @@ export default function AddSideModal({
       alert("Please enter a side name");
       return;
     }
-    console.log('Attempting to add side:', undefined, customName.trim());
+    setAdding(true);
     try {
       await onAdd(undefined, customName.trim());
-      console.log('Add successful!');
     } catch (error) {
       console.error('Add failed:', error);
+      setAdding(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
-      <div className="bg-white rounded-none md:rounded-xl max-w-lg w-full h-full md:h-auto md:max-h-[80vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="border-b border-gray-200 px-4 md:px-6 py-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold">Add Side</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            ✕
-          </button>
-        </div>
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Add Side</DialogTitle>
+        </DialogHeader>
 
         {/* Mode Selector */}
         <div className="border-b border-gray-200 px-4 md:px-6 py-3 flex gap-2">
           <button
             onClick={() => setMode("library")}
-            className={`px-3 py-1 rounded-lg text-sm font-medium ${
+            className={cn(
+              "px-3 py-1 rounded-lg text-sm font-medium",
               mode === "library"
                 ? "bg-emerald-100 text-emerald-700"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+            )}
           >
             From Library
           </button>
           <button
             onClick={() => setMode("favorites")}
-            className={`px-3 py-1 rounded-lg text-sm font-medium ${
+            className={cn(
+              "px-3 py-1 rounded-lg text-sm font-medium",
               mode === "favorites"
                 ? "bg-emerald-100 text-emerald-700"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+            )}
           >
             My Favorites
           </button>
           <button
             onClick={() => setMode("custom")}
-            className={`px-3 py-1 rounded-lg text-sm font-medium ${
+            className={cn(
+              "px-3 py-1 rounded-lg text-sm font-medium",
               mode === "custom"
                 ? "bg-emerald-100 text-emerald-700"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+            )}
           >
             Custom
           </button>
@@ -146,17 +149,18 @@ export default function AddSideModal({
                   {librarySides.map((side) => (
                     <button
                       key={side.id}
+                      disabled={adding}
                       onClick={() => handleAddFromLibrary(side.id)}
-                      className="w-full border border-gray-200 rounded-lg p-3 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left"
+                      className="w-full border border-gray-200 rounded-lg p-3 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left disabled:opacity-50"
                     >
                       <div className="font-medium text-gray-900">{side.name}</div>
-                      <div className="flex gap-2 mt-1 text-xs text-gray-600">
-                        <span className="px-2 py-0.5 bg-gray-100 rounded capitalize">
+                      <div className="flex gap-2 mt-1">
+                        <Badge variant="secondary" className="capitalize">
                           {side.category}
-                        </span>
-                        <span className="px-2 py-0.5 bg-gray-100 rounded capitalize">
+                        </Badge>
+                        <Badge variant="secondary" className="capitalize">
                           {side.weight}
-                        </span>
+                        </Badge>
                       </div>
                     </button>
                   ))}
@@ -178,8 +182,9 @@ export default function AddSideModal({
                   {favoriteSides.map((side) => (
                     <button
                       key={side.id}
+                      disabled={adding}
                       onClick={() => handleAddFromLibrary(side.id)}
-                      className="w-full border border-gray-200 rounded-lg p-3 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left"
+                      className="w-full border border-gray-200 rounded-lg p-3 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left disabled:opacity-50"
                     >
                       <div className="font-medium text-gray-900">{side.name}</div>
                       {side.category && (
@@ -199,34 +204,31 @@ export default function AddSideModal({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Enter side name
               </label>
-              <input
+              <Input
                 type="text"
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 placeholder="e.g., Roasted Vegetables"
                 autoFocus
               />
-              <button
+              <Button
                 onClick={handleAddCustom}
-                className="w-full mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700"
+                disabled={adding}
+                className="w-full mt-4"
               >
-                Add Custom Side
-              </button>
+                {adding ? "Adding..." : "Add Custom Side"}
+              </Button>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-4 md:px-6 py-4">
-          <button
-            onClick={onClose}
-            className="w-full px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
-          >
+        <DialogFooter>
+          <Button variant="ghost" className="w-full" onClick={onClose}>
             Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
