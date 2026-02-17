@@ -374,6 +374,18 @@ router.get("/:id/grocery-list", async (req: Request, res: Response) => {
       }
     }
 
+    // ── Apply serving multiplier to recipe ingredients ──
+    const familyRow = db.prepare(
+      "SELECT serving_multiplier FROM families WHERE id = ?",
+    ).get(plan.family_id) as { serving_multiplier: number } | undefined;
+    const multiplier = familyRow?.serving_multiplier ?? 1.0;
+
+    if (multiplier !== 1.0) {
+      for (const entry of consolidated.values()) {
+        entry.total_quantity *= multiplier;
+      }
+    }
+
     // ── Side ingredient handling ──
     // Find sides in this meal plan (meal_type = 'side', recipe_id IS NULL)
     const sideItems = db.prepare(`
@@ -383,14 +395,10 @@ router.get("/:id/grocery-list", async (req: Request, res: Response) => {
     `).all(req.params.id) as Array<{ id: number; notes: string | null }>;
 
     if (sideItems.length > 0) {
-      // Get family member count and serving multiplier for scaled serving size
+      // Get family member count for scaled serving size (multiplier already fetched above)
       const memberCount = (db.prepare(
         "SELECT COUNT(*) as c FROM family_members WHERE family_id = ?",
       ).get(plan.family_id) as { c: number }).c;
-      const familyRow = db.prepare(
-        "SELECT serving_multiplier FROM families WHERE id = ?",
-      ).get(plan.family_id) as { serving_multiplier: number } | undefined;
-      const multiplier = familyRow?.serving_multiplier ?? 1.0;
       const servings = Math.max(Math.round(memberCount * multiplier), 2); // minimum 2 servings
 
       const insertSideIngredient = db.prepare(`

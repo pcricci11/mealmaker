@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 
 const SERVING_OPTIONS: { value: number; label: string; desc: string }[] = [
+  { value: 0.5, label: "0.5x", desc: "Small" },
   { value: 1.0, label: "1x", desc: "Standard" },
   { value: 1.5, label: "1.5x", desc: "Hearty" },
   { value: 2.0, label: "2x", desc: "Extra Large" },
@@ -49,11 +50,8 @@ export default function MyFamily() {
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<FamilyMember | null>(null);
 
-  // Preferences (local state, saved on slider release)
+  // Portion sizing
   const [servingMultiplier, setServingMultiplier] = useState<number>(1.0);
-  const [maxCookWeekday, setMaxCookWeekday] = useState(45);
-  const [maxCookWeekend, setMaxCookWeekend] = useState(90);
-  const [vegRatio, setVegRatio] = useState(0);
 
   // Chef input
   const [newChefName, setNewChefName] = useState("");
@@ -80,9 +78,6 @@ export default function MyFamily() {
         setFamily(f);
         setNameDraft(f.name);
         setServingMultiplier(f.serving_multiplier ?? 1.0);
-        setMaxCookWeekday(f.max_cook_minutes_weekday);
-        setMaxCookWeekend(f.max_cook_minutes_weekend);
-        setVegRatio(f.vegetarian_ratio);
 
         const [membersData, chefsData, websitesData] = await Promise.all([
           getMembers(f.id),
@@ -373,130 +368,35 @@ export default function MyFamily() {
       </Card>
 
       {/* ────────────────────────────────────── */}
-      {/* SECTION 2: PREFERENCES                 */}
+      {/* SECTION 2: PORTION SIZING              */}
       {/* ────────────────────────────────────── */}
       <Card className="overflow-hidden">
         <div className="px-4 md:px-6 py-4 bg-gray-50 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900">Preferences</h2>
+          <h2 className="text-lg font-bold text-gray-900">Portion Sizing</h2>
         </div>
 
-        <div className="p-4 md:p-6 space-y-8">
-          {/* Serving Multiplier */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Serving Size
-            </label>
-            <div className="flex gap-2">
-              {SERVING_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => {
-                    setServingMultiplier(opt.value);
-                    savePreference({ serving_multiplier: opt.value });
-                  }}
-                  className={`flex-1 px-4 py-3 rounded-lg border-2 text-center transition-colors ${
-                    servingMultiplier === opt.value
-                      ? "border-orange-500 bg-orange-50 text-orange-600 font-semibold"
-                      : "border-gray-200 text-gray-600 hover:border-gray-300"
-                  }`}
-                >
-                  <div className="text-lg font-bold">{opt.label}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">{opt.desc}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Max Cook Time — Weekday */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700">
-                Max Cook Time (Weekday)
-              </label>
-              <span className="text-sm font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
-                {maxCookWeekday} min
-              </span>
-            </div>
-            <input
-              type="range"
-              min={15}
-              max={120}
-              step={5}
-              value={maxCookWeekday}
-              onChange={(e) => setMaxCookWeekday(Number(e.target.value))}
-              onMouseUp={() =>
-                savePreference({ max_cook_minutes_weekday: maxCookWeekday })
-              }
-              onTouchEnd={() =>
-                savePreference({ max_cook_minutes_weekday: maxCookWeekday })
-              }
-              className="w-full accent-orange-500"
-            />
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>15 min</span>
-              <span>1 hr</span>
-              <span>2 hrs</span>
-            </div>
-          </div>
-
-          {/* Max Cook Time — Weekend */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700">
-                Max Cook Time (Weekend)
-              </label>
-              <span className="text-sm font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
-                {maxCookWeekend} min
-              </span>
-            </div>
-            <input
-              type="range"
-              min={15}
-              max={180}
-              step={5}
-              value={maxCookWeekend}
-              onChange={(e) => setMaxCookWeekend(Number(e.target.value))}
-              onMouseUp={() =>
-                savePreference({ max_cook_minutes_weekend: maxCookWeekend })
-              }
-              onTouchEnd={() =>
-                savePreference({ max_cook_minutes_weekend: maxCookWeekend })
-              }
-              className="w-full accent-orange-500"
-            />
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>15 min</span>
-              <span>1.5 hrs</span>
-              <span>3 hrs</span>
-            </div>
-          </div>
-
-          {/* Vegetarian Ratio */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700">
-                Vegetarian Meals
-              </label>
-              <span className="text-sm font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
-                {vegRatio}%
-              </span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={10}
-              value={vegRatio}
-              onChange={(e) => setVegRatio(Number(e.target.value))}
-              onMouseUp={() => savePreference({ vegetarian_ratio: vegRatio })}
-              onTouchEnd={() => savePreference({ vegetarian_ratio: vegRatio })}
-              className="w-full accent-orange-500"
-            />
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>All Meat</span>
-              <span>Mixed</span>
-              <span>All Vegetarian</span>
-            </div>
+        <div className="p-4 md:p-6 space-y-4">
+          <p className="text-sm text-gray-500">
+            Per person, does your family tend to eat more, less, or the same as the average person? This will auto-adjust your grocery list amounts when shopping.
+          </p>
+          <div className="flex gap-2">
+            {SERVING_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => {
+                  setServingMultiplier(opt.value);
+                  savePreference({ serving_multiplier: opt.value });
+                }}
+                className={`flex-1 px-4 py-3 rounded-lg border-2 text-center transition-colors ${
+                  servingMultiplier === opt.value
+                    ? "border-orange-500 bg-orange-50 text-orange-600 font-semibold"
+                    : "border-gray-200 text-gray-600 hover:border-gray-300"
+                }`}
+              >
+                <div className="text-lg font-bold">{opt.label}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{opt.desc}</div>
+              </button>
+            ))}
           </div>
         </div>
       </Card>
