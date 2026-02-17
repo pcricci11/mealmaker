@@ -1,4 +1,10 @@
 import { Outlet, NavLink, Link } from "react-router-dom";
+import {
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  UserButton,
+} from "@clerk/clerk-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -12,7 +18,7 @@ export default function App() {
             <span className="block text-xl md:text-2xl font-extrabold text-orange-600">Yes Chef</span>
             <span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-500">Meal Planner</span>
           </Link>
-          <nav className="flex gap-1.5 md:gap-2 overflow-x-auto md:overflow-x-visible -mx-4 px-4 md:mx-0 md:px-0 hide-scrollbar">
+          <nav className="flex gap-1.5 md:gap-2 overflow-x-auto md:overflow-x-visible -mx-4 px-4 md:mx-0 md:px-0 hide-scrollbar flex-1">
             <NavLink
               to="/my-plan"
               className={({ isActive }) =>
@@ -62,6 +68,29 @@ export default function App() {
               My Family
             </NavLink>
           </nav>
+          <div className="flex items-center">
+            <SignedOut>
+              <SignInButton mode="modal">
+                <button
+                  className={cn(
+                    buttonVariants({ variant: "default", size: "sm" }),
+                    "bg-orange-600 hover:bg-orange-700 whitespace-nowrap"
+                  )}
+                >
+                  Sign in
+                </button>
+              </SignInButton>
+            </SignedOut>
+            <SignedIn>
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "h-8 w-8",
+                  },
+                }}
+              />
+            </SignedIn>
+          </div>
         </div>
         <Separator />
       </header>
