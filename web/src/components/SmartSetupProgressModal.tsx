@@ -11,8 +11,10 @@ export interface SmartSetupProgress {
 
 export default function SmartSetupProgressModal({
   progress,
+  onCancel,
 }: {
   progress: SmartSetupProgress;
+  onCancel?: () => void;
 }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-0 md:p-4 z-50">
@@ -65,6 +67,17 @@ export default function SmartSetupProgressModal({
                   ))}
                 </ul>
               )}
+
+            {onCancel && (
+              <div className="flex justify-center pt-2">
+                <button
+                  onClick={onCancel}
+                  className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

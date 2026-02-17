@@ -2,7 +2,7 @@
 // Modal for searching and importing recipes from the web via Claude
 
 import { useState, useEffect, useRef } from "react";
-import { searchRecipesWeb, createRecipe } from "../api";
+import { searchRecipesWeb, createRecipe, isAbortError } from "../api";
 import type { Recipe, WebSearchRecipeResult } from "@shared/types";
 import { CUISINE_COLORS } from "./SwapMainModal";
 
@@ -32,6 +32,14 @@ export default function RecipeSearchModal({
   const [error, setError] = useState<string | null>(null);
   const didAutoSearch = useRef(hasPrefetched);
   const savingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Abort on unmount
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   // Only auto-search when there are no prefetched results
   useEffect(() => {
@@ -46,17 +54,22 @@ export default function RecipeSearchModal({
     const trimmed = query.trim();
     if (!trimmed) return;
 
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setSearching(true);
     setError(null);
     setResults([]);
 
     try {
-      const data = await searchRecipesWeb(trimmed);
+      const data = await searchRecipesWeb(trimmed, controller.signal);
       setResults(data);
       if (data.length === 0) {
         setError("No recipes found. Try a different search.");
       }
     } catch (err: any) {
+      if (isAbortError(err)) return;
       setError(err.message || "Search failed. Please try again.");
     } finally {
       setSearching(false);
@@ -65,6 +78,9 @@ export default function RecipeSearchModal({
 
   const handleSelect = async (result: WebSearchRecipeResult) => {
     console.log("[RecipeSearchModal] handleSelect clicked", { name: result.name, cuisine: result.cuisine });
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setSaving(true);
     setSavingPhase("adding");
     setError(null);
@@ -93,11 +109,12 @@ export default function RecipeSearchModal({
         difficulty: result.difficulty,
         seasonal_tags: [],
         frequency_cap_per_month: null,
-      });
+      }, controller.signal);
       console.log("[RecipeSearchModal] recipe saved to DB", { id: saved.id, title: saved.title });
       if (savingTimerRef.current) clearTimeout(savingTimerRef.current);
       onRecipeSelected(saved);
     } catch (err: any) {
+      if (isAbortError(err)) return;
       console.error("[RecipeSearchModal] createRecipe failed", err);
       if (savingTimerRef.current) clearTimeout(savingTimerRef.current);
       setError(err.message || "Failed to save recipe.");
@@ -120,9 +137,8 @@ export default function RecipeSearchModal({
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-gray-900">Find a Recipe</h3>
             <button
-              onClick={onClose}
+              onClick={() => { abortRef.current?.abort(); onClose(); }}
               className="text-gray-400 hover:text-gray-600"
-              disabled={saving}
             >
               ✕
             </button>
@@ -182,6 +198,16 @@ export default function RecipeSearchModal({
               <p className="text-gray-400 text-xs mt-1">
                 Sautéing through the web for you
               </p>
+              <button
+                onClick={() => {
+                  abortRef.current?.abort();
+                  setSearching(false);
+                  setResults([]);
+                }}
+                className="mt-3 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 font-medium"
+              >
+                Cancel Search
+              </button>
             </div>
           ) : saving ? (
             <div className="text-center py-12">
@@ -197,6 +223,17 @@ export default function RecipeSearchModal({
                   <p className="text-gray-400 text-xs mt-1">Almost plated!</p>
                 </>
               )}
+              <button
+                onClick={() => {
+                  abortRef.current?.abort();
+                  if (savingTimerRef.current) clearTimeout(savingTimerRef.current);
+                  setSaving(false);
+                  setSavingPhase(null);
+                }}
+                className="mt-3 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 font-medium"
+              >
+                Cancel
+              </button>
             </div>
           ) : (
             <>
@@ -284,8 +321,7 @@ export default function RecipeSearchModal({
         {/* Footer */}
         <div className="border-t border-gray-200 px-4 md:px-6 py-4">
           <button
-            onClick={onClose}
-            disabled={saving}
+            onClick={() => { abortRef.current?.abort(); onClose(); }}
             className="w-full px-4 py-2 text-gray-600 hover:text-gray-900 font-medium text-sm"
           >
             {results.length > 0 ? "Skip this recipe" : "Cancel"}

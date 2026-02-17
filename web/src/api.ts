@@ -4,7 +4,7 @@ import type {
   FamilyFavoriteChef, FamilyFavoriteMeal, FamilyFavoriteSide, FamilyFavoriteWebsite,
   WeeklyCookingSchedule, WeeklyLunchNeed, GeneratePlanRequestV3,
   Recipe, RecipeInput, Ingredient, MealPlan, GroceryList, DayOfWeek,
-  GeneratePlanResponse, ServingMultiplier, WebSearchRecipeResult,
+  GeneratePlanResponse, WebSearchRecipeResult,
 } from "@shared/types";
 
 const BASE = "http://localhost:3001/api";
@@ -36,7 +36,7 @@ export async function createFamily(data: FamilyInput): Promise<Family> {
   );
 }
 
-export async function updateFamily(id: number, data: Partial<FamilyInput> & { serving_multiplier?: ServingMultiplier }): Promise<Family> {
+export async function updateFamily(id: number, data: Partial<FamilyInput> & { serving_multiplier?: number }): Promise<Family> {
   return json(
     await fetch(`${BASE}/families/${id}`, {
       method: "PUT",
@@ -132,12 +132,13 @@ export async function deleteRecipe(id: number): Promise<void> {
   }
 }
 
-export async function createRecipe(data: RecipeInput): Promise<Recipe> {
+export async function createRecipe(data: RecipeInput, signal?: AbortSignal): Promise<Recipe> {
   return json(
     await fetch(`${BASE}/recipes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
+      signal,
     }),
   );
 }
@@ -152,36 +153,40 @@ export async function importRecipeFromUrl(url: string): Promise<{ recipe: Recipe
   );
 }
 
-export async function matchRecipeInDb(query: string): Promise<{ matches: Array<{ recipe: Recipe; score: number }> }> {
+export async function matchRecipeInDb(query: string, signal?: AbortSignal): Promise<{ matches: Array<{ recipe: Recipe; score: number }> }> {
   const data = await json<{ matches: Array<{ recipe: Recipe; score: number }> }>(
     await fetch(`${BASE}/recipes/match`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query }),
+      signal,
     }),
   );
   return data;
 }
 
-export async function searchRecipesWeb(query: string): Promise<WebSearchRecipeResult[]> {
+export async function searchRecipesWeb(query: string, signal?: AbortSignal): Promise<WebSearchRecipeResult[]> {
   const data = await json<{ results: WebSearchRecipeResult[] }>(
     await fetch(`${BASE}/recipes/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query }),
+      signal,
     }),
   );
   return data.results;
 }
 
 export async function batchSearchRecipesWeb(
-  queries: string[]
+  queries: string[],
+  signal?: AbortSignal,
 ): Promise<Record<string, WebSearchRecipeResult[]>> {
   const data = await json<{ results: Record<string, WebSearchRecipeResult[]> }>(
     await fetch(`${BASE}/recipes/batch-search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ queries }),
+      signal,
     }),
   );
   return data.results;
@@ -227,7 +232,7 @@ export async function swapMainRecipe(mealItemId: number, newRecipeId: number): P
 }
 
 // ── Smart Setup ──
-export async function smartSetup(familyId: number, text: string): Promise<{
+export async function smartSetup(familyId: number, text: string, signal?: AbortSignal): Promise<{
   cooking_days: Record<string, { is_cooking: boolean; meal_mode: string }>;
   lunch_needs: Record<number, string[]>;
   preferences: {
@@ -242,6 +247,7 @@ export async function smartSetup(familyId: number, text: string): Promise<{
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ family_id: familyId, text }),
+      signal,
     }),
   );
 }
@@ -471,12 +477,13 @@ export async function lockMealPlan(request: {
   family_id: number;
   week_start: string;
   items: Array<{ day: string; recipe_id: number }>;
-}): Promise<MealPlan> {
+}, signal?: AbortSignal): Promise<MealPlan> {
   return json(
     await fetch(`${BASE}/meal-plans/lock`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(request),
+      signal,
     }),
   );
 }
@@ -530,4 +537,9 @@ export async function generateFromConversation(text: string): Promise<Conversati
       body: JSON.stringify({ text }),
     }),
   );
+}
+
+// ── Helpers ──
+export function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
 }

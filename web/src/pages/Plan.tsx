@@ -18,6 +18,7 @@ import {
   addMealToDay,
   matchRecipeInDb,
   batchSearchRecipesWeb,
+  isAbortError,
 } from "../api";
 import MealDetailModal from "../components/MealDetailModal";
 import ConversationalPlanner from "../components/ConversationalPlanner";
@@ -106,6 +107,15 @@ export default function Plan() {
   // Stored across the search flow for plan generation
   const [cookingSchedule, setCookingSchedule] = useState<any[]>([]);
 
+  // Cancellation support
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const lockTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
   // Load family/members on mount; load saved plan only on /my-plan
   useEffect(() => {
     const loadFamilyData = async () => {
@@ -122,29 +132,23 @@ export default function Plan() {
     };
     loadFamilyData();
 
-    // On /my-plan, load saved plan from query param or localStorage
-    if (isMyPlan) {
-      const paramId = searchParams.get("id");
-      const planIdToLoad = paramId || localStorage.getItem("currentPlanId");
-      if (planIdToLoad) {
-        setLoading(true);
-        getMealPlan(Number(planIdToLoad))
-          .then((result) => {
-            setPlan(result);
-            localStorage.setItem("currentPlanId", String(result.id));
-            if (paramId) {
-              setSearchParams({}, { replace: true });
-            }
-          })
-          .catch(() => {
-            localStorage.removeItem("currentPlanId");
-            navigate("/plan", { replace: true });
-          })
-          .finally(() => setLoading(false));
-      } else {
-        // No plan to show — redirect to planning page
-        navigate("/plan", { replace: true });
-      }
+    // Load saved plan from query param or localStorage (both /plan and /my-plan)
+    const paramId = searchParams.get("id");
+    const planIdToLoad = paramId || localStorage.getItem("currentPlanId");
+    if (planIdToLoad) {
+      setLoading(true);
+      getMealPlan(Number(planIdToLoad))
+        .then((result) => {
+          setPlan(result);
+          localStorage.setItem("currentPlanId", String(result.id));
+          if (paramId) {
+            setSearchParams({}, { replace: true });
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem("currentPlanId");
+        })
+        .finally(() => setLoading(false));
     }
 
     // On /plan, check for draft recipes passed via navigation state (from Edit Week)
@@ -202,8 +206,29 @@ export default function Plan() {
     }
   };
 
+  const handleCancelSetup = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setSetupProgress(null);
+    setPendingSearchMeals([]);
+    setCurrentSearchIndex(0);
+    setPendingConfirmations([]);
+    setCurrentConfirmIndex(0);
+    setResolvedSpecificMeals([]);
+    setBatchedSearchResults({});
+    pendingWebSearchRef.current = [];
+    shouldAutoGenerate.current = false;
+    showToast("Search cancelled");
+  };
+
   const handleSmartSetup = async (text: string) => {
     console.log("[Plan] handleSmartSetup called", { text });
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const signal = controller.signal;
+
     setSetupProgress({ phase: "parsing", message: "Prepping your week's menu...", searchQueries: [] });
     setError(null);
     setPendingSearchMeals([]);
@@ -217,7 +242,7 @@ export default function Plan() {
       if (!familyId) throw new Error("No family found. Please create a family first.");
 
       const weekStart = getWeekStart();
-      const result = await smartSetup(familyId, text);
+      const result = await smartSetup(familyId, text, signal);
       console.log("[Plan] smartSetup result", result);
 
       // Build cooking schedule from smart setup result
@@ -245,7 +270,8 @@ export default function Plan() {
 
         // Fuzzy-match each specific meal against the database (top 3, >40%)
         for (const meal of result.specific_meals) {
-          const { matches } = await matchRecipeInDb(meal.description);
+          if (signal.aborted) return;
+          const { matches } = await matchRecipeInDb(meal.description, signal);
           if (matches.length > 0) {
             console.log("[Plan] DB matches found", { description: meal.description, count: matches.length, top: matches[0].recipe.title, topScore: matches[0].score });
             needsConfirmation.push({ day: meal.day, description: meal.description, matches });
@@ -274,7 +300,7 @@ export default function Plan() {
         }
 
         // No confirmations needed — proceed directly to web search or finish
-        await proceedToWebSearch(unmatched, autoResolved, fetchedRecipes);
+        await proceedToWebSearch(unmatched, autoResolved, fetchedRecipes, signal);
       } else {
         // No specific meals — just store cooking schedule, user fills manually
         setSetupProgress({ phase: "done", message: "Kitchen's ready! Time to pick your meals 🍽️", searchQueries: [] });
@@ -283,6 +309,7 @@ export default function Plan() {
         return;
       }
     } catch (err: any) {
+      if (isAbortError(err)) return;
       console.error("[Plan] handleSmartSetup error", err);
       setError(err.message || "Smart setup failed. Please try again.");
     } finally {
@@ -294,6 +321,7 @@ export default function Plan() {
     unmatched: Array<{ day: string; description: string }>,
     resolved: Array<{ day: string; recipe_id: number }>,
     fetchedRecipes: Recipe[],
+    signal?: AbortSignal,
   ) => {
     if (unmatched.length > 0) {
       const searchQueries = unmatched.map((m) => ({
@@ -309,7 +337,8 @@ export default function Plan() {
       let batchResults: Record<string, WebSearchRecipeResult[]> = {};
       try {
         batchResults = await batchSearchRecipesWeb(
-          unmatched.map((m) => m.description)
+          unmatched.map((m) => m.description),
+          signal,
         );
         console.log("[Plan] batch search results", batchResults);
         setBatchedSearchResults(batchResults);
@@ -441,6 +470,9 @@ export default function Plan() {
   };
 
   const handleLockPlan = async () => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     setLockProgress("📝 Reading ingredients for your grocery lists!");
     setError(null);
@@ -458,15 +490,16 @@ export default function Plan() {
       // Timed progress messages
       const progressTimer1 = setTimeout(() => setLockProgress("Mixing together your shopping list..."), 4000);
       const progressTimer2 = setTimeout(() => setLockProgress("Almost done — just seasoning the details..."), 8000);
+      lockTimersRef.current = [progressTimer1, progressTimer2];
 
       const result = await lockMealPlan({
         family_id: fam.id,
         week_start: weekStart,
         items,
-      });
+      }, controller.signal);
 
-      clearTimeout(progressTimer1);
-      clearTimeout(progressTimer2);
+      lockTimersRef.current.forEach(clearTimeout);
+      lockTimersRef.current = [];
       setLockProgress("✅ Your plan is ready!");
       await new Promise((r) => setTimeout(r, 800));
 
@@ -477,10 +510,14 @@ export default function Plan() {
       localStorage.setItem("lastMealPlanId", String(result.id));
       navigate("/my-plan");
     } catch (err: any) {
+      if (isAbortError(err)) return;
       setError(err.message || "Failed to lock plan");
     } finally {
+      lockTimersRef.current.forEach(clearTimeout);
+      lockTimersRef.current = [];
       setLoading(false);
       setLockProgress(null);
+      abortControllerRef.current = null;
     }
   };
 
@@ -497,6 +534,18 @@ export default function Plan() {
     // entries may have multiple [day, recipe] pairs for the same day — that's fine,
     // the navigation state restore groups them into arrays
     navigate("/plan", { state: { draftRecipes: entries } });
+  };
+
+  const handleStartFresh = () => {
+    localStorage.removeItem("currentPlanId");
+    localStorage.removeItem("lastPlanId");
+    localStorage.removeItem("lastMealPlanId");
+    setPlan(null);
+    setDraftRecipes(new Map());
+    setError(null);
+    if (isMyPlan) {
+      navigate("/plan", { replace: true });
+    }
   };
 
   const handleLove = async (itemId: number) => {
@@ -624,6 +673,26 @@ export default function Plan() {
           <p className="text-center text-sm text-gray-400">
             {lockProgress || "Roasting up your personalized meal plan..."}
           </p>
+          {lockProgress && (
+            <div className="flex justify-center">
+              <button
+                onClick={() => {
+                  if (abortControllerRef.current) {
+                    abortControllerRef.current.abort();
+                    abortControllerRef.current = null;
+                  }
+                  lockTimersRef.current.forEach(clearTimeout);
+                  lockTimersRef.current = [];
+                  setLoading(false);
+                  setLockProgress(null);
+                  showToast("Plan creation cancelled");
+                }}
+                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -728,6 +797,12 @@ export default function Plan() {
               <p className="text-xs text-gray-400">
                 {Array.from(draftRecipes.values()).reduce((sum, arr) => sum + arr.length, 0)} recipe{Array.from(draftRecipes.values()).reduce((sum, arr) => sum + arr.length, 0) !== 1 ? "s" : ""} assigned — remaining days will be auto-filled
               </p>
+              <button
+                onClick={handleStartFresh}
+                className="text-xs text-gray-400 hover:text-red-500 mt-1"
+              >
+                Start over
+              </button>
             </div>
           ) : (
             <p className="text-center text-sm text-gray-400">
@@ -741,16 +816,13 @@ export default function Plan() {
       {plan && !loading && dayData && (
         <div className="space-y-4">
           <div className="flex flex-col md:flex-row md:items-center gap-2 md:justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Locked</span>
-              <h2 className="text-xl md:text-2xl font-bold text-gray-900">Your Meal Plan</h2>
-            </div>
+            <h2 className="text-xl md:text-2xl font-bold text-gray-900">Meal Plan</h2>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => { setPlan(null); navigate("/plan"); }}
-                className="text-sm font-medium text-gray-500 hover:text-gray-700 py-2"
+                onClick={handleStartFresh}
+                className="text-sm font-medium text-gray-400 hover:text-red-500 py-2"
               >
-                ← Home
+                Start over
               </button>
               <button
                 onClick={handleEditWeek}
@@ -809,7 +881,7 @@ export default function Plan() {
       )}
 
       {/* Smart Setup Progress Modal */}
-      {setupProgress && <SmartSetupProgressModal progress={setupProgress} />}
+      {setupProgress && <SmartSetupProgressModal progress={setupProgress} onCancel={handleCancelSetup} />}
 
       {/* DB Match Confirmation Modal */}
       {pendingConfirmations.length > 0 && currentConfirmIndex < pendingConfirmations.length && (
@@ -985,6 +1057,13 @@ export default function Plan() {
           onSelect={handleRecipesSelected}
           onClose={() => setShowBuildFromRecipes(false)}
         />
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg animate-fade-in">
+          {toast}
+        </div>
       )}
     </div>
   );
