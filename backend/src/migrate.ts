@@ -2,8 +2,21 @@ import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
 
-const DB_PATH = path.join(__dirname, "..", "mealmaker.db");
-const MIGRATIONS_DIR = path.join(__dirname, "..", "migrations");
+// Resolve the backend project root (where package.json lives) by walking up from __dirname.
+// Compiled output lands at dist/backend/src/, so __dirname varies between dev and prod.
+function findBackendRoot(): string {
+  let dir = __dirname;
+  while (!fs.existsSync(path.join(dir, "package.json"))) {
+    const parent = path.dirname(dir);
+    if (parent === dir) throw new Error("Could not find backend root (package.json)");
+    dir = parent;
+  }
+  return dir;
+}
+
+const BACKEND_ROOT = findBackendRoot();
+const DB_PATH = path.join(BACKEND_ROOT, "mealmaker.db");
+const MIGRATIONS_DIR = path.join(BACKEND_ROOT, "migrations");
 
 export function runMigrations(db: Database.Database): void {
   db.exec(`

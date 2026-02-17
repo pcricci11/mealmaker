@@ -1,8 +1,19 @@
 import Database from "better-sqlite3";
+import fs from "fs";
 import path from "path";
 import { runMigrations, runBackfills } from "./migrate";
 
-const DB_PATH = path.join(__dirname, "..", "mealmaker.db");
+function findBackendRoot(): string {
+  let dir = __dirname;
+  while (!fs.existsSync(path.join(dir, "package.json"))) {
+    const parent = path.dirname(dir);
+    if (parent === dir) throw new Error("Could not find backend root (package.json)");
+    dir = parent;
+  }
+  return dir;
+}
+
+const DB_PATH = path.join(findBackendRoot(), "mealmaker.db");
 
 const db = new Database(DB_PATH);
 
