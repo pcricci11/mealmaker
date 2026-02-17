@@ -89,12 +89,9 @@ export default function ConversationalPlanner({ onSmartSetup, loading, onPickFro
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
-      <h3 className="font-bold text-lg text-gray-900 mb-1">
-        Tell me about your week
+      <h3 className="font-bold text-lg text-gray-900 mb-4">
+        What's Cooking, Chef?
       </h3>
-      <p className="text-sm text-gray-500 mb-4">
-        Describe your schedule and we'll set up your meal plan automatically.
-      </p>
 
       <textarea
         value={text}

@@ -467,7 +467,7 @@ export default function Plan() {
 
       clearTimeout(progressTimer1);
       clearTimeout(progressTimer2);
-      setLockProgress("✅ Your grocery list is ready!");
+      setLockProgress("✅ Your plan is ready!");
       await new Promise((r) => setTimeout(r, 800));
 
       setPlan(result);
@@ -475,7 +475,7 @@ export default function Plan() {
       localStorage.setItem("currentPlanId", String(result.id));
       localStorage.setItem("lastPlanId", String(result.id));
       localStorage.setItem("lastMealPlanId", String(result.id));
-      navigate("/grocery");
+      navigate("/my-plan");
     } catch (err: any) {
       setError(err.message || "Failed to lock plan");
     } finally {
