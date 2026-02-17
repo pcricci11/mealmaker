@@ -55,6 +55,11 @@ const DAYS: { key: string; label: string }[] = [
   { key: "sunday", label: "Sun" },
 ];
 
+function getTodayDay(): DayOfWeek {
+  const days: DayOfWeek[] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  return days[new Date().getDay()];
+}
+
 export default function Plan() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -87,6 +92,7 @@ export default function Plan() {
   const [mainModalSearchQuery, setMainModalSearchQuery] = useState("");
   const [showBuildFromRecipes, setShowBuildFromRecipes] = useState(false);
   const [draftRecipes, setDraftRecipes] = useState<Map<DayOfWeek, Recipe[]>>(new Map());
+  const [quickDinnerOpen, setQuickDinnerOpen] = useState(false);
 
   // Recipe search state for specific meal requests
   const [pendingSearchMeals, setPendingSearchMeals] = useState<
@@ -136,9 +142,11 @@ export default function Plan() {
     };
     loadFamilyData();
 
-    // Load saved plan from query param or localStorage (both /plan and /my-plan)
+    // Load saved plan: /my-plan always tries localStorage; /plan only from explicit ?id= param
     const paramId = searchParams.get("id");
-    const planIdToLoad = paramId || localStorage.getItem("currentPlanId");
+    const planIdToLoad = isMyPlan
+      ? (paramId || localStorage.getItem("currentPlanId"))
+      : paramId;
     if (planIdToLoad) {
       setLoading(true);
       getMealPlan(Number(planIdToLoad))
@@ -644,6 +652,7 @@ export default function Plan() {
           onSmartSetup={handleSmartSetup}
           loading={setupProgress !== null}
           onPickFromRecipes={() => setShowBuildFromRecipes(true)}
+          onQuickDinner={() => setQuickDinnerOpen(true)}
         />
       )}
 
@@ -925,6 +934,22 @@ export default function Plan() {
           prefetchedResults={batchedSearchResults[pendingSearchMeals[currentSearchIndex].description]}
           onRecipeSelected={handleRecipeSelected}
           onClose={handleSearchSkip}
+        />
+      )}
+
+      {/* Quick Dinner search modal */}
+      {quickDinnerOpen && (
+        <RecipeSearchModal
+          onRecipeSelected={(recipe) => {
+            setQuickDinnerOpen(false);
+            const today = getTodayDay();
+            const next = new Map(draftRecipes);
+            const existing = next.get(today) || [];
+            existing.push(recipe);
+            next.set(today, existing);
+            setDraftRecipes(next);
+          }}
+          onClose={() => setQuickDinnerOpen(false)}
         />
       )}
 

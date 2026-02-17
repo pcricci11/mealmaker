@@ -8,9 +8,9 @@ export default function App() {
     <div className="min-h-screen flex flex-col">
       <header className="bg-white sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-2 md:py-3 flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
-          <Link to="/plan" className="leading-none hover:opacity-80 transition-opacity">
-            <span className="block text-xl md:text-2xl font-extrabold text-emerald-700">Yes Chef</span>
-            <span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-500">Meal Planner</span>
+          <Link to="/" className="leading-none hover:opacity-80 transition-opacity">
+            <span className="block text-xl md:text-2xl font-extrabold text-orange-600">Yes Chef</span>
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-500">Meal Planner</span>
           </Link>
           <nav className="flex gap-1.5 md:gap-2 overflow-x-auto md:overflow-x-visible -mx-4 px-4 md:mx-0 md:px-0 hide-scrollbar">
             <NavLink

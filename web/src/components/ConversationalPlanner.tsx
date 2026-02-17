@@ -7,6 +7,7 @@ interface Props {
   onSmartSetup: (text: string) => void;
   loading?: boolean;
   onPickFromRecipes?: () => void;
+  onQuickDinner?: () => void;
 }
 
 // Browser Speech Recognition types
@@ -31,7 +32,7 @@ function getSpeechRecognition(): (new () => SpeechRecognitionInstance) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-export default function ConversationalPlanner({ onSmartSetup, loading, onPickFromRecipes }: Props) {
+export default function ConversationalPlanner({ onSmartSetup, loading, onPickFromRecipes, onQuickDinner }: Props) {
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -97,7 +98,7 @@ export default function ConversationalPlanner({ onSmartSetup, loading, onPickFro
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={`e.g. "We're cooking Monday through Thursday, eating out Friday. My daughter needs lunch on Tuesday and Wednesday. Saturday we want something special — maybe Italian. Keep it quick on weeknights, 30 min max."`}
-        className="w-full h-28 md:h-32 border border-gray-300 rounded-lg px-3 md:px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+        className="w-full h-28 md:h-32 border border-gray-300 rounded-lg px-3 md:px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
         disabled={loading}
       />
 
@@ -105,7 +106,7 @@ export default function ConversationalPlanner({ onSmartSetup, loading, onPickFro
         <button
           onClick={handleSubmit}
           disabled={loading || !text.trim()}
-          className="px-5 py-3 md:py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-5 py-3 md:py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? "Setting up..." : "Smart Setup"}
         </button>
@@ -115,7 +116,7 @@ export default function ConversationalPlanner({ onSmartSetup, loading, onPickFro
           className={`p-2.5 border rounded-lg transition-colors ${
             listening
               ? "border-red-400 bg-red-50 text-red-500 hover:bg-red-100"
-              : "border-gray-300 text-gray-600 hover:border-emerald-500 hover:text-emerald-600"
+              : "border-gray-300 text-gray-600 hover:border-orange-500 hover:text-orange-500"
           }`}
           title={listening ? "Stop listening" : "Voice input"}
         >
@@ -138,9 +139,17 @@ export default function ConversationalPlanner({ onSmartSetup, loading, onPickFro
       {onPickFromRecipes && (
         <button
           onClick={onPickFromRecipes}
-          className="mt-3 text-sm text-emerald-600 hover:text-emerald-700 transition-colors"
+          className="mt-3 text-sm text-orange-500 hover:text-orange-600 transition-colors"
         >
           or pick from your saved recipes &rarr;
+        </button>
+      )}
+      {onQuickDinner && (
+        <button
+          onClick={onQuickDinner}
+          className="mt-1 block text-sm text-gray-400 hover:text-orange-500 transition-colors"
+        >
+          Just need dinner tonight? &rarr;
         </button>
       )}
     </div>

@@ -8,12 +8,17 @@ import MyRecipes from "./pages/MyRecipes";
 import MyFamily from "./pages/MyFamily";
 import "./index.css";
 
+function HomeRedirect() {
+  const hasPlan = !!localStorage.getItem("currentPlanId");
+  return <Navigate to={hasPlan ? "/my-plan" : "/plan"} replace />;
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />}>
-          <Route index element={<Navigate to="/plan" replace />} />
+          <Route index element={<HomeRedirect />} />
           <Route path="plan" element={<Plan />} />
           <Route path="my-plan" element={<Plan />} />
           <Route path="meal-plan" element={<Navigate to="/plan" replace />} />
