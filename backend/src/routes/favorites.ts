@@ -17,18 +17,18 @@ router.get("/chefs", (req, res) => {
 
   const chefs = db
     .prepare(
-      `SELECT id, family_id, name, created_at 
-      FROM family_favorite_chefs 
+      `SELECT id, family_id, name, cuisines, created_at
+      FROM family_favorite_chefs
       WHERE family_id = ?
       ORDER BY name ASC`
     )
     .all(familyId);
 
-  res.json(chefs);
+  res.json(chefs.map((c: any) => ({ ...c, cuisines: c.cuisines ? JSON.parse(c.cuisines) : null })));
 });
 
 router.post("/chefs", (req, res) => {
-  const { family_id, name } = req.body;
+  const { family_id, name, cuisines } = req.body;
 
   if (!family_id || !name) {
     return res.status(400).json({ error: "family_id and name are required" });
@@ -36,16 +36,16 @@ router.post("/chefs", (req, res) => {
 
   const result = db
     .prepare(
-      `INSERT INTO family_favorite_chefs (family_id, name) 
-      VALUES (?, ?)`
+      `INSERT INTO family_favorite_chefs (family_id, name, cuisines)
+      VALUES (?, ?, ?)`
     )
-    .run(family_id, name);
+    .run(family_id, name.trim(), cuisines?.length ? JSON.stringify(cuisines) : null);
 
   const chef = db
     .prepare("SELECT * FROM family_favorite_chefs WHERE id = ?")
-    .get(result.lastInsertRowid);
+    .get(result.lastInsertRowid) as any;
 
-  res.status(201).json(chef);
+  res.status(201).json({ ...chef, cuisines: chef.cuisines ? JSON.parse(chef.cuisines) : null });
 });
 
 router.delete("/chefs/:id", (req, res) => {

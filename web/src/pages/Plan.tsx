@@ -304,7 +304,7 @@ export default function Plan() {
         }
 
         // No confirmations needed — proceed directly to web search or finish
-        await proceedToWebSearch(unmatched, autoResolved, fetchedRecipes, signal);
+        await proceedToWebSearch(unmatched, autoResolved, fetchedRecipes, signal, familyId);
       } else {
         // No specific meals — just store cooking schedule, user fills manually
         setSetupProgress({ phase: "done", message: "Kitchen's ready! Time to pick your meals 🍽️", searchQueries: [] });
@@ -326,6 +326,7 @@ export default function Plan() {
     resolved: Array<{ day: string; recipe_id: number }>,
     fetchedRecipes: Recipe[],
     signal?: AbortSignal,
+    familyId?: number,
   ) => {
     if (unmatched.length > 0) {
       const searchQueries = unmatched.map((m) => ({
@@ -343,6 +344,7 @@ export default function Plan() {
         batchResults = await batchSearchRecipesWeb(
           unmatched.map((m) => m.description),
           signal,
+          familyId,
         );
         console.log("[Plan] batch search results", batchResults);
         setBatchedSearchResults(batchResults);
@@ -391,7 +393,7 @@ export default function Plan() {
       // All confirmations done — proceed to web search for remaining
       setPendingConfirmations([]);
       setCurrentConfirmIndex(0);
-      proceedToWebSearch(pendingWebSearchRef.current, updatedResolved, allRecipes);
+      proceedToWebSearch(pendingWebSearchRef.current, updatedResolved, allRecipes, undefined, family?.id);
     }
   };
 
@@ -410,7 +412,7 @@ export default function Plan() {
       // All confirmations done — proceed to web search
       setPendingConfirmations([]);
       setCurrentConfirmIndex(0);
-      proceedToWebSearch(pendingWebSearchRef.current, resolvedSpecificMeals, allRecipes);
+      proceedToWebSearch(pendingWebSearchRef.current, resolvedSpecificMeals, allRecipes, undefined, family?.id);
     }
   };
 
@@ -715,7 +717,7 @@ export default function Plan() {
             {draftRecipes.size > 0 && (
               <Button
                 variant="link"
-                className="h-auto p-0 text-sm text-emerald-600 hover:text-emerald-700"
+                className="h-auto p-0 text-sm text-orange-500 hover:text-orange-600"
                 onClick={() => setShowBuildFromRecipes(true)}
               >
                 + Add Recipes
@@ -728,15 +730,15 @@ export default function Plan() {
               return recipes && recipes.length > 0 ? (
                 <Card
                   key={key}
-                  className="bg-emerald-50 border-emerald-300 p-3 text-center min-h-[80px] md:min-h-[120px] flex flex-col items-center justify-center relative"
+                  className="bg-orange-50 border-orange-300 p-3 text-center min-h-[80px] md:min-h-[120px] flex flex-col items-center justify-center relative"
                 >
-                  <span className="text-xs font-semibold text-emerald-700 uppercase">
+                  <span className="text-xs font-semibold text-orange-600 uppercase">
                     {label}
                   </span>
                   {recipes.map((recipe, idx) => (
                     <div
                       key={recipe.id}
-                      className="w-full cursor-pointer hover:bg-emerald-100/50 rounded px-1 py-0.5 relative group"
+                      className="w-full cursor-pointer hover:bg-orange-100/50 rounded px-1 py-0.5 relative group"
                       onClick={() => {
                         const fakeItem: MealPlanItemV3 = {
                           id: 0, meal_plan_id: 0, day: key as DayOfWeek,
@@ -753,7 +755,7 @@ export default function Plan() {
                         {recipe.title}
                       </span>
                       {recipe.cuisine && (
-                        <span className="text-[10px] text-emerald-600">
+                        <span className="text-[10px] text-orange-500">
                           {recipe.cuisine.replace("_", " ")}
                         </span>
                       )}
@@ -781,7 +783,7 @@ export default function Plan() {
                 <button
                   key={key}
                   onClick={() => setShowBuildFromRecipes(true)}
-                  className="bg-white border border-dashed border-gray-300 rounded-xl p-4 text-center min-h-[80px] md:min-h-[120px] flex flex-col items-center justify-center hover:border-emerald-400 hover:bg-emerald-50/30 transition-colors"
+                  className="bg-white border border-dashed border-gray-300 rounded-xl p-4 text-center min-h-[80px] md:min-h-[120px] flex flex-col items-center justify-center hover:border-orange-400 hover:bg-orange-50/30 transition-colors"
                 >
                   <span className="text-xs font-semibold text-gray-400 uppercase">
                     {label}
@@ -843,7 +845,7 @@ export default function Plan() {
                 variant="link"
                 size="sm"
                 onClick={() => navigate("/grocery")}
-                className="text-emerald-600 hover:text-emerald-700"
+                className="text-orange-500 hover:text-orange-600"
               >
                 Grocery List →
               </Button>
@@ -992,14 +994,14 @@ export default function Plan() {
                   navigate(`/recipes?${params}`);
                   setMainModal(null);
                 }}
-                className="w-full border border-gray-200 rounded-lg p-4 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left"
+                className="w-full border border-gray-200 rounded-lg p-4 hover:border-orange-500 hover:bg-orange-50 transition-colors text-left"
               >
                 <div className="font-medium text-gray-900">Pick from My Recipes</div>
                 <p className="text-sm text-gray-500 mt-1">Choose from your saved recipe collection</p>
               </button>
               <button
                 onClick={() => setMainModal({ ...mainModal, step: "web-search" })}
-                className="w-full border border-gray-200 rounded-lg p-4 hover:border-emerald-500 hover:bg-emerald-50 transition-colors text-left"
+                className="w-full border border-gray-200 rounded-lg p-4 hover:border-orange-500 hover:bg-orange-50 transition-colors text-left"
               >
                 <div className="font-medium text-gray-900">Search the Web</div>
                 <p className="text-sm text-gray-500 mt-1">Find a new recipe online</p>

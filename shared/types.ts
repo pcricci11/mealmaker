@@ -218,7 +218,7 @@ export type FrequencyPreference =
   | "bimonthly"
   | "rarely";
 
-export type ServingMultiplier = "normal" | "hearty" | "extra_large";
+export type ServingMultiplier = number;
 
 // ── V3 Aliases ──
 
@@ -232,6 +232,7 @@ export interface FamilyFavoriteChef {
   id: number;
   family_id: number;
   name: string;
+  cuisines?: string[] | null;
   created_at?: string;
 }
 

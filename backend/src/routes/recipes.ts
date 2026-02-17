@@ -16,9 +16,27 @@ router.get("/", (_req: Request, res: Response) => {
   res.json(rows.map(rowToRecipe));
 });
 
+// Helper: build source constraint from family favorites
+function buildSourceConstraint(familyId: number): string {
+  const chefs = db.prepare("SELECT name FROM family_favorite_chefs WHERE family_id = ?").all(familyId) as { name: string }[];
+  const websites = db.prepare("SELECT name FROM family_favorite_websites WHERE family_id = ?").all(familyId) as { name: string }[];
+
+  if (chefs.length === 0 && websites.length === 0) return "";
+
+  const parts: string[] = [];
+  if (chefs.length > 0) {
+    parts.push(`PREFER recipes by these chefs/authors: ${chefs.map(c => c.name).join(", ")}.`);
+  }
+  if (websites.length > 0) {
+    parts.push(`PREFER recipes from these websites: ${websites.map(w => w.name).join(", ")}.`);
+  }
+  parts.push("Search these sources first. Only use other sources if you cannot find good matches from the preferred sources.");
+  return "\n\n" + parts.join("\n");
+}
+
 // POST /api/recipes/search — web search for recipes via Claude
 router.post("/search", async (req: Request, res: Response) => {
-  const { query } = req.body;
+  const { query, family_id } = req.body;
   if (!query || typeof query !== "string" || !query.trim()) {
     return res.status(400).json({ error: "query is required" });
   }
@@ -29,6 +47,7 @@ router.post("/search", async (req: Request, res: Response) => {
   }
 
   const client = new Anthropic({ apiKey });
+  const sourceConstraint = family_id ? buildSourceConstraint(family_id) : "";
 
   try {
     const message = await createWithRetry(client, {
@@ -58,7 +77,7 @@ Constraints:
 - difficulty must be one of: ${VALID_DIFFICULTIES.join(", ")}
 - protein_type should be null for vegetarian dishes
 - cook_minutes should be total time (prep + cook)
-- Return ONLY the JSON array, no markdown fences, no explanation.`,
+- Return ONLY the JSON array, no markdown fences, no explanation.` + sourceConstraint,
       messages: [
         { role: "user", content: `Search for recipes: "${query.trim()}"` },
       ],
@@ -98,7 +117,7 @@ Constraints:
 
 // POST /api/recipes/batch-search — batch web search for multiple recipes via Claude
 router.post("/batch-search", async (req: Request, res: Response) => {
-  const { queries } = req.body;
+  const { queries, family_id } = req.body;
   if (!Array.isArray(queries) || queries.length === 0 || queries.some((q: any) => typeof q !== "string" || !q.trim())) {
     return res.status(400).json({ error: "queries must be a non-empty array of strings" });
   }
@@ -110,6 +129,7 @@ router.post("/batch-search", async (req: Request, res: Response) => {
 
   const client = new Anthropic({ apiKey });
   const cappedQueries = queries.slice(0, 5);
+  const sourceConstraint = family_id ? buildSourceConstraint(family_id) : "";
 
   try {
     const message = await createWithRetry(client, {
@@ -122,7 +142,7 @@ router.post("/batch-search", async (req: Request, res: Response) => {
 
 CRITICAL: Return ONLY the JSON object. No explanation, no preamble, no markdown.
 Do not write "Based on" or "Here are" or any other text.
-Your entire response must be valid JSON that starts with { and ends with }.`,
+Your entire response must be valid JSON that starts with { and ends with }.` + sourceConstraint,
       messages: [
         {
           role: "user",
@@ -189,8 +209,23 @@ router.post("/match", (req: Request, res: Response) => {
       .replace(/\s+/g, " ")
       .trim();
 
+  // Stop words: common conversational words that don't help identify a recipe
+  const STOP_WORDS = new Set([
+    "i", "we", "me", "us", "my", "our",
+    "want", "need", "like", "make", "cook", "have", "get", "try",
+    "a", "an", "the", "some", "any",
+    "for", "with", "and", "or", "of", "on", "in", "to",
+    "please", "tonight", "today", "dinner", "lunch", "meal",
+    "something", "thing", "recipe", "food",
+  ]);
+
   const normQuery = normalize(query);
-  const queryWords = normQuery.split(" ").filter(Boolean);
+  const allQueryWords = normQuery.split(" ").filter(Boolean);
+  // Filter stop words, but fall back to all words if everything is a stop word
+  const contentWords = allQueryWords.filter((w) => !STOP_WORDS.has(w));
+  const queryWords = contentWords.length > 0 ? contentWords : allQueryWords;
+
+  console.log(`[match] query="${query}" → normalized="${normQuery}" → contentWords=[${queryWords.join(", ")}] (filtered ${allQueryWords.length - queryWords.length} stop words)`);
 
   // Pull all recipe names from DB (fast — recipes table is small)
   const rows = db
@@ -208,13 +243,14 @@ router.post("/match", (req: Request, res: Response) => {
       continue;
     }
 
-    // Word-overlap scoring (handles containment proportionally)
+    // Word-overlap scoring: what fraction of the user's content words appear in the recipe name?
     const nameWords = normName.split(" ").filter(Boolean);
     const matchingWords = queryWords.filter((w) => nameWords.includes(w));
     if (matchingWords.length === 0) continue;
 
-    const overlapScore =
-      matchingWords.length / Math.max(queryWords.length, nameWords.length);
+    // Use queryWords.length as denominator: "what % of what the user asked for was found?"
+    // This prevents long recipe names from diluting the score.
+    const overlapScore = matchingWords.length / queryWords.length;
 
     if (overlapScore >= 0.4) {
       scored.push({ ...row, score: overlapScore });
@@ -231,9 +267,11 @@ router.post("/match", (req: Request, res: Response) => {
       recipe: rowToRecipe(stmt.get(t.id)),
       score: t.score,
     }));
+    console.log(`[match] query="${query}" → ${matches.length} matches: ${matches.map((m) => `"${m.recipe.title}" (score=${m.score.toFixed(2)})`).join(", ")}`);
     return res.json({ matches });
   }
 
+  console.log(`[match] query="${query}" → no matches found`);
   res.json({ matches: [] });
 });
 

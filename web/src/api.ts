@@ -165,12 +165,12 @@ export async function matchRecipeInDb(query: string, signal?: AbortSignal): Prom
   return data;
 }
 
-export async function searchRecipesWeb(query: string, signal?: AbortSignal): Promise<WebSearchRecipeResult[]> {
+export async function searchRecipesWeb(query: string, signal?: AbortSignal, familyId?: number): Promise<WebSearchRecipeResult[]> {
   const data = await json<{ results: WebSearchRecipeResult[] }>(
     await fetch(`${BASE}/recipes/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, family_id: familyId }),
       signal,
     }),
   );
@@ -180,12 +180,13 @@ export async function searchRecipesWeb(query: string, signal?: AbortSignal): Pro
 export async function batchSearchRecipesWeb(
   queries: string[],
   signal?: AbortSignal,
+  familyId?: number,
 ): Promise<Record<string, WebSearchRecipeResult[]>> {
   const data = await json<{ results: Record<string, WebSearchRecipeResult[]> }>(
     await fetch(`${BASE}/recipes/batch-search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ queries }),
+      body: JSON.stringify({ queries, family_id: familyId }),
       signal,
     }),
   );
@@ -339,12 +340,12 @@ export async function getFavoriteChefs(familyId: number): Promise<FamilyFavorite
   return json(await fetch(`${BASE}/favorites/chefs?family_id=${familyId}`));
 }
 
-export async function createFavoriteChef(familyId: number, name: string): Promise<FamilyFavoriteChef> {
+export async function createFavoriteChef(familyId: number, name: string, cuisines?: string[]): Promise<FamilyFavoriteChef> {
   return json(
     await fetch(`${BASE}/favorites/chefs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ family_id: familyId, name }),
+      body: JSON.stringify({ family_id: familyId, name, cuisines }),
     }),
   );
 }

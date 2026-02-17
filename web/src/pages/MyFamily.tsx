@@ -6,6 +6,7 @@ import type {
   FamilyFavoriteChef,
   FamilyFavoriteWebsite,
 } from "@shared/types";
+import { VALID_CUISINES } from "@shared/types";
 import {
   getFamilies,
   createFamily,
@@ -56,6 +57,7 @@ export default function MyFamily() {
 
   // Chef input
   const [newChefName, setNewChefName] = useState("");
+  const [newChefCuisines, setNewChefCuisines] = useState<string[]>([]);
   const [addingChef, setAddingChef] = useState(false);
 
   // Website input
@@ -158,9 +160,10 @@ export default function MyFamily() {
     if (!family || !newChefName.trim()) return;
     setAddingChef(true);
     try {
-      const created = await createFavoriteChef(family.id, newChefName.trim());
+      const created = await createFavoriteChef(family.id, newChefName.trim(), newChefCuisines.length > 0 ? newChefCuisines : undefined);
       setChefs((prev) => [...prev, created]);
       setNewChefName("");
+      setNewChefCuisines([]);
     } finally {
       setAddingChef(false);
     }
@@ -233,7 +236,7 @@ export default function MyFamily() {
     <div className="max-w-2xl mx-auto py-4 space-y-8">
       {/* Save toast */}
       {saveStatus && (
-        <div className="fixed top-16 right-4 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg z-50">
+        <div className="fixed top-16 right-4 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg z-50">
           {saveStatus}
         </div>
       )}
@@ -262,7 +265,7 @@ export default function MyFamily() {
                   }
                 }}
                 autoFocus
-                className="text-2xl font-bold text-gray-900 border-b-2 border-emerald-500 outline-none bg-transparent py-1 w-full max-w-sm"
+                className="text-2xl font-bold text-gray-900 border-b-2 border-orange-500 outline-none bg-transparent py-1 w-full max-w-sm"
               />
               <Button variant="link" onClick={saveFamilyName} className="h-auto p-0">
                 Save
@@ -393,7 +396,7 @@ export default function MyFamily() {
                   }}
                   className={`flex-1 px-4 py-3 rounded-lg border-2 text-center transition-colors ${
                     servingMultiplier === opt.value
-                      ? "border-emerald-500 bg-emerald-50 text-emerald-700 font-semibold"
+                      ? "border-orange-500 bg-orange-50 text-orange-600 font-semibold"
                       : "border-gray-200 text-gray-600 hover:border-gray-300"
                   }`}
                 >
@@ -410,7 +413,7 @@ export default function MyFamily() {
               <label className="text-sm font-medium text-gray-700">
                 Max Cook Time (Weekday)
               </label>
-              <span className="text-sm font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+              <span className="text-sm font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
                 {maxCookWeekday} min
               </span>
             </div>
@@ -427,7 +430,7 @@ export default function MyFamily() {
               onTouchEnd={() =>
                 savePreference({ max_cook_minutes_weekday: maxCookWeekday })
               }
-              className="w-full accent-emerald-600"
+              className="w-full accent-orange-500"
             />
             <div className="flex justify-between text-xs text-gray-400 mt-1">
               <span>15 min</span>
@@ -442,7 +445,7 @@ export default function MyFamily() {
               <label className="text-sm font-medium text-gray-700">
                 Max Cook Time (Weekend)
               </label>
-              <span className="text-sm font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+              <span className="text-sm font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
                 {maxCookWeekend} min
               </span>
             </div>
@@ -459,7 +462,7 @@ export default function MyFamily() {
               onTouchEnd={() =>
                 savePreference({ max_cook_minutes_weekend: maxCookWeekend })
               }
-              className="w-full accent-emerald-600"
+              className="w-full accent-orange-500"
             />
             <div className="flex justify-between text-xs text-gray-400 mt-1">
               <span>15 min</span>
@@ -474,7 +477,7 @@ export default function MyFamily() {
               <label className="text-sm font-medium text-gray-700">
                 Vegetarian Meals
               </label>
-              <span className="text-sm font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+              <span className="text-sm font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
                 {vegRatio}%
               </span>
             </div>
@@ -487,7 +490,7 @@ export default function MyFamily() {
               onChange={(e) => setVegRatio(Number(e.target.value))}
               onMouseUp={() => savePreference({ vegetarian_ratio: vegRatio })}
               onTouchEnd={() => savePreference({ vegetarian_ratio: vegRatio })}
-              className="w-full accent-emerald-600"
+              className="w-full accent-orange-500"
             />
             <div className="flex justify-between text-xs text-gray-400 mt-1">
               <span>All Meat</span>
@@ -530,6 +533,31 @@ export default function MyFamily() {
             </Button>
           </div>
 
+          {/* Cuisine tags (optional) */}
+          <div>
+            <p className="text-xs text-gray-400 mb-1.5">Cuisines (optional):</p>
+            <div className="flex flex-wrap gap-1.5">
+              {VALID_CUISINES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() =>
+                    setNewChefCuisines((prev) =>
+                      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
+                    )
+                  }
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    newChefCuisines.includes(c)
+                      ? "bg-orange-100 text-orange-800 border-orange-300"
+                      : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  {c.replace("_", " ")}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Chef list */}
           {chefs.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-4">
@@ -543,6 +571,11 @@ export default function MyFamily() {
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-full text-sm font-medium"
                 >
                   {chef.name}
+                  {chef.cuisines && chef.cuisines.length > 0 && (
+                    <span className="text-xs text-amber-500 font-normal">
+                      ({chef.cuisines.map((c) => c.replace("_", " ")).join(", ")})
+                    </span>
+                  )}
                   <button
                     onClick={() => handleDeleteChef(chef.id)}
                     className="text-amber-400 hover:text-amber-700 transition-colors"
