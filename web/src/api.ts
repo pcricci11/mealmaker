@@ -7,7 +7,7 @@ import type {
   GeneratePlanResponse, WebSearchRecipeResult,
 } from "@shared/types";
 
-const BASE = "http://localhost:3001/api";
+const BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
