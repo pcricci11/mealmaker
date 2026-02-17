@@ -142,6 +142,144 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
   }
 });
 
+// Clone an existing meal plan to the current week
+router.post("/:id/clone", async (req: Request, res: Response) => {
+  try {
+    const sourcePlanId = parseInt(req.params.id);
+    const { week_start, mode } = req.body as { week_start: string; mode?: "replace" | "merge" };
+    const cloneMode = mode || "replace";
+
+    if (!week_start) {
+      return res.status(400).json({ error: "week_start is required" });
+    }
+
+    // Get the source plan
+    const sourcePlan = db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(sourcePlanId) as any;
+    if (!sourcePlan) {
+      return res.status(404).json({ error: "Source plan not found" });
+    }
+
+    // Get all main items from the source plan that have a recipe_id
+    const sourceItems = db.prepare(`
+      SELECT day, recipe_id, meal_type, main_number
+      FROM meal_plan_items
+      WHERE meal_plan_id = ? AND recipe_id IS NOT NULL AND meal_type = 'main'
+      ORDER BY CASE day
+        WHEN 'monday' THEN 1 WHEN 'tuesday' THEN 2 WHEN 'wednesday' THEN 3
+        WHEN 'thursday' THEN 4 WHEN 'friday' THEN 5 WHEN 'saturday' THEN 6 WHEN 'sunday' THEN 7
+      END, main_number
+    `).all(sourcePlanId) as Array<{ day: string; recipe_id: number; meal_type: string; main_number: number | null }>;
+
+    if (sourceItems.length === 0) {
+      return res.status(400).json({ error: "Source plan has no recipes to clone" });
+    }
+
+    // Find or create a plan for the target week
+    const existing = db.prepare(
+      "SELECT id FROM meal_plans WHERE family_id = ? AND week_start = ? AND variant = 0"
+    ).get(sourcePlan.family_id, week_start) as { id: number } | undefined;
+
+    let newPlanId: number;
+    if (existing) {
+      newPlanId = existing.id;
+      if (cloneMode === "replace") {
+        db.prepare("DELETE FROM meal_plan_items WHERE meal_plan_id = ?").run(newPlanId);
+      }
+    } else {
+      const result = db.prepare(
+        "INSERT INTO meal_plans (family_id, week_start, variant) VALUES (?, ?, 0)"
+      ).run(sourcePlan.family_id, week_start);
+      newPlanId = result.lastInsertRowid as number;
+    }
+
+    // For merge mode, find the max main_number per day so we can append after existing mains
+    const dayMainOffset: Record<string, number> = {};
+    if (cloneMode === "merge" && existing) {
+      const existingMains = db.prepare(
+        "SELECT day, MAX(main_number) as max_num FROM meal_plan_items WHERE meal_plan_id = ? AND meal_type = 'main' GROUP BY day"
+      ).all(newPlanId) as Array<{ day: string; max_num: number | null }>;
+      for (const row of existingMains) {
+        dayMainOffset[row.day] = row.max_num || 0;
+      }
+    }
+
+    // Copy the items
+    const insertItem = db.prepare(
+      "INSERT INTO meal_plan_items (meal_plan_id, day, recipe_id, meal_type, main_number, locked) VALUES (?, ?, ?, ?, ?, 1)"
+    );
+    for (const item of sourceItems) {
+      const offset = dayMainOffset[item.day] || 0;
+      const mainNum = (item.main_number || 1) + offset;
+      insertItem.run(newPlanId, item.day, item.recipe_id, item.meal_type, mainNum);
+    }
+
+    // Fetch the new plan with items
+    const savedItems = db.prepare(`
+      SELECT mpi.id, mpi.meal_plan_id, mpi.day, mpi.recipe_id, mpi.locked,
+             mpi.meal_type, mpi.main_number, mpi.is_custom, mpi.notes,
+             r.name as recipe_name, r.cuisine, r.vegetarian,
+             r.protein_type, r.cook_minutes, r.makes_leftovers, r.kid_friendly,
+             r.source_url, r.difficulty, r.allergens, r.ingredients, r.tags,
+             r.source_type, r.source_name, r.seasonal_tags, r.frequency_cap_per_month,
+             r.kid_friendly as r_kid_friendly
+      FROM meal_plan_items mpi
+      LEFT JOIN recipes r ON r.id = mpi.recipe_id
+      WHERE mpi.meal_plan_id = ?
+      ORDER BY CASE mpi.day
+        WHEN 'monday' THEN 1 WHEN 'tuesday' THEN 2 WHEN 'wednesday' THEN 3
+        WHEN 'thursday' THEN 4 WHEN 'friday' THEN 5 WHEN 'saturday' THEN 6 WHEN 'sunday' THEN 7
+      END, mpi.meal_type, mpi.main_number
+    `).all(newPlanId) as any[];
+
+    res.status(201).json({
+      id: newPlanId,
+      family_id: sourcePlan.family_id,
+      week_start,
+      variant: 0,
+      items: savedItems.map((row: any) => ({
+        id: row.id,
+        meal_plan_id: newPlanId,
+        day: row.day,
+        recipe_id: row.recipe_id,
+        locked: !!row.locked,
+        lunch_leftover_label: null,
+        leftover_lunch_recipe_id: null,
+        meal_type: row.meal_type || "main",
+        main_number: row.main_number || null,
+        assigned_member_ids: null,
+        parent_meal_item_id: null,
+        is_custom: !!row.is_custom,
+        notes: null,
+        recipe_name: row.recipe_name || null,
+        recipe: row.recipe_id ? {
+          id: row.recipe_id,
+          title: row.recipe_name,
+          cuisine: row.cuisine,
+          vegetarian: !!row.vegetarian,
+          protein_type: row.protein_type,
+          cook_minutes: row.cook_minutes,
+          allergens: JSON.parse(row.allergens || "[]"),
+          kid_friendly: !!row.r_kid_friendly,
+          makes_leftovers: !!row.makes_leftovers,
+          leftovers_score: 0,
+          ingredients: JSON.parse(row.ingredients || "[]"),
+          tags: JSON.parse(row.tags || "[]"),
+          source_type: row.source_type || "seeded",
+          source_name: row.source_name || null,
+          source_url: row.source_url || null,
+          difficulty: row.difficulty || "medium",
+          seasonal_tags: JSON.parse(row.seasonal_tags || "[]"),
+          frequency_cap_per_month: row.frequency_cap_per_month || null,
+          notes: null,
+        } : null,
+      })),
+    });
+  } catch (error: any) {
+    console.error("Clone meal plan error:", error);
+    res.status(500).json({ error: error.message || "Failed to clone meal plan" });
+  }
+});
+
 // Get meal plan history for a family
 router.get("/history", async (req, res) => {
   try {

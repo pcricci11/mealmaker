@@ -230,7 +230,6 @@ export default function MealPlan() {
                 setSwapSideModal({ mealItemId, mainRecipeId })
               }
               onAddSide={(mainMealItemId) => setAddSideModal(mainMealItemId)}
-              onLoveMeal={handleLoveMeal}
               onRemoveSide={handleRemoveSide}
               onSwapMain={(mealItemId) =>
                 setSwapMainModal({ mealItemId, day: day as DayOfWeek })

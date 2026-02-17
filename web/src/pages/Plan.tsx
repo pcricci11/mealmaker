@@ -874,7 +874,7 @@ export default function Plan() {
                     setSwapSideModal({ mealItemId, mainRecipeId })
                   }
                   onAddSide={(mainMealItemId) => setAddSideModal(mainMealItemId)}
-                  onLoveMeal={handleLove}
+                  lovedItemIds={lovedIds}
                   onRemoveSide={handleRemoveSide}
                   onDeleteMain={async (mealItemId) => {
                     if (!confirm("Remove this meal?")) return;

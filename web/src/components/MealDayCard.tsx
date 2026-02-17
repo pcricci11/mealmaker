@@ -1,8 +1,7 @@
 // components/MealDayCard.tsx
 // Display card for a single day with mains, lunches, and sides
 
-import { useState } from "react";
-import type { MealPlanItemV3, FamilyMemberV3, DayOfWeek } from "@shared/types";
+import type { MealPlanItemV3, FamilyMemberV3 } from "@shared/types";
 import SideCard from "./SideCard";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,12 +16,11 @@ interface Props {
   members: FamilyMemberV3[];
   onSwapSide: (mealItemId: number, mainRecipeId: number) => void;
   onAddSide: (mainMealItemId: number) => void;
-  onLoveMeal: (mealItemId: number) => void;
   onSwapMain: (mealItemId: number) => void;
   onDeleteMain?: (mealItemId: number) => void;
   onRemoveSide?: (mealItemId: number) => void;
-  onMealClick?: (item: MealPlanItemV3) => void;
   onAddMain?: (day: string) => void;
+  lovedItemIds?: Set<number>;
 }
 
 const DAY_LABELS: Record<string, string> = {
@@ -58,14 +56,12 @@ export default function MealDayCard({
   members,
   onSwapSide,
   onAddSide,
-  onLoveMeal,
   onSwapMain,
   onDeleteMain,
   onRemoveSide,
-  onMealClick,
   onAddMain,
+  lovedItemIds,
 }: Props) {
-  const [lovedMeals, setLovedMeals] = useState<Set<number>>(new Set());
   const isWeekend = day === "saturday" || day === "sunday";
 
   const getMembersForMain = (main: MealPlanItemV3) => {
@@ -121,23 +117,26 @@ export default function MealDayCard({
           return (
             <div key={main.id} className="space-y-3">
               {/* Main Meal */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 relative">
+              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 relative group/card">
                 <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <div className="font-semibold text-lg flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-lg flex items-center gap-1.5">
                       {main.recipe?.source_url ? (
                         <a
                           href={main.recipe.source_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-gray-900 hover:underline cursor-pointer"
+                          className="text-gray-900 hover:underline cursor-pointer truncate"
                         >
                           {main.recipe_name || "Unknown Recipe"}
                         </a>
                       ) : (
-                        <span className="text-gray-900">
+                        <span className="text-gray-900 truncate">
                           {main.recipe_name || "Unknown Recipe"}
                         </span>
+                      )}
+                      {lovedItemIds?.has(main.id) && (
+                        <span className="text-red-500 text-sm shrink-0" title="Loved">&#9829;</span>
                       )}
                       {main.recipe?.source_url && (
                         <a
@@ -147,13 +146,13 @@ export default function MealDayCard({
                           className="text-orange-500 hover:text-orange-600 shrink-0"
                           title="View Recipe"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                           </svg>
                         </a>
                       )}
                       {main.main_number && (
-                        <span className="text-sm text-gray-500">
+                        <span className="text-sm text-gray-500 shrink-0">
                           (Main {main.main_number})
                         </span>
                       )}
@@ -164,45 +163,32 @@ export default function MealDayCard({
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 ml-2">
-                    {onDeleteMain && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onDeleteMain(main.id); }}
-                        className="text-lg hover:scale-110 transition-transform cursor-pointer text-gray-400 hover:text-red-500 p-1 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                        title="Remove this meal"
-                        type="button"
-                      >✕</button>
-                    )}
+                  <div className="flex items-center gap-1 ml-2 shrink-0 md:opacity-0 md:group-hover/card:opacity-100 transition-opacity">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onSwapMain(main.id);
                       }}
-                      className="text-xl hover:scale-110 transition-transform cursor-pointer p-1 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                      className="w-7 h-7 flex items-center justify-center rounded text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-colors cursor-pointer"
                       title="Swap this meal"
                       type="button"
                     >
-                      🔄
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        const newLoved = new Set(lovedMeals);
-                        if (newLoved.has(main.id)) {
-                          newLoved.delete(main.id);
-                        } else {
-                          newLoved.add(main.id);
-                          onLoveMeal(main.id);
-                        }
-                        setLovedMeals(newLoved);
-                      }}
-                      className="text-xl hover:scale-110 transition-transform cursor-pointer p-1 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                      title="Love this meal"
-                      type="button"
-                    >
-                      {lovedMeals.has(main.id) ? '❤️' : '♡'}
-                    </button>
+                    {onDeleteMain && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDeleteMain(main.id); }}
+                        className="w-7 h-7 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                        title="Remove this meal"
+                        type="button"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
 

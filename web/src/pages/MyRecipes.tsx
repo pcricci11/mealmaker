@@ -3,10 +3,10 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import type { Recipe, FamilyFavoriteMeal, RecipeInput, Cuisine, Difficulty } from "@shared/types";
 import { VALID_CUISINES, VALID_DIFFICULTIES } from "@shared/types";
 import {
-  getFamilies, getFavoriteMeals, getMealPlanHistory, getRecipes,
+  getFamilies, getFavoriteMeals, getMealPlanHistory, getRecipes, getMealPlan,
   addMealToDay, swapMainRecipe, deleteFavoriteMeal, createFavoriteMeal,
   getSideSuggestions, addSide,
-  deleteRecipe, renameRecipe, createRecipe, importRecipeFromUrl, updateRecipeNotes,
+  deleteRecipe, renameRecipe, createRecipe, importRecipeFromUrl, updateRecipeNotes, cloneMealPlan,
 } from "../api";
 import { CUISINE_COLORS } from "../components/SwapMainModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -88,6 +88,8 @@ export default function MyRecipes() {
   const [removingLoved, setRemovingLoved] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Recipe | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [cloningPlanId, setCloningPlanId] = useState<number | null>(null);
+  const [reuseConfirmPlan, setReuseConfirmPlan] = useState<HistoryPlan | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -330,6 +332,26 @@ export default function MyRecipes() {
       showToast(err.message || "Failed to save notes");
     } finally {
       setSavingNotes(false);
+    }
+  };
+
+  const handleReusePlan = async (planId: number, mode: "replace" | "merge") => {
+    setCloningPlanId(planId);
+    setReuseConfirmPlan(null);
+    try {
+      const today = new Date();
+      const dow = today.getDay();
+      const diff = dow === 0 ? -6 : 1 - dow;
+      const monday = new Date(today);
+      monday.setDate(today.getDate() + diff);
+      const weekStart = monday.toISOString().split("T")[0];
+
+      const newPlan = await cloneMealPlan(planId, weekStart, mode);
+      localStorage.setItem("currentPlanId", String(newPlan.id));
+      navigate("/my-plan");
+    } catch (err: any) {
+      showToast(err.message || "Failed to reuse plan");
+      setCloningPlanId(null);
     }
   };
 
@@ -882,21 +904,47 @@ export default function MyRecipes() {
                     variant="outline"
                     size="sm"
                     className="shrink-0 ml-4 text-sm font-medium text-orange-500 hover:text-orange-600 border-orange-200 hover:bg-orange-50"
-                    onClick={() => {
-                      const mainItems = (plan.items ?? [])
-                        .filter((i) => i.meal_type === "main" && i.recipe_name)
-                        .sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day));
-                      const cookingDays = [...new Set(mainItems.map((i) => i.day))];
-                      const dayParts = mainItems.map(
-                        (i) => `${i.recipe_name} on ${DAY_LABELS[i.day] || i.day}`
+                    disabled={cloningPlanId === plan.id}
+                    onClick={async () => {
+                      // Check if current week already has meals
+                      let hasExistingMeals = false;
+
+                      // First check loaded history for this week
+                      const today = new Date();
+                      const dow = today.getDay();
+                      const diff = dow === 0 ? -6 : 1 - dow;
+                      const monday = new Date(today);
+                      monday.setDate(today.getDate() + diff);
+                      const thisWeek = monday.toISOString().split("T")[0];
+
+                      const currentWeekPlan = history.find(
+                        (h) => h.week_start === thisWeek && h.items?.length > 0
                       );
-                      const description =
-                        `Cook ${cookingDays.map((d) => DAY_LABELS[d] || d).join(", ")}. ` +
-                        `I want ${dayParts.join(", ")}.`;
-                      navigate("/plan", { state: { prefill: description } });
+                      if (currentWeekPlan) {
+                        hasExistingMeals = true;
+                      } else {
+                        // Fallback: check via currentPlanId in case history is stale
+                        const currentPlanId = localStorage.getItem("currentPlanId");
+                        if (currentPlanId) {
+                          try {
+                            const livePlan = await getMealPlan(parseInt(currentPlanId));
+                            if (livePlan?.items?.length > 0) {
+                              hasExistingMeals = true;
+                            }
+                          } catch {
+                            // Plan doesn't exist — no conflict
+                          }
+                        }
+                      }
+
+                      if (hasExistingMeals) {
+                        setReuseConfirmPlan(plan);
+                      } else {
+                        handleReusePlan(plan.id, "replace");
+                      }
                     }}
                   >
-                    Reuse This Week
+                    {cloningPlanId === plan.id ? "Cloning..." : "Reuse This Week"}
                   </Button>
                 </Card>
               );
@@ -1036,6 +1084,45 @@ export default function MyRecipes() {
                 disabled={!addForm.name.trim() || addingSaving}
               >
                 {addingSaving ? "Adding..." : "Add Recipe"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Reuse Plan Confirmation Modal */}
+      {reuseConfirmPlan && (
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setReuseConfirmPlan(null); }}>
+          <DialogContent fullScreenMobile={false}>
+            <DialogHeader>
+              <DialogTitle>You already have meals planned this week</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground px-6">
+              How would you like to add the meals from{" "}
+              <span className="font-medium text-gray-700">
+                {reuseConfirmPlan.week_start
+                  ? formatWeekRange(reuseConfirmPlan.week_start)
+                  : "this plan"}
+              </span>
+              ?
+            </p>
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setReuseConfirmPlan(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleReusePlan(reuseConfirmPlan.id, "merge")}
+              >
+                Add to Plan
+              </Button>
+              <Button
+                onClick={() => handleReusePlan(reuseConfirmPlan.id, "replace")}
+              >
+                Replace Everything
               </Button>
             </DialogFooter>
           </DialogContent>

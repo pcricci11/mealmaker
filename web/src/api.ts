@@ -499,6 +499,16 @@ export async function lockMealPlan(request: {
   );
 }
 
+export async function cloneMealPlan(planId: number, weekStart: string, mode?: "replace" | "merge"): Promise<MealPlan> {
+  return json(
+    await fetch(`${BASE}/meal-plans/${planId}/clone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ week_start: weekStart, mode: mode || "replace" }),
+    }),
+  );
+}
+
 export async function getMealPlanHistory(familyId?: number): Promise<any[]> {
   let url = `${BASE}/meal-plans/history`;
   if (familyId) {
