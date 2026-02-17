@@ -1,18 +1,18 @@
 {
   "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "../",
+    "baseUrl": "../",
+    "paths": {
+      "@shared/*": ["shared/*"]
+    },
     "target": "ES2020",
     "module": "commonjs",
-    "moduleResolution": "node",
     "strict": true,
     "esModuleInterop": true,
-    "outDir": "./dist",
-    "rootDir": "..",
-    "resolveJsonModule": true,
-    "paths": {
-      "@shared/*": ["../shared/*"]
-    },
-    "baseUrl": "."
+    "skipLibCheck": true,
+    "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts", "../shared/**/*.ts"],
-  "exclude": ["../shared/types-v3.ts"]
+  "include": ["../shared/**/*", "src/**/*"],
+  "exclude": ["node_modules", "../web", "../shared/types-v3.ts"]
 }
