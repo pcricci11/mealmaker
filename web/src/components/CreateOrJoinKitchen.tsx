@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { createHousehold, joinHousehold } from "../api";
+import { createHousehold, joinHousehold, getMyHousehold } from "../api";
 import { useHousehold } from "../context/HouseholdContext";
+import WelcomeScreen from "./WelcomeScreen";
 
 export default function CreateOrJoinKitchen() {
   const { refresh } = useHousehold();
@@ -12,6 +13,12 @@ export default function CreateOrJoinKitchen() {
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [welcomeData, setWelcomeData] = useState<{
+    variant: "created" | "joined";
+    kitchenName: string;
+    inviteCode?: string;
+    creatorName?: string;
+  } | null>(null);
 
   async function handleCreate() {
     if (!kitchenName.trim()) return;
@@ -23,7 +30,11 @@ export default function CreateOrJoinKitchen() {
       if (result.family?.id) {
         localStorage.setItem("familyId", String(result.family.id));
       }
-      await refresh();
+      setWelcomeData({
+        variant: "created",
+        kitchenName: result.household.name,
+        inviteCode: result.household.invite_code,
+      });
     } catch (err: any) {
       setError(err.message || "Failed to create kitchen");
     } finally {
@@ -37,12 +48,31 @@ export default function CreateOrJoinKitchen() {
     setError(null);
     try {
       await joinHousehold(inviteCode.trim());
-      await refresh();
+      const data = await getMyHousehold();
+      const owner = data.members.find((m) => m.role === "owner");
+      setWelcomeData({
+        variant: "joined",
+        kitchenName: data.household?.name ?? "your kitchen",
+        creatorName: owner?.display_name ?? undefined,
+      });
     } catch (err: any) {
       setError(err.message || "Failed to join kitchen");
     } finally {
       setJoining(false);
     }
+  }
+
+  async function handleWelcomeContinue() {
+    await refresh();
+  }
+
+  if (welcomeData) {
+    return (
+      <WelcomeScreen
+        {...welcomeData}
+        onContinue={handleWelcomeContinue}
+      />
+    );
   }
 
   return (

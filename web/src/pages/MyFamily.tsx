@@ -27,6 +27,7 @@ import FamilyMemberModal from "../components/FamilyMemberModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { useHousehold } from "../context/HouseholdContext";
 
 const SERVING_OPTIONS: { value: number; label: string; desc: string }[] = [
   { value: 0.5, label: "0.5x", desc: "Small" },
@@ -36,6 +37,8 @@ const SERVING_OPTIONS: { value: number; label: string; desc: string }[] = [
 ];
 
 export default function MyFamily() {
+  const { household } = useHousehold();
+  const [inviteCodeCopied, setInviteCodeCopied] = useState(false);
   const [family, setFamily] = useState<Family | null>(null);
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [chefs, setChefs] = useState<FamilyFavoriteChef[]>([]);
@@ -234,6 +237,47 @@ export default function MyFamily() {
         <div className="fixed top-16 right-4 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg z-50">
           {saveStatus}
         </div>
+      )}
+
+      {/* ────────────────────────────────────── */}
+      {/* YOUR KITCHEN                            */}
+      {/* ────────────────────────────────────── */}
+      {household && (
+        <Card className="overflow-hidden">
+          <div className="px-4 md:px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <h2 className="text-lg font-bold text-gray-900">Your Kitchen</h2>
+          </div>
+          <div className="p-4 md:p-6 space-y-3">
+            <h3 className="text-xl font-bold text-gray-900">{household.name}</h3>
+            <div>
+              <p className="text-sm text-gray-500 mb-2">Invite Code</p>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-lg font-semibold text-orange-700 bg-orange-50 px-3 py-1.5 rounded-md select-all">
+                  {household.invite_code}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(household.invite_code);
+                      setInviteCodeCopied(true);
+                      setTimeout(() => setInviteCodeCopied(false), 1500);
+                    } catch {
+                      setInviteCodeCopied(true);
+                      setTimeout(() => setInviteCodeCopied(false), 1500);
+                    }
+                  }}
+                >
+                  {inviteCodeCopied ? "Copied!" : "Copy"}
+                </Button>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Share this code with family members so they can join your kitchen.
+              </p>
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* ────────────────────────────────────── */}
