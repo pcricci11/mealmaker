@@ -120,6 +120,7 @@ export default function Plan() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const lockTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const [groceryBanner, setGroceryBanner] = useState(false);
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
@@ -178,6 +179,17 @@ export default function Plan() {
       }
     }
   }, []);
+
+  // Show grocery list banner when plan was just locked
+  useEffect(() => {
+    const state = location.state as { justLocked?: boolean } | null;
+    if (state?.justLocked) {
+      setGroceryBanner(true);
+      window.history.replaceState({}, "");
+      const timer = setTimeout(() => setGroceryBanner(false), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [location.state]);
 
   const refreshPlan = async () => {
     if (!plan) return;
@@ -509,7 +521,7 @@ export default function Plan() {
     abortControllerRef.current = controller;
 
     setLoading(true);
-    setLockProgress("📝 Reading ingredients for your grocery lists!");
+    setLockProgress("Locking in your meal plan...");
     setError(null);
     try {
       const families = await getFamilies();
@@ -523,8 +535,8 @@ export default function Plan() {
       );
 
       // Timed progress messages
-      const progressTimer1 = setTimeout(() => setLockProgress("Mixing together your shopping list..."), 4000);
-      const progressTimer2 = setTimeout(() => setLockProgress("Almost done — just seasoning the details..."), 8000);
+      const progressTimer1 = setTimeout(() => setLockProgress("Saving your selections..."), 4000);
+      const progressTimer2 = setTimeout(() => setLockProgress("Almost done..."), 8000);
       lockTimersRef.current = [progressTimer1, progressTimer2];
 
       const result = await lockMealPlan({
@@ -543,7 +555,7 @@ export default function Plan() {
       localStorage.setItem("currentPlanId", String(result.id));
       localStorage.setItem("lastPlanId", String(result.id));
       localStorage.setItem("lastMealPlanId", String(result.id));
-      navigate("/my-plan");
+      navigate("/my-plan", { state: { justLocked: true } });
     } catch (err: any) {
       if (isAbortError(err)) return;
       setError(err.message || "Failed to lock plan");
@@ -878,6 +890,17 @@ export default function Plan() {
               </Button>
             </div>
           </div>
+          {groceryBanner && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
+              <span>Your grocery list will be ready in a few minutes, Chef!</span>
+              <button
+                onClick={() => setGroceryBanner(false)}
+                className="ml-3 text-amber-500 hover:text-amber-700 text-lg leading-none"
+              >
+                &times;
+              </button>
+            </div>
+          )}
           <p className="text-sm text-gray-500">
             Week of {plan.week_start || "this week"}
           </p>

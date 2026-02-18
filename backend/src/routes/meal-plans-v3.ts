@@ -72,46 +72,6 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
       createdBy: req.user!.id,
     });
 
-    // Lazy backfill: extract ingredients for any assigned recipe that has none
-    const assignedRecipes = await query<{ id: number; name: string; source_url: string; ingredients: string }>(`
-      SELECT DISTINCT r.id, r.name, r.source_url, r.ingredients
-      FROM meal_plan_items mpi
-      JOIN recipes r ON r.id = mpi.recipe_id
-      WHERE mpi.meal_plan_id = $1
-        AND r.source_url IS NOT NULL
-        AND (r.ingredients IS NULL OR r.ingredients = '[]' OR r.ingredients = '')
-    `, [mealPlan.id]);
-
-    if (assignedRecipes.length > 0) {
-      // Look up serving multiplier for scaled extraction
-      const familyRow = await queryOne<{ serving_multiplier: number }>(
-        "SELECT serving_multiplier FROM families WHERE id = $1",
-        [family_id],
-      );
-      const servings = Math.round((familyRow?.serving_multiplier ?? 1.0) * 4);
-
-      console.log(`[generate-v3] Lazy backfill: ${assignedRecipes.length} assigned recipes have no ingredients (${servings} servings)`);
-      for (const recipe of assignedRecipes) {
-        console.log(`[generate-v3] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
-        const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url, servings);
-        if (extracted.length > 0) {
-          await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
-            JSON.stringify(extracted),
-            recipe.id,
-          ]);
-          for (const ing of extracted) {
-            await query(
-              "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
-              [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
-            );
-          }
-          console.log(`[generate-v3] Extracted ${extracted.length} ingredients for #${recipe.id} "${recipe.name}"`);
-        } else {
-          console.warn(`[generate-v3] Failed to extract ingredients for #${recipe.id} "${recipe.name}"`);
-        }
-      }
-    }
-
     // Fetch the generated items with recipe details
     const items = await query(`
       SELECT mpi.id, mpi.meal_plan_id, mpi.day, mpi.recipe_id, mpi.locked,
@@ -147,6 +107,49 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
         makes_leftovers: !!row.makes_leftovers,
         kid_friendly: !!row.kid_friendly,
       })),
+    });
+
+    // Fire-and-forget: extract ingredients in background for recipes that have none
+    (async () => {
+      const assignedRecipes = await query<{ id: number; name: string; source_url: string; ingredients: string }>(`
+        SELECT DISTINCT r.id, r.name, r.source_url, r.ingredients
+        FROM meal_plan_items mpi
+        JOIN recipes r ON r.id = mpi.recipe_id
+        WHERE mpi.meal_plan_id = $1
+          AND r.source_url IS NOT NULL
+          AND (r.ingredients IS NULL OR r.ingredients = '[]' OR r.ingredients = '')
+      `, [mealPlan.id]);
+
+      if (assignedRecipes.length > 0) {
+        const famRow = await queryOne<{ serving_multiplier: number }>(
+          "SELECT serving_multiplier FROM families WHERE id = $1",
+          [family_id],
+        );
+        const servings = Math.round((famRow?.serving_multiplier ?? 1.0) * 4);
+
+        console.log(`[generate-v3] Background backfill: ${assignedRecipes.length} recipes need ingredients (${servings} servings)`);
+        for (const recipe of assignedRecipes) {
+          console.log(`[generate-v3] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
+          const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url, servings);
+          if (extracted.length > 0) {
+            await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
+              JSON.stringify(extracted),
+              recipe.id,
+            ]);
+            for (const ing of extracted) {
+              await query(
+                "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
+                [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
+              );
+            }
+            console.log(`[generate-v3] Extracted ${extracted.length} ingredients for #${recipe.id} "${recipe.name}"`);
+          } else {
+            console.warn(`[generate-v3] Failed to extract ingredients for #${recipe.id} "${recipe.name}"`);
+          }
+        }
+      }
+    })().catch((err) => {
+      console.error("[generate-v3] Background ingredient extraction failed:", err);
     });
   } catch (error: any) {
     console.error("Generate meal plan V3 error:", error);
@@ -555,43 +558,6 @@ router.post("/lock", async (req: Request, res: Response) => {
     }
     console.log(`[lock] Inserted ${items.length} items`);
 
-    // Lazy backfill: extract ingredients for any assigned recipe that has none
-    const assignedRecipes = await query<{ id: number; name: string; source_url: string; ingredients: string }>(`
-      SELECT DISTINCT r.id, r.name, r.source_url, r.ingredients
-      FROM meal_plan_items mpi
-      JOIN recipes r ON r.id = mpi.recipe_id
-      WHERE mpi.meal_plan_id = $1
-        AND r.source_url IS NOT NULL
-        AND (r.ingredients IS NULL OR r.ingredients = '[]' OR r.ingredients = '')
-    `, [mealPlanId]);
-
-    if (assignedRecipes.length > 0) {
-      const familyRow = await queryOne<{ serving_multiplier: number }>(
-        "SELECT serving_multiplier FROM families WHERE id = $1",
-        [family_id],
-      );
-      const servings = Math.round((familyRow?.serving_multiplier ?? 1.0) * 4);
-
-      console.log(`[lock] Backfill: ${assignedRecipes.length} recipes need ingredients (${servings} servings)`);
-      for (const recipe of assignedRecipes) {
-        console.log(`[lock] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
-        const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url, servings);
-        if (extracted.length > 0) {
-          await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
-            JSON.stringify(extracted),
-            recipe.id,
-          ]);
-          for (const ing of extracted) {
-            await query(
-              "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
-              [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
-            );
-          }
-          console.log(`[lock] Extracted ${extracted.length} ingredients for #${recipe.id}`);
-        }
-      }
-    }
-
     // Fetch the saved items with recipe details
     const savedItems = await query(`
       SELECT mpi.id, mpi.meal_plan_id, mpi.day, mpi.recipe_id, mpi.locked,
@@ -629,6 +595,47 @@ router.post("/lock", async (req: Request, res: Response) => {
         makes_leftovers: !!row.makes_leftovers,
         kid_friendly: !!row.kid_friendly,
       })),
+    });
+
+    // Fire-and-forget: extract ingredients in background for recipes that have none
+    (async () => {
+      const assignedRecipes = await query<{ id: number; name: string; source_url: string; ingredients: string }>(`
+        SELECT DISTINCT r.id, r.name, r.source_url, r.ingredients
+        FROM meal_plan_items mpi
+        JOIN recipes r ON r.id = mpi.recipe_id
+        WHERE mpi.meal_plan_id = $1
+          AND r.source_url IS NOT NULL
+          AND (r.ingredients IS NULL OR r.ingredients = '[]' OR r.ingredients = '')
+      `, [mealPlanId]);
+
+      if (assignedRecipes.length > 0) {
+        const famRow = await queryOne<{ serving_multiplier: number }>(
+          "SELECT serving_multiplier FROM families WHERE id = $1",
+          [family_id],
+        );
+        const servings = Math.round((famRow?.serving_multiplier ?? 1.0) * 4);
+
+        console.log(`[lock] Background backfill: ${assignedRecipes.length} recipes need ingredients (${servings} servings)`);
+        for (const recipe of assignedRecipes) {
+          console.log(`[lock] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
+          const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url, servings);
+          if (extracted.length > 0) {
+            await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
+              JSON.stringify(extracted),
+              recipe.id,
+            ]);
+            for (const ing of extracted) {
+              await query(
+                "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
+                [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
+              );
+            }
+            console.log(`[lock] Extracted ${extracted.length} ingredients for #${recipe.id}`);
+          }
+        }
+      }
+    })().catch((err) => {
+      console.error("[lock] Background ingredient extraction failed:", err);
     });
   } catch (error: any) {
     console.error("Lock meal plan error:", error);

@@ -434,33 +434,6 @@ router.post("/", optionalAuth, async (req: Request, res: Response) => {
   }
 
   res.status(201).json(rowToRecipe(row));
-
-  // Fire-and-forget: extract ingredients in background for web_search recipes
-  if (
-    sourceType === "web_search" &&
-    r.source_url &&
-    (!r.ingredients || r.ingredients.length === 0)
-  ) {
-    extractIngredientsFromUrl(r.title, r.source_url)
-      .then(async (extracted) => {
-        if (extracted.length > 0) {
-          await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
-            JSON.stringify(extracted),
-            recipeId,
-          ]);
-          for (const ing of extracted) {
-            await query(
-              "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
-              [recipeId, ing.name, ing.quantity, ing.unit, ing.category],
-            );
-          }
-          console.log(`[create] Background extraction for recipe ${recipeId}: ${extracted.length} ingredients`);
-        }
-      })
-      .catch((err) => {
-        console.error(`[create] Background ingredient extraction failed for recipe ${recipeId}:`, err);
-      });
-  }
 });
 
 // PUT /api/recipes/:id
