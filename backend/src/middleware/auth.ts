@@ -61,10 +61,15 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
 
     const token = authHeader.slice(7);
+    console.log("Auth: verifying token, length =", token.length, "prefix =", token.slice(0, 20) + "...");
+    console.log("Auth: secretKey present =", !!process.env.CLERK_SECRET_KEY, "length =", process.env.CLERK_SECRET_KEY?.length);
+
     const verifiedToken = await verifyToken(token, {
       secretKey: process.env.CLERK_SECRET_KEY,
+      authorizedParties: undefined, // allow any azp
     });
     const clerkId = verifiedToken.sub;
+    console.log("Auth: verified, clerkId =", clerkId);
 
     if (!clerkId) {
       return res.status(401).json({ error: "Invalid token" });
@@ -76,7 +81,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     next();
   } catch (err: any) {
     console.error("Auth error:", err.message);
-    return res.status(401).json({ error: "Invalid or expired token" });
+    console.error("Auth error reason:", err.reason);
+    console.error("Auth error action:", err.action);
+    console.error("Auth full error:", err);
+    return res.status(401).json({ error: "Invalid or expired token", reason: err.reason || err.message });
   }
 }
 
@@ -94,6 +102,7 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
     const token = authHeader.slice(7);
     const verifiedToken = await verifyToken(token, {
       secretKey: process.env.CLERK_SECRET_KEY,
+      authorizedParties: undefined,
     });
     const clerkId = verifiedToken.sub;
 
@@ -103,8 +112,9 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
       req.householdId = householdId;
     }
     next();
-  } catch {
-    // Token invalid — proceed without auth
+  } catch (err: any) {
+    // Token invalid — proceed without auth, but log for debugging
+    console.error("optionalAuth error:", err.reason || err.message);
     next();
   }
 }
