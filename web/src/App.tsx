@@ -1,4 +1,4 @@
-import { Outlet, NavLink, Link } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
 import {
   SignedIn,
   SignedOut,
@@ -8,6 +8,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import HouseholdGuard from "./components/HouseholdGuard";
 
 export default function App() {
   return (
@@ -95,7 +96,7 @@ export default function App() {
         <Separator />
       </header>
       <main className="max-w-4xl mx-auto px-3 md:px-4 py-4 md:py-6 flex-1">
-        <Outlet />
+        <HouseholdGuard />
       </main>
       <footer className="border-t border-gray-200 py-4 text-center text-xs text-gray-400">
         &copy; 2026 Yes Chef Meal Planner
