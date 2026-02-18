@@ -193,6 +193,18 @@ export async function matchRecipeInDb(query: string, signal?: AbortSignal): Prom
   return data;
 }
 
+export async function aiMatchRecipe(query: string, familyId: number, signal?: AbortSignal): Promise<{ matches: Array<{ recipe: Recipe; score: number; reasoning?: string }> }> {
+  const data = await json<{ matches: Array<{ recipe: Recipe; score: number; reasoning?: string }> }>(
+    await authFetch(`${BASE}/recipes/ai-match`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, family_id: familyId }),
+      signal,
+    }),
+  );
+  return data;
+}
+
 export async function searchRecipesWeb(query: string, signal?: AbortSignal, familyId?: number): Promise<WebSearchRecipeResult[]> {
   const data = await json<{ results: WebSearchRecipeResult[] }>(
     await authFetch(`${BASE}/recipes/search`, {

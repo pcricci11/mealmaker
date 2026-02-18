@@ -12,6 +12,7 @@ import {
   smartSetup,
   getRecipes,
   matchRecipeInDb,
+  aiMatchRecipe,
 } from "../api";
 import type {
   Family,
@@ -167,7 +168,23 @@ export default function ThisWeek() {
               setAllRecipes([...recipes]);
             }
           } else {
-            unmatched.push(meal);
+            // DB miss — try AI matching before falling to web search
+            try {
+              const aiResult = await aiMatchRecipe(meal.description, family.id);
+              if (aiResult.matches.length > 0) {
+                const best = aiResult.matches[0];
+                autoResolved.push({ day: meal.day, recipe_id: best.recipe.id });
+                if (!recipes.some((r) => r.id === best.recipe.id)) {
+                  recipes.push(best.recipe);
+                  setAllRecipes([...recipes]);
+                }
+              } else {
+                unmatched.push(meal);
+              }
+            } catch {
+              // AI failed silently — fall through to web search
+              unmatched.push(meal);
+            }
           }
         }
 

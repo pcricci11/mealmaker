@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 interface PendingConfirmation {
   day: string;
   description: string;
-  matches: Array<{ recipe: Recipe; score: number }>;
+  matches: Array<{ recipe: Recipe; score: number; reasoning?: string }>;
 }
 
 interface Props {
@@ -37,6 +37,7 @@ export default function DbMatchConfirmModal({
   onSearchWeb,
 }: Props) {
   const { day, description, matches } = confirmation;
+  const hasReasoning = matches.some((m) => m.reasoning);
 
   return (
     <Dialog open={true} onOpenChange={() => {}}>
@@ -63,13 +64,15 @@ export default function DbMatchConfirmModal({
         {/* Match cards */}
         <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">📖</span>
+            <span className="text-lg">{hasReasoning ? "✨" : "📖"}</span>
             <span className="text-sm font-medium text-orange-800">
-              Found these in your collection:
+              {hasReasoning
+                ? "AI picked these based on your family:"
+                : "Found these in your collection:"}
             </span>
           </div>
           <div className="space-y-2">
-            {matches.map(({ recipe, score }, i) => {
+            {matches.map(({ recipe, score, reasoning }, i) => {
               const cuisineClass =
                 CUISINE_COLORS[recipe.cuisine] || "bg-gray-100 text-gray-700";
               const pct = Math.round(score * 100);
@@ -106,6 +109,11 @@ export default function DbMatchConfirmModal({
                   {recipe.source_name && (
                     <div className="text-xs text-gray-500 mt-2">
                       by {recipe.source_name}
+                    </div>
+                  )}
+                  {reasoning && (
+                    <div className="text-xs italic text-gray-400 mt-2">
+                      {reasoning}
                     </div>
                   )}
                 </button>

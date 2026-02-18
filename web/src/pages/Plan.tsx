@@ -16,6 +16,7 @@ import {
   removeMealItem,
   addMealToDay,
   matchRecipeInDb,
+  aiMatchRecipe,
   batchSearchRecipesWeb,
   isAbortError,
 } from "../api";
@@ -279,6 +280,7 @@ export default function Plan() {
         const needsConfirmation: PendingConfirmation[] = [];
 
         // Fuzzy-match each specific meal against the database (top 3, >40%)
+        // Falls back to AI matching if DB keyword match fails
         for (const meal of result.specific_meals) {
           if (signal.aborted) return;
           const { matches } = await matchRecipeInDb(meal.description, signal);
@@ -292,8 +294,29 @@ export default function Plan() {
             }
             setAllRecipes([...fetchedRecipes]);
           } else {
-            console.log("[Plan] no DB match, will search web", { description: meal.description, day: meal.day });
-            unmatched.push(meal);
+            // DB miss — try AI matching before falling to web search
+            console.log("[Plan] no DB match, trying AI match", { description: meal.description, day: meal.day });
+            try {
+              setSetupProgress({ phase: "matching", message: "Thinking about your family's preferences...", searchQueries: [] });
+              const aiResult = await aiMatchRecipe(meal.description, familyId, signal);
+              if (aiResult.matches.length > 0) {
+                console.log("[Plan] AI matches found", { description: meal.description, count: aiResult.matches.length, top: aiResult.matches[0].recipe.title, topScore: aiResult.matches[0].score });
+                needsConfirmation.push({ day: meal.day, description: meal.description, matches: aiResult.matches });
+                for (const m of aiResult.matches) {
+                  if (!fetchedRecipes.some((r) => r.id === m.recipe.id)) {
+                    fetchedRecipes.push(m.recipe);
+                  }
+                }
+                setAllRecipes([...fetchedRecipes]);
+              } else {
+                console.log("[Plan] no AI match, will search web", { description: meal.description, day: meal.day });
+                unmatched.push(meal);
+              }
+            } catch (aiErr) {
+              // AI failed silently — fall through to web search
+              console.warn("[Plan] AI match failed, falling to web search", aiErr);
+              unmatched.push(meal);
+            }
           }
         }
 

@@ -5,7 +5,9 @@ import { rowToRecipe } from "../helpers";
 import { validateRecipe } from "../validation";
 import { extractIngredientsFromUrl } from "../services/ingredientExtractor";
 import { createWithRetry, RateLimitError } from "../services/claudeRetry";
+import { aiMatchRecipes } from "../services/aiRecipeMatcher";
 import { requireAuth, optionalAuth } from "../middleware/auth";
+import { verifyFamilyAccess } from "../middleware/auth";
 import type { RecipeInput } from "../../../shared/types";
 import { VALID_CUISINES, VALID_DIFFICULTIES } from "../../../shared/types";
 
@@ -310,6 +312,55 @@ router.post("/match", optionalAuth, async (req: Request, res: Response) => {
 
   console.log(`[match] query="${matchQuery}" → no matches found`);
   res.json({ matches: [] });
+});
+
+// POST /api/recipes/ai-match — AI-powered recipe matching using Claude
+router.post("/ai-match", requireAuth, async (req: Request, res: Response) => {
+  const { query: matchQuery, family_id } = req.body;
+  if (!matchQuery || typeof matchQuery !== "string" || !matchQuery.trim()) {
+    return res.status(400).json({ error: "query is required" });
+  }
+  if (!family_id || typeof family_id !== "number") {
+    return res.status(400).json({ error: "family_id is required" });
+  }
+
+  // Verify family access
+  const family = await verifyFamilyAccess(family_id, req.householdId);
+  if (!family) {
+    return res.status(403).json({ error: "Access denied to this family" });
+  }
+
+  try {
+    const aiResults = await aiMatchRecipes({
+      description: matchQuery.trim(),
+      familyId: family_id,
+      householdId: req.householdId,
+    });
+
+    if (aiResults.length === 0) {
+      return res.json({ matches: [] });
+    }
+
+    // Fetch full recipe rows for each AI result
+    const matches = [];
+    for (const result of aiResults) {
+      const fullRow = await queryOne("SELECT * FROM recipes WHERE id = $1", [result.recipe_id]);
+      if (fullRow) {
+        matches.push({
+          recipe: rowToRecipe(fullRow),
+          score: result.score,
+          reasoning: result.reasoning,
+        });
+      }
+    }
+
+    console.log(`[ai-match] query="${matchQuery}" → ${matches.length} matches: ${matches.map((m) => `"${m.recipe.title}" (score=${m.score})`).join(", ")}`);
+    res.json({ matches });
+  } catch (error: any) {
+    console.error("[ai-match] error:", error);
+    // Never block the user — return empty on any failure
+    res.json({ matches: [] });
+  }
 });
 
 // GET /api/recipes/:id
