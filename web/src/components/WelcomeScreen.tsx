@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { buildInviteMailto } from "../utils/invite";
 
 interface WelcomeScreenProps {
   variant: "created" | "joined";
@@ -16,21 +16,6 @@ export default function WelcomeScreen({
   creatorName,
   onContinue,
 }: WelcomeScreenProps) {
-  const [copied, setCopied] = useState(false);
-
-  async function copyCode() {
-    if (!inviteCode) return;
-    try {
-      await navigator.clipboard.writeText(inviteCode);
-      setCopied(true);
-      setTimeout(() => onContinue(), 800);
-    } catch {
-      // Fallback: select the text for manual copy
-      setCopied(true);
-      setTimeout(() => onContinue(), 800);
-    }
-  }
-
   if (variant === "created") {
     return (
       <div className="flex flex-col items-center justify-center py-12 px-4">
@@ -57,11 +42,12 @@ export default function WelcomeScreen({
 
           <div className="space-y-2">
             <Button
-              onClick={copyCode}
+              asChild
               className="w-full bg-orange-600 hover:bg-orange-700"
-              disabled={copied}
             >
-              {copied ? "Copied!" : "Invite Someone Now"}
+              <a href={buildInviteMailto(inviteCode ?? "")}>
+                Invite Someone Now
+              </a>
             </Button>
             <Button
               onClick={onContinue}

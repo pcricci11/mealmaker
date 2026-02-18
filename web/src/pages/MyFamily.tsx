@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useHousehold } from "../context/HouseholdContext";
+import { buildInviteMailto } from "../utils/invite";
 
 const SERVING_OPTIONS: { value: number; label: string; desc: string }[] = [
   { value: 0.5, label: "0.5x", desc: "Small" },
@@ -275,6 +276,15 @@ export default function MyFamily() {
               <p className="text-xs text-gray-400 mt-2">
                 Share this code with family members so they can join your kitchen.
               </p>
+              <Button
+                asChild
+                size="sm"
+                className="mt-3 bg-orange-600 hover:bg-orange-700"
+              >
+                <a href={buildInviteMailto(household.invite_code)}>
+                  Invite Someone
+                </a>
+              </Button>
             </div>
           </div>
         </Card>
