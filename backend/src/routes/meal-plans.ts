@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import db from "../db";
+import { query, queryOne, transaction } from "../db";
 import { rowToRecipe } from "../helpers";
 import { generatePlan, normalizeToMonday, deriveSeed } from "../planner/index";
 import type { PlannerContext } from "../planner/types";
@@ -78,7 +78,7 @@ const ITEMS_QUERY = `
          r.seasonal_tags, r.frequency_cap_per_month
   FROM meal_plan_items mpi
   LEFT JOIN recipes r ON r.id = mpi.recipe_id
-  WHERE mpi.meal_plan_id = ?
+  WHERE mpi.meal_plan_id = $1
   ORDER BY CASE mpi.day
     WHEN 'monday' THEN 1 WHEN 'tuesday' THEN 2 WHEN 'wednesday' THEN 3
     WHEN 'thursday' THEN 4 WHEN 'friday' THEN 5 WHEN 'saturday' THEN 6 WHEN 'sunday' THEN 7
@@ -86,7 +86,7 @@ const ITEMS_QUERY = `
 `;
 
 // POST /api/meal-plans/generate
-router.post("/generate", (req: Request, res: Response) => {
+router.post("/generate", async (req: Request, res: Response) => {
   const validation = validateGeneratePlanRequest(req.body);
   if (!validation.isValid) {
     return res.status(400).json({ error: "Validation failed", details: validation.errors });
@@ -95,23 +95,24 @@ router.post("/generate", (req: Request, res: Response) => {
   const { family_id, locks, week_start, variant: reqVariant, settings } = req.body;
   const variant = reqVariant ?? 0;
 
-  const familyRow = db.prepare("SELECT * FROM families WHERE id = ?").get(family_id);
+  const familyRow = await queryOne("SELECT * FROM families WHERE id = $1", [family_id]);
   if (!familyRow) return res.status(404).json({ error: "Family not found" });
   const family = rowToFamily(familyRow);
 
-  const memberRows = db.prepare("SELECT * FROM family_members WHERE family_id = ?").all(family_id);
+  const memberRows = await query("SELECT * FROM family_members WHERE family_id = $1", [family_id]);
   const members = memberRows.map(rowToMember);
 
   // Normalize week_start to Monday
   const normalizedWeek = week_start ? normalizeToMonday(week_start) : normalizeToMonday(new Date().toISOString().slice(0, 10));
 
   // Check for existing plan with same (family_id, week_start, variant)
-  const existingPlan = db.prepare(
-    "SELECT * FROM meal_plans WHERE family_id = ? AND week_start = ? AND variant = ?",
-  ).get(family_id, normalizedWeek, variant) as any;
+  const existingPlan = await queryOne(
+    "SELECT * FROM meal_plans WHERE family_id = $1 AND week_start = $2 AND variant = $3",
+    [family_id, normalizedWeek, variant],
+  );
 
   if (existingPlan) {
-    const items = db.prepare(ITEMS_QUERY).all(existingPlan.id);
+    const items = await query(ITEMS_QUERY, [existingPlan.id]);
     return res.status(200).json({
       id: existingPlan.id,
       family_id: existingPlan.family_id,
@@ -124,15 +125,15 @@ router.post("/generate", (req: Request, res: Response) => {
     });
   }
 
-  const recipeRows = db.prepare("SELECT * FROM recipes").all();
+  const recipeRows = await query("SELECT * FROM recipes");
   const allRecipes = recipeRows.map(rowToRecipe);
 
   // Get recent recipe history (trailing 30 days)
-  const recentRows = db.prepare(`
+  const recentRows = await query<{ recipe_id: number }>(`
     SELECT mpi.recipe_id FROM meal_plan_items mpi
     JOIN meal_plans mp ON mp.id = mpi.meal_plan_id
-    WHERE mp.family_id = ? AND mp.created_at >= datetime('now', '-30 days')
-  `).all(family_id) as { recipe_id: number }[];
+    WHERE mp.family_id = $1 AND mp.created_at >= NOW() - INTERVAL '30 days'
+  `, [family_id]);
   const recentRecipeHistory = recentRows.map((r) => r.recipe_id);
 
   const seed = deriveSeed(family.id, normalizedWeek, variant);
@@ -153,46 +154,43 @@ router.post("/generate", (req: Request, res: Response) => {
     // Save to DB in a transaction
     const settingsSnapshot = settings ? JSON.stringify(settings) : null;
 
-    const savePlan = db.transaction(() => {
-      const planResult = db.prepare(
-        "INSERT INTO meal_plans (family_id, week_start, variant, settings_snapshot) VALUES (?, ?, ?, ?)",
-      ).run(family_id, normalizedWeek, variant, settingsSnapshot);
-      const planId = planResult.lastInsertRowid as number;
-
-      const insertItem = db.prepare(`
-        INSERT INTO meal_plan_items (meal_plan_id, day, recipe_id, locked, lunch_leftover_label,
-          leftover_lunch_recipe_id, notes, reasons_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+    const planId = await transaction(async (client) => {
+      const planResult = await client.query(
+        "INSERT INTO meal_plans (family_id, week_start, variant, settings_snapshot) VALUES ($1, $2, $3, $4) RETURNING id",
+        [family_id, normalizedWeek, variant, settingsSnapshot],
+      );
+      const id = planResult.rows[0].id;
 
       for (const slot of planSlots) {
-        insertItem.run(
-          planId,
+        await client.query(`
+          INSERT INTO meal_plan_items (meal_plan_id, day, recipe_id, locked, lunch_leftover_label,
+            leftover_lunch_recipe_id, notes, reasons_json)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `, [
+          id,
           slot.day,
           slot.recipe.id,
-          slot.locked ? 1 : 0,
+          slot.locked ?? false,
           slot.lunch_leftover_label,
           slot.leftover_lunch_recipe_id,
           null,
           JSON.stringify(slot.reasons),
-        );
+        ]);
       }
 
-      return planId;
+      return id;
     });
 
-    const planId = savePlan();
-
     // Return the full plan
-    const items = db.prepare(ITEMS_QUERY).all(planId);
-    const planRow = db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(planId) as any;
+    const items = await query(ITEMS_QUERY, [planId]);
+    const planRow = await queryOne("SELECT * FROM meal_plans WHERE id = $1", [planId]);
 
     res.status(201).json({
       id: planId,
       family_id,
       week_start: normalizedWeek,
       variant,
-      created_at: planRow.created_at,
+      created_at: planRow!.created_at,
       settings_snapshot: settingsSnapshot ? JSON.parse(settingsSnapshot) : null,
       items: items.map(buildItemResponse),
     });
@@ -202,11 +200,11 @@ router.post("/generate", (req: Request, res: Response) => {
 });
 
 // GET /api/meal-plans/:id
-router.get("/:id", (req: Request, res: Response) => {
-  const plan = db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(req.params.id) as any;
+router.get("/:id", async (req: Request, res: Response) => {
+  const plan = await queryOne("SELECT * FROM meal_plans WHERE id = $1", [req.params.id]);
   if (!plan) return res.status(404).json({ error: "Meal plan not found" });
 
-  const items = db.prepare(ITEMS_QUERY).all(req.params.id);
+  const items = await query(ITEMS_QUERY, [req.params.id]);
 
   res.json({
     id: plan.id,
@@ -220,31 +218,29 @@ router.get("/:id", (req: Request, res: Response) => {
 });
 
 // POST /api/meal-plans/:id/swap
-router.post("/:id/swap", (req: Request, res: Response) => {
+router.post("/:id/swap", async (req: Request, res: Response) => {
   const validation = validateSwapRequest(req.body);
   if (!validation.isValid) {
     return res.status(400).json({ error: "Validation failed", details: validation.errors });
   }
 
-  const plan = db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(req.params.id) as any;
+  const plan = await queryOne("SELECT * FROM meal_plans WHERE id = $1", [req.params.id]);
   if (!plan) return res.status(404).json({ error: "Meal plan not found" });
 
   const { day } = req.body as { day: DayOfWeek };
 
-  const familyRow = db.prepare("SELECT * FROM families WHERE id = ?").get(plan.family_id);
+  const familyRow = await queryOne("SELECT * FROM families WHERE id = $1", [plan.family_id]);
   if (!familyRow) return res.status(404).json({ error: "Family not found" });
   const family = rowToFamily(familyRow);
 
-  const memberRows = db.prepare("SELECT * FROM family_members WHERE family_id = ?").all(plan.family_id);
+  const memberRows = await query("SELECT * FROM family_members WHERE family_id = $1", [plan.family_id]);
   const members = memberRows.map(rowToMember);
 
-  const recipeRows = db.prepare("SELECT * FROM recipes").all();
+  const recipeRows = await query("SELECT * FROM recipes");
   const allRecipes = recipeRows.map(rowToRecipe);
 
   // Lock all other days from existing plan
-  const existingItems = db.prepare(
-    "SELECT * FROM meal_plan_items WHERE meal_plan_id = ?",
-  ).all(req.params.id) as any[];
+  const existingItems = await query("SELECT * FROM meal_plan_items WHERE meal_plan_id = $1", [req.params.id]);
 
   const locks: Partial<Record<DayOfWeek, number>> = {};
   for (const item of existingItems) {
@@ -254,11 +250,11 @@ router.post("/:id/swap", (req: Request, res: Response) => {
   }
 
   // Get recent recipe history
-  const recentRows = db.prepare(`
+  const recentRows = await query<{ recipe_id: number }>(`
     SELECT mpi.recipe_id FROM meal_plan_items mpi
     JOIN meal_plans mp ON mp.id = mpi.meal_plan_id
-    WHERE mp.family_id = ? AND mp.created_at >= datetime('now', '-30 days')
-  `).all(plan.family_id) as { recipe_id: number }[];
+    WHERE mp.family_id = $1 AND mp.created_at >= NOW() - INTERVAL '30 days'
+  `, [plan.family_id]);
   const recentRecipeHistory = recentRows.map((r) => r.recipe_id);
 
   // Modified seed for swap: base variant + 100 + day index
@@ -284,22 +280,22 @@ router.post("/:id/swap", (req: Request, res: Response) => {
     }
 
     // Update the swapped item
-    db.prepare(`
-      UPDATE meal_plan_items SET recipe_id=?, locked=?, lunch_leftover_label=?,
-        leftover_lunch_recipe_id=?, reasons_json=?
-      WHERE meal_plan_id=? AND day=?
-    `).run(
+    await query(`
+      UPDATE meal_plan_items SET recipe_id=$1, locked=$2, lunch_leftover_label=$3,
+        leftover_lunch_recipe_id=$4, reasons_json=$5
+      WHERE meal_plan_id=$6 AND day=$7
+    `, [
       swappedSlot.recipe.id,
-      swappedSlot.locked ? 1 : 0,
+      swappedSlot.locked ?? false,
       swappedSlot.lunch_leftover_label,
       swappedSlot.leftover_lunch_recipe_id,
       JSON.stringify(swappedSlot.reasons),
       req.params.id,
       day,
-    );
+    ]);
 
     // Return the full updated plan
-    const items = db.prepare(ITEMS_QUERY).all(req.params.id);
+    const items = await query(ITEMS_QUERY, [req.params.id]);
     res.json({
       id: plan.id,
       family_id: plan.family_id,
@@ -315,30 +311,30 @@ router.post("/:id/swap", (req: Request, res: Response) => {
 });
 
 // POST /api/meal-plans/items/:itemId/swap-recipe
-router.post("/items/:itemId/swap-recipe", (req: Request, res: Response) => {
+router.post("/items/:itemId/swap-recipe", async (req: Request, res: Response) => {
   const { recipe_id } = req.body;
   if (!recipe_id) {
     return res.status(400).json({ error: "recipe_id is required" });
   }
 
-  const item = db.prepare("SELECT * FROM meal_plan_items WHERE id = ?").get(req.params.itemId) as any;
+  const item = await queryOne("SELECT * FROM meal_plan_items WHERE id = $1", [req.params.itemId]);
   if (!item) return res.status(404).json({ error: "Meal plan item not found" });
 
-  const recipe = db.prepare("SELECT * FROM recipes WHERE id = ?").get(recipe_id) as any;
+  const recipe = await queryOne("SELECT * FROM recipes WHERE id = $1", [recipe_id]);
   if (!recipe) return res.status(404).json({ error: "Recipe not found" });
 
-  db.prepare("UPDATE meal_plan_items SET recipe_id = ? WHERE id = ?").run(recipe_id, req.params.itemId);
+  await query("UPDATE meal_plan_items SET recipe_id = $1 WHERE id = $2", [recipe_id, req.params.itemId]);
 
   // Return the full updated plan
-  const plan = db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(item.meal_plan_id) as any;
-  const items = db.prepare(ITEMS_QUERY).all(item.meal_plan_id);
+  const plan = await queryOne("SELECT * FROM meal_plans WHERE id = $1", [item.meal_plan_id]);
+  const items = await query(ITEMS_QUERY, [item.meal_plan_id]);
   res.json({
-    id: plan.id,
-    family_id: plan.family_id,
-    week_start: plan.week_start,
-    variant: plan.variant,
-    created_at: plan.created_at,
-    settings_snapshot: plan.settings_snapshot ? JSON.parse(plan.settings_snapshot) : null,
+    id: plan!.id,
+    family_id: plan!.family_id,
+    week_start: plan!.week_start,
+    variant: plan!.variant,
+    created_at: plan!.created_at,
+    settings_snapshot: plan!.settings_snapshot ? JSON.parse(plan!.settings_snapshot) : null,
     items: items.map(buildItemResponse),
   });
 });
@@ -346,16 +342,16 @@ router.post("/items/:itemId/swap-recipe", (req: Request, res: Response) => {
 // GET /api/meal-plans/:id/grocery-list
 router.get("/:id/grocery-list", async (req: Request, res: Response) => {
   try {
-    const plan = db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(req.params.id) as any;
+    const plan = await queryOne("SELECT * FROM meal_plans WHERE id = $1", [req.params.id]);
     if (!plan) return res.status(404).json({ error: "Meal plan not found" });
 
     // Query recipe_ingredients via join through meal_plan_items (mains)
-    const rows = db.prepare(`
+    const rows = await query<{ item: string; quantity: number; unit: string; category: string }>(`
       SELECT ri.item, ri.quantity, ri.unit, ri.category
       FROM meal_plan_items mpi
       JOIN recipe_ingredients ri ON ri.recipe_id = mpi.recipe_id
-      WHERE mpi.meal_plan_id = ?
-    `).all(req.params.id) as Array<{ item: string; quantity: number; unit: string; category: string }>;
+      WHERE mpi.meal_plan_id = $1
+    `, [req.params.id]);
 
     // Consolidate by item+unit with SUM
     const consolidated = new Map<string, { total_quantity: number; unit: string; category: GroceryCategory }>();
@@ -374,10 +370,11 @@ router.get("/:id/grocery-list", async (req: Request, res: Response) => {
       }
     }
 
-    // ── Apply serving multiplier to recipe ingredients ──
-    const familyRow = db.prepare(
-      "SELECT serving_multiplier FROM families WHERE id = ?",
-    ).get(plan.family_id) as { serving_multiplier: number } | undefined;
+    // Apply serving multiplier to recipe ingredients
+    const familyRow = await queryOne<{ serving_multiplier: number }>(
+      "SELECT serving_multiplier FROM families WHERE id = $1",
+      [plan.family_id],
+    );
     const multiplier = familyRow?.serving_multiplier ?? 1.0;
 
     if (multiplier !== 1.0) {
@@ -386,38 +383,32 @@ router.get("/:id/grocery-list", async (req: Request, res: Response) => {
       }
     }
 
-    // ── Side ingredient handling ──
-    // Find sides in this meal plan (meal_type = 'side', recipe_id IS NULL)
-    const sideItems = db.prepare(`
+    // Side ingredient handling
+    const sideItems = await query<{ id: number; notes: string | null }>(`
       SELECT mpi.id, mpi.notes
       FROM meal_plan_items mpi
-      WHERE mpi.meal_plan_id = ? AND mpi.meal_type = 'side' AND mpi.recipe_id IS NULL
-    `).all(req.params.id) as Array<{ id: number; notes: string | null }>;
+      WHERE mpi.meal_plan_id = $1 AND mpi.meal_type = 'side' AND mpi.recipe_id IS NULL
+    `, [req.params.id]);
 
     if (sideItems.length > 0) {
-      // Get family member count for scaled serving size (multiplier already fetched above)
-      const memberCount = (db.prepare(
-        "SELECT COUNT(*) as c FROM family_members WHERE family_id = ?",
-      ).get(plan.family_id) as { c: number }).c;
-      const servings = Math.max(Math.round(memberCount * multiplier), 2); // minimum 2 servings
-
-      const insertSideIngredient = db.prepare(`
-        INSERT INTO side_ingredients (side_library_id, side_name, item, quantity, unit, category, servings)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `);
+      const memberCountRow = await queryOne<{ c: string }>(
+        "SELECT COUNT(*) as c FROM family_members WHERE family_id = $1",
+        [plan.family_id],
+      );
+      const memberCount = parseInt(memberCountRow?.c ?? "0");
+      const servings = Math.max(Math.round(memberCount * multiplier), 2);
 
       for (const side of sideItems) {
         let sideLibraryId: number | null = null;
         let sideName: string | null = null;
 
-        // Parse notes JSON to get side info
         if (side.notes) {
           try {
             const notes = JSON.parse(side.notes);
             sideLibraryId = notes.side_library_id || null;
             sideName = notes.side_name || notes.name || null;
           } catch {
-            continue; // skip unparseable notes
+            continue;
           }
         }
 
@@ -426,13 +417,15 @@ router.get("/:id/grocery-list", async (req: Request, res: Response) => {
         // Check cache in side_ingredients table
         let cached: Array<{ item: string; quantity: number; unit: string; category: string }>;
         if (sideLibraryId) {
-          cached = db.prepare(
-            "SELECT item, quantity, unit, category FROM side_ingredients WHERE side_library_id = ?",
-          ).all(sideLibraryId) as typeof cached;
+          cached = await query(
+            "SELECT item, quantity, unit, category FROM side_ingredients WHERE side_library_id = $1",
+            [sideLibraryId],
+          );
         } else {
-          cached = db.prepare(
-            "SELECT item, quantity, unit, category FROM side_ingredients WHERE side_name = ?",
-          ).all(sideName!) as typeof cached;
+          cached = await query(
+            "SELECT item, quantity, unit, category FROM side_ingredients WHERE side_name = $1",
+            [sideName!],
+          );
         }
 
         let sideIngredients: Array<{ item: string; quantity: number; unit: string; category: string }>;
@@ -443,7 +436,10 @@ router.get("/:id/grocery-list", async (req: Request, res: Response) => {
           // Resolve the display name for Claude
           let displayName = sideName;
           if (sideLibraryId && !displayName) {
-            const libRow = db.prepare("SELECT name FROM sides_library WHERE id = ?").get(sideLibraryId) as { name: string } | undefined;
+            const libRow = await queryOne<{ name: string }>(
+              "SELECT name FROM sides_library WHERE id = $1",
+              [sideLibraryId],
+            );
             displayName = libRow?.name || null;
           }
           if (!displayName) continue;
@@ -454,14 +450,10 @@ router.get("/:id/grocery-list", async (req: Request, res: Response) => {
 
           // Cache results
           for (const ing of estimated) {
-            insertSideIngredient.run(
-              sideLibraryId,
-              sideName || displayName,
-              ing.name,
-              ing.quantity,
-              ing.unit,
-              ing.category,
-              servings,
+            await query(
+              `INSERT INTO side_ingredients (side_library_id, side_name, item, quantity, unit, category, servings)
+              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+              [sideLibraryId, sideName || displayName, ing.name, ing.quantity, ing.unit, ing.category, servings],
             );
           }
 
@@ -510,13 +502,13 @@ router.get("/:id/grocery-list", async (req: Request, res: Response) => {
     });
 
     // Find recipes in this plan that have no ingredients
-    const missingRecipes = db.prepare(`
+    const missingRecipes = await query<{ recipe_id: number; name: string }>(`
       SELECT DISTINCT mpi.recipe_id, r.name
       FROM meal_plan_items mpi
       JOIN recipes r ON r.id = mpi.recipe_id
       LEFT JOIN recipe_ingredients ri ON ri.recipe_id = mpi.recipe_id
-      WHERE mpi.meal_plan_id = ? AND ri.id IS NULL AND mpi.recipe_id IS NOT NULL
-    `).all(req.params.id) as Array<{ recipe_id: number; name: string }>;
+      WHERE mpi.meal_plan_id = $1 AND ri.id IS NULL AND mpi.recipe_id IS NOT NULL
+    `, [req.params.id]);
 
     res.json({
       meal_plan_id: Number(req.params.id),

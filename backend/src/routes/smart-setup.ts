@@ -3,7 +3,7 @@
 
 import { Router, Request, Response } from "express";
 import Anthropic from "@anthropic-ai/sdk";
-import db from "../db";
+import { query } from "../db";
 
 const router = Router();
 
@@ -62,9 +62,10 @@ router.post("/", async (req: Request, res: Response) => {
   }
 
   // Get family members for context
-  const members = db
-    .prepare("SELECT id, name FROM family_members WHERE family_id = ?")
-    .all(family_id) as { id: number; name: string }[];
+  const members = await query<{ id: number; name: string }>(
+    "SELECT id, name FROM family_members WHERE family_id = $1",
+    [family_id],
+  );
 
   const memberContext = members.length > 0
     ? `Family members: ${members.map((m) => m.name).join(", ")}`

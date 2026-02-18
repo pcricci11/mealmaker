@@ -2,104 +2,95 @@
 // Family members CRUD operations
 
 import { Router } from "express";
-import Database from "better-sqlite3";
-import db from "../db";
+import { query, queryOne, queryRaw } from "../db";
 import { validateFamilyMember } from "../validation-v3";
-import type { FamilyMember, FamilyMemberInput } from "@shared/types";
 
 const router = Router();
 
 // Get all family members for a family
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   const familyId = parseInt(req.query.family_id as string);
-  
+
   if (!familyId) {
     return res.status(400).json({ error: "family_id is required" });
   }
 
-  const members = db
-    .prepare(
-      `SELECT 
-        id, family_id, name, dietary_style, 
-        allergies, dislikes, favorites, no_spicy, 
-        created_at
-      FROM family_members 
-      WHERE family_id = ?
-      ORDER BY created_at ASC`
-    )
-    .all(familyId)
-    .map((row: any) => ({
-      ...row,
-      allergies: JSON.parse(row.allergies || "[]"),
-      dislikes: JSON.parse(row.dislikes || "[]"),
-      favorites: JSON.parse(row.favorites || "[]"),
-      no_spicy: Boolean(row.no_spicy),
-    }));
+  const members = (await query(
+    `SELECT
+      id, family_id, name, dietary_style,
+      allergies, dislikes, favorites, no_spicy,
+      created_at
+    FROM family_members
+    WHERE family_id = $1
+    ORDER BY created_at ASC`,
+    [familyId],
+  )).map((row: any) => ({
+    ...row,
+    allergies: JSON.parse(row.allergies || "[]"),
+    dislikes: JSON.parse(row.dislikes || "[]"),
+    favorites: JSON.parse(row.favorites || "[]"),
+    no_spicy: !!row.no_spicy,
+  }));
 
   res.json(members);
 });
 
 // Get single family member
-router.get("/:id", (req, res) => {
+router.get("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
-  
-  const row = db
-    .prepare(
-      `SELECT 
-        id, family_id, name, dietary_style, 
-        allergies, dislikes, favorites, no_spicy, 
-        created_at
-      FROM family_members 
-      WHERE id = ?`
-    )
-    .get(id);
+
+  const row = await queryOne(
+    `SELECT
+      id, family_id, name, dietary_style,
+      allergies, dislikes, favorites, no_spicy,
+      created_at
+    FROM family_members
+    WHERE id = $1`,
+    [id],
+  );
 
   if (!row) {
     return res.status(404).json({ error: "Family member not found" });
   }
 
   const member = {
-    ...(row as any),
-    allergies: JSON.parse((row as any).allergies || "[]"),
-    dislikes: JSON.parse((row as any).dislikes || "[]"),
-    favorites: JSON.parse((row as any).favorites || "[]"),
-    no_spicy: Boolean((row as any).no_spicy),
+    ...row,
+    allergies: JSON.parse(row.allergies || "[]"),
+    dislikes: JSON.parse(row.dislikes || "[]"),
+    favorites: JSON.parse(row.favorites || "[]"),
+    no_spicy: !!row.no_spicy,
   };
 
   res.json(member);
 });
 
 // Create family member
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const input = validateFamilyMember(req.body);
 
-    const result = db
-      .prepare(
-        `INSERT INTO family_members 
-        (family_id, name, dietary_style, allergies, dislikes, favorites, no_spicy)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
+    const member = await queryOne(
+      `INSERT INTO family_members
+      (family_id, name, dietary_style, allergies, dislikes, favorites, no_spicy)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *`,
+      [
         input.family_id,
         input.name,
         input.dietary_style,
         JSON.stringify(input.allergies || []),
         JSON.stringify(input.dislikes || []),
         JSON.stringify(input.favorites || []),
-        input.no_spicy ? 1 : 0
-      );
-
-    const member = db
-      .prepare("SELECT * FROM family_members WHERE id = ?")
-      .get(result.lastInsertRowid);
+        input.no_spicy ?? false,
+      ],
+    );
 
     res.status(201).json({
-      ...(member as any),
-      allergies: JSON.parse((member as any).allergies || "[]"),
-      dislikes: JSON.parse((member as any).dislikes || "[]"),
-      favorites: JSON.parse((member as any).favorites || "[]"),
-      no_spicy: Boolean((member as any).no_spicy),
+      ...member,
+      allergies: JSON.parse(member.allergies || "[]"),
+      dislikes: JSON.parse(member.dislikes || "[]"),
+      favorites: JSON.parse(member.favorites || "[]"),
+      no_spicy: !!member.no_spicy,
     });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -107,7 +98,7 @@ router.post("/", (req, res) => {
 });
 
 // Update family member
-router.put("/:id", (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const updates = req.body;
@@ -115,30 +106,31 @@ router.put("/:id", (req, res) => {
     // Build dynamic update query
     const fields: string[] = [];
     const values: any[] = [];
+    let paramIndex = 1;
 
     if (updates.name !== undefined) {
-      fields.push("name = ?");
+      fields.push(`name = $${paramIndex++}`);
       values.push(updates.name);
     }
     if (updates.dietary_style !== undefined) {
-      fields.push("dietary_style = ?");
+      fields.push(`dietary_style = $${paramIndex++}`);
       values.push(updates.dietary_style);
     }
     if (updates.allergies !== undefined) {
-      fields.push("allergies = ?");
+      fields.push(`allergies = $${paramIndex++}`);
       values.push(JSON.stringify(updates.allergies));
     }
     if (updates.dislikes !== undefined) {
-      fields.push("dislikes = ?");
+      fields.push(`dislikes = $${paramIndex++}`);
       values.push(JSON.stringify(updates.dislikes));
     }
     if (updates.favorites !== undefined) {
-      fields.push("favorites = ?");
+      fields.push(`favorites = $${paramIndex++}`);
       values.push(JSON.stringify(updates.favorites));
     }
     if (updates.no_spicy !== undefined) {
-      fields.push("no_spicy = ?");
-      values.push(updates.no_spicy ? 1 : 0);
+      fields.push(`no_spicy = $${paramIndex++}`);
+      values.push(updates.no_spicy ?? false);
     }
 
     if (fields.length === 0) {
@@ -147,24 +139,21 @@ router.put("/:id", (req, res) => {
 
     values.push(id);
 
-    db.prepare(
-      `UPDATE family_members SET ${fields.join(", ")} WHERE id = ?`
-    ).run(...values);
-
-    const member = db
-      .prepare("SELECT * FROM family_members WHERE id = ?")
-      .get(id);
+    const member = await queryOne(
+      `UPDATE family_members SET ${fields.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+      values,
+    );
 
     if (!member) {
       return res.status(404).json({ error: "Family member not found" });
     }
 
     res.json({
-      ...(member as any),
-      allergies: JSON.parse((member as any).allergies || "[]"),
-      dislikes: JSON.parse((member as any).dislikes || "[]"),
-      favorites: JSON.parse((member as any).favorites || "[]"),
-      no_spicy: Boolean((member as any).no_spicy),
+      ...member,
+      allergies: JSON.parse(member.allergies || "[]"),
+      dislikes: JSON.parse(member.dislikes || "[]"),
+      favorites: JSON.parse(member.favorites || "[]"),
+      no_spicy: !!member.no_spicy,
     });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -172,14 +161,15 @@ router.put("/:id", (req, res) => {
 });
 
 // Delete family member
-router.delete("/:id", (req, res) => {
+router.delete("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
 
-  const result = db
-    .prepare("DELETE FROM family_members WHERE id = ?")
-    .run(id);
+  const result = await queryRaw(
+    "DELETE FROM family_members WHERE id = $1",
+    [id],
+  );
 
-  if (result.changes === 0) {
+  if (result.rowCount === 0) {
     return res.status(404).json({ error: "Family member not found" });
   }
 

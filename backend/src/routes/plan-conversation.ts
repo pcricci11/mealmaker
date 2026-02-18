@@ -3,7 +3,7 @@
 
 import { Router, Request, Response } from "express";
 import Anthropic from "@anthropic-ai/sdk";
-import db from "../db";
+import { query, queryOne } from "../db";
 import { generateMealPlanV3 } from "../services/mealPlanGeneratorV3";
 
 const router = Router();
@@ -51,21 +51,23 @@ router.post("/generate-from-conversation", async (req: Request, res: Response) =
   }
 
   // Get or create a default family
-  let family: any = db.prepare("SELECT * FROM families LIMIT 1").get();
+  let family: any = await queryOne("SELECT * FROM families LIMIT 1");
   if (!family) {
-    const result = db.prepare(
+    family = await queryOne(
       `INSERT INTO families (name, allergies, vegetarian_ratio, gluten_free, dairy_free, nut_free)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run("My Family", "[]", 40, 0, 0, 0);
-    family = { id: result.lastInsertRowid };
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      ["My Family", "[]", 40, false, false, false],
+    );
   }
 
   const familyId = family.id;
 
   // Get family members for context
-  const members = db
-    .prepare("SELECT id, name FROM family_members WHERE family_id = ?")
-    .all(familyId) as { id: number; name: string }[];
+  const members = await query<{ id: number; name: string }>(
+    "SELECT id, name FROM family_members WHERE family_id = $1",
+    [familyId],
+  );
 
   const memberContext = members.length > 0
     ? `Family members: ${members.map((m) => m.name).join(", ")}`
@@ -134,9 +136,9 @@ router.post("/generate-from-conversation", async (req: Request, res: Response) =
       vegetarianRatio: preferences.vegetarian_ratio || 40,
     });
 
-    // Step 4: Fetch the full plan with recipe details (same as GET /meal-plans/:id)
-    const plan = db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(planResult.id) as any;
-    const items = db.prepare(`
+    // Step 4: Fetch the full plan with recipe details
+    const plan = await queryOne("SELECT * FROM meal_plans WHERE id = $1", [planResult.id]);
+    const items = await query(`
       SELECT mpi.id as item_id, mpi.meal_plan_id, mpi.day, mpi.recipe_id, mpi.locked,
              mpi.meal_type, mpi.main_number, mpi.assigned_member_ids,
              mpi.parent_meal_item_id, mpi.is_custom, mpi.notes,
@@ -144,12 +146,12 @@ router.post("/generate-from-conversation", async (req: Request, res: Response) =
              r.protein_type, r.cook_minutes, r.makes_leftovers, r.kid_friendly
       FROM meal_plan_items mpi
       LEFT JOIN recipes r ON r.id = mpi.recipe_id
-      WHERE mpi.meal_plan_id = ?
+      WHERE mpi.meal_plan_id = $1
       ORDER BY CASE mpi.day
         WHEN 'monday' THEN 1 WHEN 'tuesday' THEN 2 WHEN 'wednesday' THEN 3
         WHEN 'thursday' THEN 4 WHEN 'friday' THEN 5 WHEN 'saturday' THEN 6 WHEN 'sunday' THEN 7
       END, mpi.meal_type, mpi.main_number
-    `).all(planResult.id) as any[];
+    `, [planResult.id]);
 
     const fullItems = items.map((row: any) => ({
       id: row.item_id,
@@ -167,12 +169,11 @@ router.post("/generate-from-conversation", async (req: Request, res: Response) =
       kid_friendly: !!row.kid_friendly,
     }));
 
-    // Store plan ID for grocery list access
     res.status(201).json({
-      id: plan.id,
-      family_id: plan.family_id,
-      week_start: plan.week_start,
-      created_at: plan.created_at,
+      id: plan!.id,
+      family_id: plan!.family_id,
+      week_start: plan!.week_start,
+      created_at: plan!.created_at,
       cooking_schedule: cookingSchedule,
       items: fullItems,
     });

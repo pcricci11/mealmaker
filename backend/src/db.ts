@@ -1,35 +1,61 @@
-import Database from "better-sqlite3";
-import fs from "fs";
-import path from "path";
-import { runMigrations, runBackfills } from "./migrate";
+import { Pool, PoolClient, QueryResult, QueryResultRow } from "pg";
 
-function findBackendRoot(): string {
-  let dir = __dirname;
-  while (!fs.existsSync(path.join(dir, "package.json"))) {
-    const parent = path.dirname(dir);
-    if (parent === dir) throw new Error("Could not find backend root (package.json)");
-    dir = parent;
+let pool: Pool;
+
+function getPool(): Pool {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.DATABASE_URL?.includes("render.com")
+        ? { rejectUnauthorized: false }
+        : undefined,
+    });
   }
-  return dir;
+  return pool;
 }
 
-const DB_PATH = path.join(findBackendRoot(), "mealmaker.db");
-
-const db = new Database(DB_PATH);
-
-// Enable WAL mode for better concurrency
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
-
-export function initDb() {
-  runMigrations(db);
-  runBackfills(db);
-
-  // Clean up orphaned meal_plan_items (e.g. from manual DB edits without foreign_keys ON)
-  db.prepare(`
-    DELETE FROM meal_plan_items
-    WHERE meal_plan_id NOT IN (SELECT id FROM meal_plans)
-  `).run();
+/** Run a query and return all rows. */
+export async function query<T extends QueryResultRow = any>(
+  text: string,
+  params?: any[],
+): Promise<T[]> {
+  const result = await getPool().query<T>(text, params);
+  return result.rows;
 }
 
-export default db;
+/** Run a query and return the first row (or null). */
+export async function queryOne<T extends QueryResultRow = any>(
+  text: string,
+  params?: any[],
+): Promise<T | null> {
+  const result = await getPool().query<T>(text, params);
+  return result.rows[0] ?? null;
+}
+
+/** Run a query and return the raw QueryResult (for rowCount, etc.). */
+export async function queryRaw(
+  text: string,
+  params?: any[],
+): Promise<QueryResult> {
+  return getPool().query(text, params);
+}
+
+/** Execute a callback inside a PostgreSQL transaction. */
+export async function transaction<T>(
+  fn: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export default getPool;

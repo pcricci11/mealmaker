@@ -3,7 +3,7 @@
 
 import { Router, Request, Response } from "express";
 import Anthropic from "@anthropic-ai/sdk";
-import db from "../db";
+import { query, queryOne } from "../db";
 
 const router = Router();
 
@@ -61,21 +61,23 @@ router.post("/generate-from-conversation", async (req: Request, res: Response) =
   }
 
   // Get or create a default family
-  let family: any = db.prepare("SELECT * FROM families LIMIT 1").get();
+  let family: any = await queryOne("SELECT * FROM families LIMIT 1");
   if (!family) {
-    const result = db.prepare(
+    family = await queryOne(
       `INSERT INTO families (name, allergies, vegetarian_ratio, gluten_free, dairy_free, nut_free)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run("My Family", "[]", 40, 0, 0, 0);
-    family = { id: result.lastInsertRowid };
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      ["My Family", "[]", 40, false, false, false],
+    );
   }
 
   const familyId = family.id;
 
   // Get family members for context
-  const members = db
-    .prepare("SELECT id, name FROM family_members WHERE family_id = ?")
-    .all(familyId) as { id: number; name: string }[];
+  const members = await query<{ id: number; name: string }>(
+    "SELECT id, name FROM family_members WHERE family_id = $1",
+    [familyId],
+  );
 
   const memberContext = members.length > 0
     ? `Family members: ${members.map((m) => m.name).join(", ")}`

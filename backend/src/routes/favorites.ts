@@ -2,60 +2,56 @@
 // Family favorites CRUD (chefs, meals, sides)
 
 import { Router } from "express";
-import db from "../db";
+import { query, queryOne, queryRaw } from "../db";
 
 const router = Router();
 
 // ===== FAVORITE CHEFS =====
 
-router.get("/chefs", (req, res) => {
+router.get("/chefs", async (req, res) => {
   const familyId = parseInt(req.query.family_id as string);
-  
+
   if (!familyId) {
     return res.status(400).json({ error: "family_id is required" });
   }
 
-  const chefs = db
-    .prepare(
-      `SELECT id, family_id, name, cuisines, created_at
-      FROM family_favorite_chefs
-      WHERE family_id = ?
-      ORDER BY name ASC`
-    )
-    .all(familyId);
+  const chefs = await query(
+    `SELECT id, family_id, name, cuisines, created_at
+    FROM family_favorite_chefs
+    WHERE family_id = $1
+    ORDER BY name ASC`,
+    [familyId],
+  );
 
   res.json(chefs.map((c: any) => ({ ...c, cuisines: c.cuisines ? JSON.parse(c.cuisines) : null })));
 });
 
-router.post("/chefs", (req, res) => {
+router.post("/chefs", async (req, res) => {
   const { family_id, name, cuisines } = req.body;
 
   if (!family_id || !name) {
     return res.status(400).json({ error: "family_id and name are required" });
   }
 
-  const result = db
-    .prepare(
-      `INSERT INTO family_favorite_chefs (family_id, name, cuisines)
-      VALUES (?, ?, ?)`
-    )
-    .run(family_id, name.trim(), cuisines?.length ? JSON.stringify(cuisines) : null);
-
-  const chef = db
-    .prepare("SELECT * FROM family_favorite_chefs WHERE id = ?")
-    .get(result.lastInsertRowid) as any;
+  const chef = await queryOne(
+    `INSERT INTO family_favorite_chefs (family_id, name, cuisines)
+    VALUES ($1, $2, $3)
+    RETURNING *`,
+    [family_id, name.trim(), cuisines?.length ? JSON.stringify(cuisines) : null],
+  );
 
   res.status(201).json({ ...chef, cuisines: chef.cuisines ? JSON.parse(chef.cuisines) : null });
 });
 
-router.delete("/chefs/:id", (req, res) => {
+router.delete("/chefs/:id", async (req, res) => {
   const id = parseInt(req.params.id);
 
-  const result = db
-    .prepare("DELETE FROM family_favorite_chefs WHERE id = ?")
-    .run(id);
+  const result = await queryRaw(
+    "DELETE FROM family_favorite_chefs WHERE id = $1",
+    [id],
+  );
 
-  if (result.changes === 0) {
+  if (result.rowCount === 0) {
     return res.status(404).json({ error: "Chef not found" });
   }
 
@@ -64,54 +60,50 @@ router.delete("/chefs/:id", (req, res) => {
 
 // ===== FAVORITE WEBSITES =====
 
-router.get("/websites", (req, res) => {
+router.get("/websites", async (req, res) => {
   const familyId = parseInt(req.query.family_id as string);
 
   if (!familyId) {
     return res.status(400).json({ error: "family_id is required" });
   }
 
-  const websites = db
-    .prepare(
-      `SELECT id, family_id, name, created_at
-      FROM family_favorite_websites
-      WHERE family_id = ?
-      ORDER BY name ASC`
-    )
-    .all(familyId);
+  const websites = await query(
+    `SELECT id, family_id, name, created_at
+    FROM family_favorite_websites
+    WHERE family_id = $1
+    ORDER BY name ASC`,
+    [familyId],
+  );
 
   res.json(websites);
 });
 
-router.post("/websites", (req, res) => {
+router.post("/websites", async (req, res) => {
   const { family_id, name } = req.body;
 
   if (!family_id || !name) {
     return res.status(400).json({ error: "family_id and name are required" });
   }
 
-  const result = db
-    .prepare(
-      `INSERT INTO family_favorite_websites (family_id, name)
-      VALUES (?, ?)`
-    )
-    .run(family_id, name);
-
-  const website = db
-    .prepare("SELECT * FROM family_favorite_websites WHERE id = ?")
-    .get(result.lastInsertRowid);
+  const website = await queryOne(
+    `INSERT INTO family_favorite_websites (family_id, name)
+    VALUES ($1, $2)
+    RETURNING *`,
+    [family_id, name],
+  );
 
   res.status(201).json(website);
 });
 
-router.delete("/websites/:id", (req, res) => {
+router.delete("/websites/:id", async (req, res) => {
   const id = parseInt(req.params.id);
 
-  const result = db
-    .prepare("DELETE FROM family_favorite_websites WHERE id = ?")
-    .run(id);
+  const result = await queryRaw(
+    "DELETE FROM family_favorite_websites WHERE id = $1",
+    [id],
+  );
 
-  if (result.changes === 0) {
+  if (result.rowCount === 0) {
     return res.status(404).json({ error: "Website not found" });
   }
 
@@ -120,28 +112,27 @@ router.delete("/websites/:id", (req, res) => {
 
 // ===== FAVORITE MEALS =====
 
-router.get("/meals", (req, res) => {
+router.get("/meals", async (req, res) => {
   const familyId = parseInt(req.query.family_id as string);
-  
+
   if (!familyId) {
     return res.status(400).json({ error: "family_id is required" });
   }
 
-  const meals = db
-    .prepare(
-      `SELECT 
-        id, family_id, name, recipe_url, difficulty, 
-        total_time_minutes, frequency_preference, notes, created_at
-      FROM family_favorite_meals 
-      WHERE family_id = ?
-      ORDER BY name ASC`
-    )
-    .all(familyId);
+  const meals = await query(
+    `SELECT
+      id, family_id, name, recipe_url, difficulty,
+      total_time_minutes, frequency_preference, notes, created_at
+    FROM family_favorite_meals
+    WHERE family_id = $1
+    ORDER BY name ASC`,
+    [familyId],
+  );
 
   res.json(meals);
 });
 
-router.post("/meals", (req, res) => {
+router.post("/meals", async (req, res) => {
   const {
     family_id,
     name,
@@ -156,58 +147,55 @@ router.post("/meals", (req, res) => {
     return res.status(400).json({ error: "family_id and name are required" });
   }
 
-  const result = db
-    .prepare(
-      `INSERT INTO family_favorite_meals 
-      (family_id, name, recipe_url, difficulty, total_time_minutes, frequency_preference, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+  const meal = await queryOne(
+    `INSERT INTO family_favorite_meals
+    (family_id, name, recipe_url, difficulty, total_time_minutes, frequency_preference, notes)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING *`,
+    [
       family_id,
       name,
       recipe_url || null,
       difficulty || null,
       total_time_minutes || null,
       frequency_preference || null,
-      notes || null
-    );
-
-  const meal = db
-    .prepare("SELECT * FROM family_favorite_meals WHERE id = ?")
-    .get(result.lastInsertRowid);
+      notes || null,
+    ],
+  );
 
   res.status(201).json(meal);
 });
 
-router.put("/meals/:id", (req, res) => {
+router.put("/meals/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   const updates = req.body;
 
   const fields: string[] = [];
   const values: any[] = [];
+  let paramIndex = 1;
 
   if (updates.name !== undefined) {
-    fields.push("name = ?");
+    fields.push(`name = $${paramIndex++}`);
     values.push(updates.name);
   }
   if (updates.recipe_url !== undefined) {
-    fields.push("recipe_url = ?");
+    fields.push(`recipe_url = $${paramIndex++}`);
     values.push(updates.recipe_url || null);
   }
   if (updates.difficulty !== undefined) {
-    fields.push("difficulty = ?");
+    fields.push(`difficulty = $${paramIndex++}`);
     values.push(updates.difficulty || null);
   }
   if (updates.total_time_minutes !== undefined) {
-    fields.push("total_time_minutes = ?");
+    fields.push(`total_time_minutes = $${paramIndex++}`);
     values.push(updates.total_time_minutes || null);
   }
   if (updates.frequency_preference !== undefined) {
-    fields.push("frequency_preference = ?");
+    fields.push(`frequency_preference = $${paramIndex++}`);
     values.push(updates.frequency_preference || null);
   }
   if (updates.notes !== undefined) {
-    fields.push("notes = ?");
+    fields.push(`notes = $${paramIndex++}`);
     values.push(updates.notes || null);
   }
 
@@ -217,13 +205,10 @@ router.put("/meals/:id", (req, res) => {
 
   values.push(id);
 
-  db.prepare(
-    `UPDATE family_favorite_meals SET ${fields.join(", ")} WHERE id = ?`
-  ).run(...values);
-
-  const meal = db
-    .prepare("SELECT * FROM family_favorite_meals WHERE id = ?")
-    .get(id);
+  const meal = await queryOne(
+    `UPDATE family_favorite_meals SET ${fields.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+    values,
+  );
 
   if (!meal) {
     return res.status(404).json({ error: "Meal not found" });
@@ -232,14 +217,15 @@ router.put("/meals/:id", (req, res) => {
   res.json(meal);
 });
 
-router.delete("/meals/:id", (req, res) => {
+router.delete("/meals/:id", async (req, res) => {
   const id = parseInt(req.params.id);
 
-  const result = db
-    .prepare("DELETE FROM family_favorite_meals WHERE id = ?")
-    .run(id);
+  const result = await queryRaw(
+    "DELETE FROM family_favorite_meals WHERE id = $1",
+    [id],
+  );
 
-  if (result.changes === 0) {
+  if (result.rowCount === 0) {
     return res.status(404).json({ error: "Meal not found" });
   }
 
@@ -248,32 +234,30 @@ router.delete("/meals/:id", (req, res) => {
 
 // ===== FAVORITE SIDES =====
 
-router.get("/sides", (req, res) => {
+router.get("/sides", async (req, res) => {
   const familyId = parseInt(req.query.family_id as string);
-  
+
   if (!familyId) {
     return res.status(400).json({ error: "family_id is required" });
   }
 
-  const sides = db
-    .prepare(
-      `SELECT 
-        id, family_id, name, recipe_url, category, 
-        pairs_well_with, notes, created_at
-      FROM family_favorite_sides 
-      WHERE family_id = ?
-      ORDER BY name ASC`
-    )
-    .all(familyId)
-    .map((row: any) => ({
-      ...row,
-      pairs_well_with: row.pairs_well_with ? JSON.parse(row.pairs_well_with) : null,
-    }));
+  const sides = (await query(
+    `SELECT
+      id, family_id, name, recipe_url, category,
+      pairs_well_with, notes, created_at
+    FROM family_favorite_sides
+    WHERE family_id = $1
+    ORDER BY name ASC`,
+    [familyId],
+  )).map((row: any) => ({
+    ...row,
+    pairs_well_with: row.pairs_well_with ? JSON.parse(row.pairs_well_with) : null,
+  }));
 
   res.json(sides);
 });
 
-router.post("/sides", (req, res) => {
+router.post("/sides", async (req, res) => {
   const {
     family_id,
     name,
@@ -287,58 +271,55 @@ router.post("/sides", (req, res) => {
     return res.status(400).json({ error: "family_id and name are required" });
   }
 
-  const result = db
-    .prepare(
-      `INSERT INTO family_favorite_sides 
-      (family_id, name, recipe_url, category, pairs_well_with, notes)
-      VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+  const side = await queryOne(
+    `INSERT INTO family_favorite_sides
+    (family_id, name, recipe_url, category, pairs_well_with, notes)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING *`,
+    [
       family_id,
       name,
       recipe_url || null,
       category || null,
       pairs_well_with ? JSON.stringify(pairs_well_with) : null,
-      notes || null
-    );
-
-  const side = db
-    .prepare("SELECT * FROM family_favorite_sides WHERE id = ?")
-    .get(result.lastInsertRowid);
+      notes || null,
+    ],
+  );
 
   res.status(201).json({
-    ...(side as any),
-    pairs_well_with: (side as any).pairs_well_with
-      ? JSON.parse((side as any).pairs_well_with)
+    ...side,
+    pairs_well_with: side.pairs_well_with
+      ? JSON.parse(side.pairs_well_with)
       : null,
   });
 });
 
-router.put("/sides/:id", (req, res) => {
+router.put("/sides/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   const updates = req.body;
 
   const fields: string[] = [];
   const values: any[] = [];
+  let paramIndex = 1;
 
   if (updates.name !== undefined) {
-    fields.push("name = ?");
+    fields.push(`name = $${paramIndex++}`);
     values.push(updates.name);
   }
   if (updates.recipe_url !== undefined) {
-    fields.push("recipe_url = ?");
+    fields.push(`recipe_url = $${paramIndex++}`);
     values.push(updates.recipe_url || null);
   }
   if (updates.category !== undefined) {
-    fields.push("category = ?");
+    fields.push(`category = $${paramIndex++}`);
     values.push(updates.category || null);
   }
   if (updates.pairs_well_with !== undefined) {
-    fields.push("pairs_well_with = ?");
+    fields.push(`pairs_well_with = $${paramIndex++}`);
     values.push(updates.pairs_well_with ? JSON.stringify(updates.pairs_well_with) : null);
   }
   if (updates.notes !== undefined) {
-    fields.push("notes = ?");
+    fields.push(`notes = $${paramIndex++}`);
     values.push(updates.notes || null);
   }
 
@@ -348,34 +329,32 @@ router.put("/sides/:id", (req, res) => {
 
   values.push(id);
 
-  db.prepare(
-    `UPDATE family_favorite_sides SET ${fields.join(", ")} WHERE id = ?`
-  ).run(...values);
-
-  const side = db
-    .prepare("SELECT * FROM family_favorite_sides WHERE id = ?")
-    .get(id);
+  const side = await queryOne(
+    `UPDATE family_favorite_sides SET ${fields.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+    values,
+  );
 
   if (!side) {
     return res.status(404).json({ error: "Side not found" });
   }
 
   res.json({
-    ...(side as any),
-    pairs_well_with: (side as any).pairs_well_with
-      ? JSON.parse((side as any).pairs_well_with)
+    ...side,
+    pairs_well_with: side.pairs_well_with
+      ? JSON.parse(side.pairs_well_with)
       : null,
   });
 });
 
-router.delete("/sides/:id", (req, res) => {
+router.delete("/sides/:id", async (req, res) => {
   const id = parseInt(req.params.id);
 
-  const result = db
-    .prepare("DELETE FROM family_favorite_sides WHERE id = ?")
-    .run(id);
+  const result = await queryRaw(
+    "DELETE FROM family_favorite_sides WHERE id = $1",
+    [id],
+  );
 
-  if (result.changes === 0) {
+  if (result.rowCount === 0) {
     return res.status(404).json({ error: "Side not found" });
   }
 

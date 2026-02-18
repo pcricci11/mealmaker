@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import Anthropic from "@anthropic-ai/sdk";
-import db from "../db";
+import { query, queryOne } from "../db";
 import { rowToRecipe } from "../helpers";
 import { validateRecipe } from "../validation";
 import { extractIngredientsFromUrl } from "../services/ingredientExtractor";
@@ -11,15 +11,15 @@ import { VALID_CUISINES, VALID_DIFFICULTIES } from "../../../shared/types";
 const router = Router();
 
 // GET /api/recipes
-router.get("/", (_req: Request, res: Response) => {
-  const rows = db.prepare("SELECT * FROM recipes ORDER BY name").all();
+router.get("/", async (_req: Request, res: Response) => {
+  const rows = await query("SELECT * FROM recipes ORDER BY name");
   res.json(rows.map(rowToRecipe));
 });
 
 // Helper: build source constraint from family favorites
-function buildSourceConstraint(familyId: number): string {
-  const chefs = db.prepare("SELECT name FROM family_favorite_chefs WHERE family_id = ?").all(familyId) as { name: string }[];
-  const websites = db.prepare("SELECT name FROM family_favorite_websites WHERE family_id = ?").all(familyId) as { name: string }[];
+async function buildSourceConstraint(familyId: number): Promise<string> {
+  const chefs = await query<{ name: string }>("SELECT name FROM family_favorite_chefs WHERE family_id = $1", [familyId]);
+  const websites = await query<{ name: string }>("SELECT name FROM family_favorite_websites WHERE family_id = $1", [familyId]);
 
   if (chefs.length === 0 && websites.length === 0) return "";
 
@@ -36,8 +36,8 @@ function buildSourceConstraint(familyId: number): string {
 
 // POST /api/recipes/search — web search for recipes via Claude
 router.post("/search", async (req: Request, res: Response) => {
-  const { query, family_id } = req.body;
-  if (!query || typeof query !== "string" || !query.trim()) {
+  const { query: searchQuery, family_id } = req.body;
+  if (!searchQuery || typeof searchQuery !== "string" || !searchQuery.trim()) {
     return res.status(400).json({ error: "query is required" });
   }
 
@@ -47,7 +47,7 @@ router.post("/search", async (req: Request, res: Response) => {
   }
 
   const client = new Anthropic({ apiKey });
-  const sourceConstraint = family_id ? buildSourceConstraint(family_id) : "";
+  const sourceConstraint = family_id ? await buildSourceConstraint(family_id) : "";
 
   try {
     const message = await createWithRetry(client, {
@@ -82,7 +82,7 @@ YOU MUST RETURN ONLY JSON. DO NOT INCLUDE ANY TEXT BEFORE OR AFTER THE JSON.
 NO EXPLANATIONS. NO PREAMBLES. NO MARKDOWN.
 YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH [ AND ENDING WITH ].` + sourceConstraint,
       messages: [
-        { role: "user", content: `Search for recipes: "${query.trim()}"` },
+        { role: "user", content: `Search for recipes: "${searchQuery.trim()}"` },
       ],
     });
 
@@ -148,7 +148,7 @@ router.post("/batch-search", async (req: Request, res: Response) => {
 
   const client = new Anthropic({ apiKey });
   const cappedQueries = queries.slice(0, 5);
-  const sourceConstraint = family_id ? buildSourceConstraint(family_id) : "";
+  const sourceConstraint = family_id ? await buildSourceConstraint(family_id) : "";
 
   try {
     const message = await createWithRetry(client, {
@@ -220,9 +220,9 @@ YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH { AND ENDING WITH }.` 
 });
 
 // POST /api/recipes/match — fuzzy search for a recipe in the local database
-router.post("/match", (req: Request, res: Response) => {
-  const { query } = req.body;
-  if (!query || typeof query !== "string" || !query.trim()) {
+router.post("/match", async (req: Request, res: Response) => {
+  const { query: matchQuery } = req.body;
+  if (!matchQuery || typeof matchQuery !== "string" || !matchQuery.trim()) {
     return res.status(400).json({ error: "query is required" });
   }
 
@@ -247,18 +247,16 @@ router.post("/match", (req: Request, res: Response) => {
     "something", "thing", "recipe", "food",
   ]);
 
-  const normQuery = normalize(query);
+  const normQuery = normalize(matchQuery);
   const allQueryWords = normQuery.split(" ").filter(Boolean);
   // Filter stop words, but fall back to all words if everything is a stop word
   const contentWords = allQueryWords.filter((w) => !STOP_WORDS.has(w));
   const queryWords = contentWords.length > 0 ? contentWords : allQueryWords;
 
-  console.log(`[match] query="${query}" → normalized="${normQuery}" → contentWords=[${queryWords.join(", ")}] (filtered ${allQueryWords.length - queryWords.length} stop words)`);
+  console.log(`[match] query="${matchQuery}" → normalized="${normQuery}" → contentWords=[${queryWords.join(", ")}] (filtered ${allQueryWords.length - queryWords.length} stop words)`);
 
   // Pull all recipe names from DB (fast — recipes table is small)
-  const rows = db
-    .prepare("SELECT id, name FROM recipes")
-    .all() as Array<{ id: number; name: string }>;
+  const rows = await query<{ id: number; name: string }>("SELECT id, name FROM recipes");
 
   const scored: Array<{ id: number; name: string; score: number }> = [];
 
@@ -277,7 +275,6 @@ router.post("/match", (req: Request, res: Response) => {
     if (matchingWords.length === 0) continue;
 
     // Use queryWords.length as denominator: "what % of what the user asked for was found?"
-    // This prevents long recipe names from diluting the score.
     const overlapScore = matchingWords.length / queryWords.length;
 
     if (overlapScore >= 0.4) {
@@ -290,22 +287,25 @@ router.post("/match", (req: Request, res: Response) => {
   const top = scored.slice(0, 3);
 
   if (top.length > 0) {
-    const stmt = db.prepare("SELECT * FROM recipes WHERE id = ?");
-    const matches = top.map((t) => ({
-      recipe: rowToRecipe(stmt.get(t.id)),
-      score: t.score,
-    }));
-    console.log(`[match] query="${query}" → ${matches.length} matches: ${matches.map((m) => `"${m.recipe.title}" (score=${m.score.toFixed(2)})`).join(", ")}`);
+    const matches = [];
+    for (const t of top) {
+      const fullRow = await queryOne("SELECT * FROM recipes WHERE id = $1", [t.id]);
+      matches.push({
+        recipe: rowToRecipe(fullRow),
+        score: t.score,
+      });
+    }
+    console.log(`[match] query="${matchQuery}" → ${matches.length} matches: ${matches.map((m) => `"${m.recipe.title}" (score=${m.score.toFixed(2)})`).join(", ")}`);
     return res.json({ matches });
   }
 
-  console.log(`[match] query="${query}" → no matches found`);
+  console.log(`[match] query="${matchQuery}" → no matches found`);
   res.json({ matches: [] });
 });
 
 // GET /api/recipes/:id
-router.get("/:id", (req: Request, res: Response) => {
-  const row = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id);
+router.get("/:id", async (req: Request, res: Response) => {
+  const row = await queryOne("SELECT * FROM recipes WHERE id = $1", [req.params.id]);
   if (!row) return res.status(404).json({ error: "Recipe not found" });
   res.json(rowToRecipe(row));
 });
@@ -322,29 +322,31 @@ router.post("/", async (req: Request, res: Response) => {
 
   // Check for existing recipe with same source URL to avoid duplicates
   if (r.source_url) {
-    const existing = db.prepare(
-      "SELECT * FROM recipes WHERE source_url = ?"
-    ).get(r.source_url);
+    const existing = await queryOne(
+      "SELECT * FROM recipes WHERE source_url = $1",
+      [r.source_url],
+    );
     if (existing) {
       return res.status(200).json(rowToRecipe(existing));
     }
   }
 
-  const result = db.prepare(`
+  const row = await queryOne(`
     INSERT INTO recipes (name, cuisine, vegetarian, protein_type, cook_minutes,
       allergens, kid_friendly, makes_leftovers, ingredients, tags,
       source_type, source_name, source_url, difficulty, leftovers_score,
       seasonal_tags, frequency_cap_per_month)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+    RETURNING *
+  `, [
     r.title,           // DB column is `name`
     r.cuisine,
-    r.vegetarian ? 1 : 0,
+    r.vegetarian ?? false,
     r.protein_type || null,
     r.cook_minutes,
     JSON.stringify(r.allergens || []),
-    r.kid_friendly ? 1 : 0,
-    r.makes_leftovers ? 1 : 0,
+    r.kid_friendly ?? false,
+    r.makes_leftovers ?? false,
     JSON.stringify(r.ingredients || []),
     JSON.stringify(r.tags || []),
     sourceType,
@@ -354,23 +356,22 @@ router.post("/", async (req: Request, res: Response) => {
     r.leftovers_score || 0,
     JSON.stringify(r.seasonal_tags || []),
     r.frequency_cap_per_month || null,
-  );
+  ]);
 
-  const recipeId = result.lastInsertRowid as number;
+  const recipeId = row.id;
 
   // Insert recipe_ingredients from any provided ingredients
   let ingredients = r.ingredients || [];
   if (ingredients.length > 0) {
-    const insertIng = db.prepare(
-      "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
-    );
     for (const ing of ingredients) {
-      insertIng.run(recipeId, ing.name, ing.quantity, ing.unit, ing.category);
+      await query(
+        "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
+        [recipeId, ing.name, ing.quantity, ing.unit, ing.category],
+      );
     }
   }
 
-  const created = db.prepare("SELECT * FROM recipes WHERE id = ?").get(recipeId);
-  res.status(201).json(rowToRecipe(created));
+  res.status(201).json(rowToRecipe(row));
 
   // Fire-and-forget: extract ingredients in background for web_search recipes
   if (
@@ -379,17 +380,17 @@ router.post("/", async (req: Request, res: Response) => {
     (!r.ingredients || r.ingredients.length === 0)
   ) {
     extractIngredientsFromUrl(r.title, r.source_url)
-      .then((extracted) => {
+      .then(async (extracted) => {
         if (extracted.length > 0) {
-          db.prepare("UPDATE recipes SET ingredients = ? WHERE id = ?").run(
+          await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
             JSON.stringify(extracted),
             recipeId,
-          );
-          const insertIng = db.prepare(
-            "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
-          );
+          ]);
           for (const ing of extracted) {
-            insertIng.run(recipeId, ing.name, ing.quantity, ing.unit, ing.category);
+            await query(
+              "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
+              [recipeId, ing.name, ing.quantity, ing.unit, ing.category],
+            );
           }
           console.log(`[create] Background extraction for recipe ${recipeId}: ${extracted.length} ingredients`);
         }
@@ -401,8 +402,8 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 // PUT /api/recipes/:id
-router.put("/:id", (req: Request, res: Response) => {
-  const existing = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id) as any;
+router.put("/:id", async (req: Request, res: Response) => {
+  const existing = await queryOne("SELECT * FROM recipes WHERE id = $1", [req.params.id]);
   if (!existing) return res.status(404).json({ error: "Recipe not found" });
 
   // Only user-created recipes can be edited
@@ -416,21 +417,21 @@ router.put("/:id", (req: Request, res: Response) => {
   }
 
   const r: RecipeInput = req.body;
-  db.prepare(`
-    UPDATE recipes SET name=?, cuisine=?, vegetarian=?, protein_type=?, cook_minutes=?,
-      allergens=?, kid_friendly=?, makes_leftovers=?, ingredients=?, tags=?,
-      source_type=?, source_name=?, source_url=?, difficulty=?, leftovers_score=?,
-      seasonal_tags=?, frequency_cap_per_month=?
-    WHERE id=?
-  `).run(
+  await query(`
+    UPDATE recipes SET name=$1, cuisine=$2, vegetarian=$3, protein_type=$4, cook_minutes=$5,
+      allergens=$6, kid_friendly=$7, makes_leftovers=$8, ingredients=$9, tags=$10,
+      source_type=$11, source_name=$12, source_url=$13, difficulty=$14, leftovers_score=$15,
+      seasonal_tags=$16, frequency_cap_per_month=$17
+    WHERE id=$18
+  `, [
     r.title,
     r.cuisine,
-    r.vegetarian ? 1 : 0,
+    r.vegetarian ?? false,
     r.protein_type || null,
     r.cook_minutes,
     JSON.stringify(r.allergens || []),
-    r.kid_friendly ? 1 : 0,
-    r.makes_leftovers ? 1 : 0,
+    r.kid_friendly ?? false,
+    r.makes_leftovers ?? false,
     JSON.stringify(r.ingredients || []),
     JSON.stringify(r.tags || []),
     r.source_type || "user",
@@ -441,67 +442,74 @@ router.put("/:id", (req: Request, res: Response) => {
     JSON.stringify(r.seasonal_tags || []),
     r.frequency_cap_per_month || null,
     req.params.id,
-  );
+  ]);
 
   // Delete + reinsert recipe_ingredients
-  db.prepare("DELETE FROM recipe_ingredients WHERE recipe_id = ?").run(req.params.id);
+  await query("DELETE FROM recipe_ingredients WHERE recipe_id = $1", [req.params.id]);
   if (r.ingredients && r.ingredients.length > 0) {
-    const insertIng = db.prepare(
-      "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
-    );
     for (const ing of r.ingredients) {
-      insertIng.run(req.params.id, ing.name, ing.quantity, ing.unit, ing.category);
+      await query(
+        "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
+        [req.params.id, ing.name, ing.quantity, ing.unit, ing.category],
+      );
     }
   }
 
-  const updated = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id);
+  const updated = await queryOne("SELECT * FROM recipes WHERE id = $1", [req.params.id]);
   res.json(rowToRecipe(updated));
 });
 
 // PATCH /api/recipes/:id/rename
-router.patch("/:id/rename", (req: Request, res: Response) => {
+router.patch("/:id/rename", async (req: Request, res: Response) => {
   const { name } = req.body;
   if (!name || typeof name !== "string" || !name.trim()) {
     return res.status(400).json({ error: "name is required" });
   }
-  const existing = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id) as any;
+  const existing = await queryOne("SELECT * FROM recipes WHERE id = $1", [req.params.id]);
   if (!existing) return res.status(404).json({ error: "Recipe not found" });
 
-  db.prepare("UPDATE recipes SET name = ? WHERE id = ?").run(name.trim(), req.params.id);
-  const updated = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id);
+  const updated = await queryOne(
+    "UPDATE recipes SET name = $1 WHERE id = $2 RETURNING *",
+    [name.trim(), req.params.id],
+  );
   res.json(rowToRecipe(updated));
 });
 
 // PATCH /api/recipes/:id/notes
-router.patch("/:id/notes", (req: Request, res: Response) => {
+router.patch("/:id/notes", async (req: Request, res: Response) => {
   const { notes } = req.body;
   if (notes !== null && typeof notes !== "string") {
     return res.status(400).json({ error: "notes must be a string or null" });
   }
-  const existing = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id) as any;
+  const existing = await queryOne("SELECT * FROM recipes WHERE id = $1", [req.params.id]);
   if (!existing) return res.status(404).json({ error: "Recipe not found" });
 
   const value = notes === null ? null : notes.trim() || null;
-  db.prepare("UPDATE recipes SET notes = ? WHERE id = ?").run(value, req.params.id);
-  const updated = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id);
+  const updated = await queryOne(
+    "UPDATE recipes SET notes = $1 WHERE id = $2 RETURNING *",
+    [value, req.params.id],
+  );
   res.json(rowToRecipe(updated));
 });
 
 // DELETE /api/recipes/:id
-router.delete("/:id", (req: Request, res: Response) => {
-  const existing = db.prepare("SELECT * FROM recipes WHERE id = ?").get(req.params.id) as any;
+router.delete("/:id", async (req: Request, res: Response) => {
+  const existing = await queryOne("SELECT * FROM recipes WHERE id = $1", [req.params.id]);
   if (!existing) return res.status(404).json({ error: "Recipe not found" });
 
   // Nullify references in meal_plan_items so we don't break plan history
-  db.prepare("UPDATE meal_plan_items SET recipe_id = NULL WHERE recipe_id = ?").run(req.params.id);
-  db.prepare("DELETE FROM recipe_ingredients WHERE recipe_id = ?").run(req.params.id);
-  db.prepare("DELETE FROM recipes WHERE id = ?").run(req.params.id);
+  await query("UPDATE meal_plan_items SET recipe_id = NULL WHERE recipe_id = $1", [req.params.id]);
+  await query("DELETE FROM recipe_ingredients WHERE recipe_id = $1", [req.params.id]);
+  await query("DELETE FROM recipes WHERE id = $1", [req.params.id]);
   res.status(204).send();
 });
 
 // POST /api/recipes/:id/suggest-ingredients
 router.post("/:id/suggest-ingredients", async (req: Request, res: Response) => {
-  const recipe = db.prepare("SELECT id, name FROM recipes WHERE id = ?").get(req.params.id) as { id: number; name: string } | undefined;
+  const recipe = await queryOne<{ id: number; name: string }>(
+    "SELECT id, name FROM recipes WHERE id = $1",
+    [req.params.id],
+  );
   if (!recipe) return res.status(404).json({ error: "Recipe not found" });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -562,7 +570,7 @@ router.post("/import-from-url", async (req: Request, res: Response) => {
   }
 
   // Check for existing recipe with same URL
-  const existing = db.prepare("SELECT * FROM recipes WHERE source_url = ?").get(url.trim());
+  const existing = await queryOne("SELECT * FROM recipes WHERE source_url = $1", [url.trim()]);
   if (existing) {
     return res.status(200).json({ recipe: rowToRecipe(existing), alreadyExists: true });
   }
@@ -665,58 +673,48 @@ Constraints:
     }));
 
     // Create the recipe
-    const recipeData: RecipeInput = {
-      title: parsed.title || "Untitled Recipe",
-      cuisine,
-      vegetarian: !!parsed.vegetarian,
-      protein_type: parsed.vegetarian ? null : (parsed.protein_type || null),
-      cook_minutes: parsed.cook_minutes || 30,
-      allergens: parsed.allergens || [],
-      kid_friendly: parsed.kid_friendly !== false,
-      makes_leftovers: !!parsed.makes_leftovers,
-      leftovers_score: 0,
-      ingredients,
-      tags: parsed.tags || [],
-      source_type: "web_search",
-      source_name: parsed.source_name || null,
-      source_url: url.trim(),
-      difficulty,
-      seasonal_tags: [],
-      frequency_cap_per_month: null,
-    };
-
-    const result = db.prepare(`
+    const row = await queryOne(`
       INSERT INTO recipes (name, cuisine, vegetarian, protein_type, cook_minutes,
         allergens, kid_friendly, makes_leftovers, ingredients, tags,
         source_type, source_name, source_url, difficulty, leftovers_score,
         seasonal_tags, frequency_cap_per_month)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      recipeData.title, recipeData.cuisine, recipeData.vegetarian ? 1 : 0,
-      recipeData.protein_type, recipeData.cook_minutes,
-      JSON.stringify(recipeData.allergens), recipeData.kid_friendly ? 1 : 0,
-      recipeData.makes_leftovers ? 1 : 0, JSON.stringify(ingredients),
-      JSON.stringify(recipeData.tags), recipeData.source_type,
-      recipeData.source_name, recipeData.source_url, recipeData.difficulty,
-      0, JSON.stringify([]), null,
-    );
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      RETURNING *
+    `, [
+      parsed.title || "Untitled Recipe",
+      cuisine,
+      !!parsed.vegetarian,
+      parsed.vegetarian ? null : (parsed.protein_type || null),
+      parsed.cook_minutes || 30,
+      JSON.stringify(parsed.allergens || []),
+      parsed.kid_friendly !== false,
+      !!parsed.makes_leftovers,
+      JSON.stringify(ingredients),
+      JSON.stringify(parsed.tags || []),
+      "web_search",
+      parsed.source_name || null,
+      url.trim(),
+      difficulty,
+      0,
+      JSON.stringify([]),
+      null,
+    ]);
 
-    const recipeId = result.lastInsertRowid as number;
+    const recipeId = row.id;
 
     // Insert recipe_ingredients
     if (ingredients.length > 0) {
-      const insertIng = db.prepare(
-        "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
-      );
       for (const ing of ingredients) {
-        insertIng.run(recipeId, ing.name, ing.quantity, ing.unit, ing.category);
+        await query(
+          "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
+          [recipeId, ing.name, ing.quantity, ing.unit, ing.category],
+        );
       }
     }
 
-    const created = db.prepare("SELECT * FROM recipes WHERE id = ?").get(recipeId);
-    console.log(`[import-from-url] Created recipe ${recipeId}: "${recipeData.title}" with ${ingredients.length} ingredients`);
+    console.log(`[import-from-url] Created recipe ${recipeId}: "${row.name}" with ${ingredients.length} ingredients`);
 
-    res.status(201).json({ recipe: rowToRecipe(created), alreadyExists: false });
+    res.status(201).json({ recipe: rowToRecipe(row), alreadyExists: false });
   } catch (error: any) {
     console.error("Import from URL error:", error);
     if (error instanceof RateLimitError) {
@@ -732,12 +730,12 @@ Constraints:
 // POST /api/recipes/backfill-ingredients — re-extract ingredients for web_search recipes with empty ingredients
 router.post("/backfill-ingredients", async (_req: Request, res: Response) => {
   try {
-    const emptyRecipes = db.prepare(
+    const emptyRecipes = await query<{ id: number; name: string; source_url: string }>(
       `SELECT id, name, source_url FROM recipes
        WHERE source_type = 'web_search'
          AND source_url IS NOT NULL
-         AND (ingredients IS NULL OR ingredients = '[]' OR ingredients = '')`
-    ).all() as Array<{ id: number; name: string; source_url: string }>;
+         AND (ingredients IS NULL OR ingredients = '[]' OR ingredients = '')`,
+    );
 
     if (emptyRecipes.length === 0) {
       return res.json({ message: "No recipes need backfill", backfilled: [] });
@@ -749,15 +747,15 @@ router.post("/backfill-ingredients", async (_req: Request, res: Response) => {
       emptyRecipes.map(async (recipe) => {
         const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url);
         if (extracted.length > 0) {
-          db.prepare("UPDATE recipes SET ingredients = ? WHERE id = ?").run(
+          await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
             JSON.stringify(extracted),
             recipe.id,
-          );
-          const insertIng = db.prepare(
-            "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES (?, ?, ?, ?, ?)",
-          );
+          ]);
           for (const ing of extracted) {
-            insertIng.run(recipe.id, ing.name, ing.quantity, ing.unit, ing.category);
+            await query(
+              "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
+              [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
+            );
           }
           console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extracted ${extracted.length} ingredients`);
         } else {

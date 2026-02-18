@@ -1,7 +1,7 @@
 // services/sideSelector.ts
 // Smart side selection based on main dish characteristics
 
-import db from "../db";
+import { query } from "../db";
 
 interface MainDish {
   id: number;
@@ -20,50 +20,50 @@ interface Side {
   avoid_with_main_types: string[] | null;
 }
 
-export function selectSmartSides(
+export async function selectSmartSides(
   mainDish: MainDish,
   count: number = 1,
   excludeIds: number[] = []
-): Side[] {
+): Promise<Side[]> {
   // Analyze main dish characteristics
   const mainWeight = determineMainWeight(mainDish);
   const mainCategories = categorizeMain(mainDish);
 
   // Build query with constraints
-  let query = `
+  let sql = `
     SELECT id, name, category, weight, cuisine_affinity, avoid_with_main_types
     FROM sides_library
     WHERE 1=1
   `;
 
   const params: any[] = [];
+  let paramIndex = 1;
 
   // Exclude already used sides
   if (excludeIds.length > 0) {
-    query += ` AND id NOT IN (${excludeIds.map(() => "?").join(",")})`;
+    const placeholders = excludeIds.map((_, i) => `$${paramIndex + i}`).join(",");
+    sql += ` AND id NOT IN (${placeholders})`;
     params.push(...excludeIds);
+    paramIndex += excludeIds.length;
   }
 
   // Weight matching: heavy main → light side
   if (mainWeight === "heavy") {
-    query += ` AND weight = 'light'`;
+    sql += ` AND weight = 'light'`;
   } else if (mainWeight === "light") {
-    query += ` AND weight IN ('medium', 'heavy')`;
+    sql += ` AND weight IN ('medium', 'heavy')`;
   }
 
   // Get all potential sides
-  const allSides: Side[] = (db
-    .prepare(query)
-    .all(...params) as any[])
-    .map((s: any) => ({
-      ...s,
-      cuisine_affinity: s.cuisine_affinity
-        ? JSON.parse(s.cuisine_affinity)
-        : null,
-      avoid_with_main_types: s.avoid_with_main_types
-        ? JSON.parse(s.avoid_with_main_types)
-        : null,
-    }));
+  const allSides: Side[] = (await query(sql, params)).map((s: any) => ({
+    ...s,
+    cuisine_affinity: s.cuisine_affinity
+      ? JSON.parse(s.cuisine_affinity)
+      : null,
+    avoid_with_main_types: s.avoid_with_main_types
+      ? JSON.parse(s.avoid_with_main_types)
+      : null,
+  }));
 
   // Score each side
   const scored = allSides.map((side) => {
