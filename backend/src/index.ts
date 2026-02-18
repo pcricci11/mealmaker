@@ -14,6 +14,7 @@ import cookingScheduleRouter from "./routes/cooking-schedule";
 import sidesRouter from "./routes/sides";
 import smartSetupRouter from "./routes/smart-setup";
 import conversationalPlannerRouter from "./routes/conversational-planner";
+import householdsRouter from "./routes/households";
 
 async function start() {
   await initDb();
@@ -23,6 +24,9 @@ async function start() {
 
   app.use(cors());
   app.use(express.json());
+
+  // Household + auth routes
+  app.use("/api", householdsRouter);
 
   // Routes
   app.use("/api/families", familiesRouter);

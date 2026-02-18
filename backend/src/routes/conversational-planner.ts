@@ -4,8 +4,12 @@
 import { Router, Request, Response } from "express";
 import Anthropic from "@anthropic-ai/sdk";
 import { query, queryOne } from "../db";
+import { requireAuth } from "../middleware/auth";
 
 const router = Router();
+
+// Require auth for conversational planning
+router.use(requireAuth);
 
 const SYSTEM_PROMPT = `You are a meal planning assistant. The user will describe their week in natural language. Parse their description and return a JSON object with this exact structure:
 
@@ -60,15 +64,12 @@ router.post("/generate-from-conversation", async (req: Request, res: Response) =
     return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
   }
 
-  // Get or create a default family
-  let family: any = await queryOne("SELECT * FROM families LIMIT 1");
+  // Get the authenticated user's family
+  let family: any = req.householdId
+    ? await queryOne("SELECT * FROM families WHERE household_id = $1 LIMIT 1", [req.householdId])
+    : await queryOne("SELECT * FROM families LIMIT 1");
   if (!family) {
-    family = await queryOne(
-      `INSERT INTO families (name, allergies, vegetarian_ratio, gluten_free, dairy_free, nut_free)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      ["My Family", "[]", 40, false, false, false],
-    );
+    return res.status(404).json({ error: "No family found. Create a household first." });
   }
 
   const familyId = family.id;

@@ -5,8 +5,12 @@ import { Router, Request, Response } from "express";
 import { generateMealPlanV3 } from "../services/mealPlanGeneratorV3";
 import { extractIngredientsFromUrl } from "../services/ingredientExtractor";
 import { query, queryOne, queryRaw } from "../db";
+import { requireAuth, verifyFamilyAccess } from "../middleware/auth";
 
 const router = Router();
+
+// All V3 meal plan routes require auth
+router.use(requireAuth);
 let generateCallCount = 0;
 
 // Generate meal plan V3 (enhanced)
@@ -34,6 +38,12 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
       });
     }
 
+    // Verify family belongs to household
+    const familyRow = await verifyFamilyAccess(family_id, req.householdId);
+    if (!familyRow) {
+      return res.status(404).json({ error: "Family not found" });
+    }
+
     // Debug: log incoming cooking schedule
     console.log("[generate-v3] cooking_schedule received:", JSON.stringify(cooking_schedule, null, 2));
     const dayCount: Record<string, number> = {};
@@ -58,6 +68,8 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
       settings: settings || {},
       specificMeals: specific_meals,
       locks: locks || undefined,
+      householdId: req.householdId || null,
+      createdBy: req.user!.id,
     });
 
     // Lazy backfill: extract ingredients for any assigned recipe that has none
@@ -156,7 +168,10 @@ router.post("/:id/clone", async (req: Request, res: Response) => {
     }
 
     // Get the source plan
-    const sourcePlan = await queryOne("SELECT * FROM meal_plans WHERE id = $1", [sourcePlanId]);
+    const sourcePlan = await queryOne(
+      "SELECT * FROM meal_plans WHERE id = $1 AND (household_id = $2 OR household_id IS NULL)",
+      [sourcePlanId, req.householdId],
+    );
     if (!sourcePlan) {
       return res.status(404).json({ error: "Source plan not found" });
     }
@@ -294,13 +309,14 @@ router.get("/history", async (req, res) => {
       SELECT
         mp.id, mp.family_id, mp.week_start, mp.variant, mp.created_at
       FROM meal_plans mp
+      WHERE (mp.household_id = $1 OR mp.household_id IS NULL)
     `;
 
-    const params: any[] = [];
-    let paramIndex = 1;
+    const params: any[] = [req.householdId];
+    let paramIndex = 2;
 
     if (familyId) {
-      sql += ` WHERE mp.family_id = $${paramIndex++}`;
+      sql += ` AND mp.family_id = $${paramIndex++}`;
       params.push(familyId);
     }
 
@@ -499,6 +515,12 @@ router.post("/lock", async (req: Request, res: Response) => {
       return res.status(400).json({
         error: "family_id, week_start, and items are required",
       });
+    }
+
+    // Verify family belongs to household
+    const familyRow = await verifyFamilyAccess(family_id, req.householdId);
+    if (!familyRow) {
+      return res.status(404).json({ error: "Family not found" });
     }
 
     // Find or create the meal plan

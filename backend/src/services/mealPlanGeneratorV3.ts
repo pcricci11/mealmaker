@@ -14,6 +14,8 @@ interface GeneratePlanOptions {
   settings?: any;
   specificMeals?: Array<{ day: string; description: string }>;
   locks?: Record<string, number>;
+  householdId?: number | null;
+  createdBy?: number | null;
 }
 
 interface Recipe {
@@ -42,6 +44,8 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
     vegetarianRatio,
     specificMeals,
     locks,
+    householdId,
+    createdBy,
   } = options;
 
   // Safeguard: if locks are provided, ensure only locked days + already-cooking days
@@ -110,9 +114,9 @@ export async function generateMealPlanV3(options: GeneratePlanOptions) {
       mealPlanId = existing.id;
     } else {
       const planResult = await client.query(
-        `INSERT INTO meal_plans (family_id, week_start, variant)
-        VALUES ($1, $2, 0) RETURNING id`,
-        [familyId, weekStart],
+        `INSERT INTO meal_plans (family_id, week_start, variant, household_id, created_by)
+        VALUES ($1, $2, 0, $3, $4) RETURNING id`,
+        [familyId, weekStart, householdId || null, createdBy || null],
       );
       mealPlanId = planResult.rows[0].id;
     }

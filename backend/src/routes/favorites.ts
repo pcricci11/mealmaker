@@ -3,8 +3,12 @@
 
 import { Router } from "express";
 import { query, queryOne, queryRaw } from "../db";
+import { requireAuth, verifyFamilyAccess } from "../middleware/auth";
 
 const router = Router();
+
+// All favorite routes require auth
+router.use(requireAuth);
 
 // ===== FAVORITE CHEFS =====
 
@@ -14,6 +18,9 @@ router.get("/chefs", async (req, res) => {
   if (!familyId) {
     return res.status(400).json({ error: "family_id is required" });
   }
+
+  const family = await verifyFamilyAccess(familyId, req.householdId);
+  if (!family) return res.status(404).json({ error: "Family not found" });
 
   const chefs = await query(
     `SELECT id, family_id, name, cuisines, created_at
@@ -32,6 +39,9 @@ router.post("/chefs", async (req, res) => {
   if (!family_id || !name) {
     return res.status(400).json({ error: "family_id and name are required" });
   }
+
+  const family = await verifyFamilyAccess(family_id, req.householdId);
+  if (!family) return res.status(404).json({ error: "Family not found" });
 
   const chef = await queryOne(
     `INSERT INTO family_favorite_chefs (family_id, name, cuisines)
@@ -67,6 +77,9 @@ router.get("/websites", async (req, res) => {
     return res.status(400).json({ error: "family_id is required" });
   }
 
+  const family = await verifyFamilyAccess(familyId, req.householdId);
+  if (!family) return res.status(404).json({ error: "Family not found" });
+
   const websites = await query(
     `SELECT id, family_id, name, created_at
     FROM family_favorite_websites
@@ -84,6 +97,9 @@ router.post("/websites", async (req, res) => {
   if (!family_id || !name) {
     return res.status(400).json({ error: "family_id and name are required" });
   }
+
+  const family = await verifyFamilyAccess(family_id, req.householdId);
+  if (!family) return res.status(404).json({ error: "Family not found" });
 
   const website = await queryOne(
     `INSERT INTO family_favorite_websites (family_id, name)
@@ -119,6 +135,9 @@ router.get("/meals", async (req, res) => {
     return res.status(400).json({ error: "family_id is required" });
   }
 
+  const family = await verifyFamilyAccess(familyId, req.householdId);
+  if (!family) return res.status(404).json({ error: "Family not found" });
+
   const meals = await query(
     `SELECT
       id, family_id, name, recipe_url, difficulty,
@@ -146,6 +165,9 @@ router.post("/meals", async (req, res) => {
   if (!family_id || !name) {
     return res.status(400).json({ error: "family_id and name are required" });
   }
+
+  const family = await verifyFamilyAccess(family_id, req.householdId);
+  if (!family) return res.status(404).json({ error: "Family not found" });
 
   const meal = await queryOne(
     `INSERT INTO family_favorite_meals
@@ -241,6 +263,9 @@ router.get("/sides", async (req, res) => {
     return res.status(400).json({ error: "family_id is required" });
   }
 
+  const family = await verifyFamilyAccess(familyId, req.householdId);
+  if (!family) return res.status(404).json({ error: "Family not found" });
+
   const sides = (await query(
     `SELECT
       id, family_id, name, recipe_url, category,
@@ -270,6 +295,9 @@ router.post("/sides", async (req, res) => {
   if (!family_id || !name) {
     return res.status(400).json({ error: "family_id and name are required" });
   }
+
+  const family = await verifyFamilyAccess(family_id, req.householdId);
+  if (!family) return res.status(404).json({ error: "Family not found" });
 
   const side = await queryOne(
     `INSERT INTO family_favorite_sides

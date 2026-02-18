@@ -4,8 +4,12 @@
 import { Router } from "express";
 import { query, queryOne, queryRaw } from "../db";
 import { validateFamilyMember } from "../validation-v3";
+import { requireAuth, verifyFamilyAccess } from "../middleware/auth";
 
 const router = Router();
+
+// All member routes require auth
+router.use(requireAuth);
 
 // Get all family members for a family
 router.get("/", async (req, res) => {
@@ -13,6 +17,12 @@ router.get("/", async (req, res) => {
 
   if (!familyId) {
     return res.status(400).json({ error: "family_id is required" });
+  }
+
+  // Verify family belongs to household
+  const family = await verifyFamilyAccess(familyId, req.householdId);
+  if (!family) {
+    return res.status(404).json({ error: "Family not found" });
   }
 
   const members = (await query(
@@ -68,6 +78,12 @@ router.get("/:id", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const input = validateFamilyMember(req.body);
+
+    // Verify family belongs to household
+    const family = await verifyFamilyAccess(input.family_id, req.householdId);
+    if (!family) {
+      return res.status(404).json({ error: "Family not found" });
+    }
 
     const member = await queryOne(
       `INSERT INTO family_members

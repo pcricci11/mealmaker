@@ -5,10 +5,14 @@ import { generatePlan, normalizeToMonday, deriveSeed } from "../planner/index";
 import type { PlannerContext } from "../planner/types";
 import { validateGeneratePlanRequest, validateSwapRequest } from "../validation";
 import { estimateSideIngredients } from "../services/ingredientExtractor";
+import { requireAuth, verifyFamilyAccess } from "../middleware/auth";
 import type { Family, FamilyMember, DayOfWeek, ReasonCodeValue, GroceryItem, GroceryCategory } from "../../../shared/types";
 import { VALID_DAYS } from "../../../shared/types";
 
 const router = Router();
+
+// All meal plan routes require auth
+router.use(requireAuth);
 
 function rowToFamily(row: any): Family {
   return {
@@ -95,7 +99,7 @@ router.post("/generate", async (req: Request, res: Response) => {
   const { family_id, locks, week_start, variant: reqVariant, settings } = req.body;
   const variant = reqVariant ?? 0;
 
-  const familyRow = await queryOne("SELECT * FROM families WHERE id = $1", [family_id]);
+  const familyRow = await verifyFamilyAccess(family_id, req.householdId);
   if (!familyRow) return res.status(404).json({ error: "Family not found" });
   const family = rowToFamily(familyRow);
 
@@ -156,8 +160,8 @@ router.post("/generate", async (req: Request, res: Response) => {
 
     const planId = await transaction(async (client) => {
       const planResult = await client.query(
-        "INSERT INTO meal_plans (family_id, week_start, variant, settings_snapshot) VALUES ($1, $2, $3, $4) RETURNING id",
-        [family_id, normalizedWeek, variant, settingsSnapshot],
+        "INSERT INTO meal_plans (family_id, week_start, variant, settings_snapshot, household_id, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+        [family_id, normalizedWeek, variant, settingsSnapshot, req.householdId || null, req.user!.id],
       );
       const id = planResult.rows[0].id;
 
@@ -201,7 +205,10 @@ router.post("/generate", async (req: Request, res: Response) => {
 
 // GET /api/meal-plans/:id
 router.get("/:id", async (req: Request, res: Response) => {
-  const plan = await queryOne("SELECT * FROM meal_plans WHERE id = $1", [req.params.id]);
+  const plan = await queryOne(
+    "SELECT * FROM meal_plans WHERE id = $1 AND (household_id = $2 OR household_id IS NULL)",
+    [req.params.id, req.householdId],
+  );
   if (!plan) return res.status(404).json({ error: "Meal plan not found" });
 
   const items = await query(ITEMS_QUERY, [req.params.id]);
@@ -224,7 +231,10 @@ router.post("/:id/swap", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Validation failed", details: validation.errors });
   }
 
-  const plan = await queryOne("SELECT * FROM meal_plans WHERE id = $1", [req.params.id]);
+  const plan = await queryOne(
+    "SELECT * FROM meal_plans WHERE id = $1 AND (household_id = $2 OR household_id IS NULL)",
+    [req.params.id, req.householdId],
+  );
   if (!plan) return res.status(404).json({ error: "Meal plan not found" });
 
   const { day } = req.body as { day: DayOfWeek };
@@ -342,7 +352,10 @@ router.post("/items/:itemId/swap-recipe", async (req: Request, res: Response) =>
 // GET /api/meal-plans/:id/grocery-list
 router.get("/:id/grocery-list", async (req: Request, res: Response) => {
   try {
-    const plan = await queryOne("SELECT * FROM meal_plans WHERE id = $1", [req.params.id]);
+    const plan = await queryOne(
+      "SELECT * FROM meal_plans WHERE id = $1 AND (household_id = $2 OR household_id IS NULL)",
+      [req.params.id, req.householdId],
+    );
     if (!plan) return res.status(404).json({ error: "Meal plan not found" });
 
     // Query recipe_ingredients via join through meal_plan_items (mains)

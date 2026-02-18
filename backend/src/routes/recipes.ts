@@ -5,14 +5,23 @@ import { rowToRecipe } from "../helpers";
 import { validateRecipe } from "../validation";
 import { extractIngredientsFromUrl } from "../services/ingredientExtractor";
 import { createWithRetry, RateLimitError } from "../services/claudeRetry";
+import { requireAuth, optionalAuth } from "../middleware/auth";
 import type { RecipeInput } from "../../../shared/types";
 import { VALID_CUISINES, VALID_DIFFICULTIES } from "../../../shared/types";
 
 const router = Router();
 
-// GET /api/recipes
-router.get("/", async (_req: Request, res: Response) => {
-  const rows = await query("SELECT * FROM recipes ORDER BY name");
+// GET /api/recipes — return seed recipes + household recipes
+router.get("/", optionalAuth, async (req: Request, res: Response) => {
+  let rows;
+  if (req.householdId) {
+    rows = await query(
+      "SELECT * FROM recipes WHERE is_seed = TRUE OR household_id = $1 ORDER BY name",
+      [req.householdId],
+    );
+  } else {
+    rows = await query("SELECT * FROM recipes WHERE is_seed = TRUE ORDER BY name");
+  }
   res.json(rows.map(rowToRecipe));
 });
 
@@ -35,7 +44,7 @@ async function buildSourceConstraint(familyId: number): Promise<string> {
 }
 
 // POST /api/recipes/search — web search for recipes via Claude
-router.post("/search", async (req: Request, res: Response) => {
+router.post("/search", optionalAuth, async (req: Request, res: Response) => {
   const { query: searchQuery, family_id } = req.body;
   if (!searchQuery || typeof searchQuery !== "string" || !searchQuery.trim()) {
     return res.status(400).json({ error: "query is required" });
@@ -135,7 +144,7 @@ YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH [ AND ENDING WITH ].` 
 });
 
 // POST /api/recipes/batch-search — batch web search for multiple recipes via Claude
-router.post("/batch-search", async (req: Request, res: Response) => {
+router.post("/batch-search", optionalAuth, async (req: Request, res: Response) => {
   const { queries, family_id } = req.body;
   if (!Array.isArray(queries) || queries.length === 0 || queries.some((q: any) => typeof q !== "string" || !q.trim())) {
     return res.status(400).json({ error: "queries must be a non-empty array of strings" });
@@ -220,7 +229,7 @@ YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH { AND ENDING WITH }.` 
 });
 
 // POST /api/recipes/match — fuzzy search for a recipe in the local database
-router.post("/match", async (req: Request, res: Response) => {
+router.post("/match", optionalAuth, async (req: Request, res: Response) => {
   const { query: matchQuery } = req.body;
   if (!matchQuery || typeof matchQuery !== "string" || !matchQuery.trim()) {
     return res.status(400).json({ error: "query is required" });
@@ -311,7 +320,7 @@ router.get("/:id", async (req: Request, res: Response) => {
 });
 
 // POST /api/recipes
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", optionalAuth, async (req: Request, res: Response) => {
   const validation = validateRecipe(req.body);
   if (!validation.isValid) {
     return res.status(400).json({ error: "Validation failed", details: validation.errors });
@@ -335,8 +344,8 @@ router.post("/", async (req: Request, res: Response) => {
     INSERT INTO recipes (name, cuisine, vegetarian, protein_type, cook_minutes,
       allergens, kid_friendly, makes_leftovers, ingredients, tags,
       source_type, source_name, source_url, difficulty, leftovers_score,
-      seasonal_tags, frequency_cap_per_month)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      seasonal_tags, frequency_cap_per_month, household_id, created_by)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
     RETURNING *
   `, [
     r.title,           // DB column is `name`
@@ -356,6 +365,8 @@ router.post("/", async (req: Request, res: Response) => {
     r.leftovers_score || 0,
     JSON.stringify(r.seasonal_tags || []),
     r.frequency_cap_per_month || null,
+    req.householdId || null,
+    req.user?.id || null,
   ]);
 
   const recipeId = row.id;
@@ -402,13 +413,18 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 // PUT /api/recipes/:id
-router.put("/:id", async (req: Request, res: Response) => {
+router.put("/:id", optionalAuth, async (req: Request, res: Response) => {
   const existing = await queryOne("SELECT * FROM recipes WHERE id = $1", [req.params.id]);
   if (!existing) return res.status(404).json({ error: "Recipe not found" });
 
   // Only user-created recipes can be edited
   if (existing.source_type !== "user") {
     return res.status(403).json({ error: "Only user-created recipes can be edited" });
+  }
+
+  // Verify household access for non-seed recipes
+  if (existing.household_id && req.householdId !== existing.household_id) {
+    return res.status(404).json({ error: "Recipe not found" });
   }
 
   const validation = validateRecipe(req.body);
@@ -493,9 +509,14 @@ router.patch("/:id/notes", async (req: Request, res: Response) => {
 });
 
 // DELETE /api/recipes/:id
-router.delete("/:id", async (req: Request, res: Response) => {
+router.delete("/:id", optionalAuth, async (req: Request, res: Response) => {
   const existing = await queryOne("SELECT * FROM recipes WHERE id = $1", [req.params.id]);
   if (!existing) return res.status(404).json({ error: "Recipe not found" });
+
+  // Verify household access for non-seed recipes
+  if (existing.household_id && req.householdId !== existing.household_id) {
+    return res.status(404).json({ error: "Recipe not found" });
+  }
 
   // Nullify references in meal_plan_items so we don't break plan history
   await query("UPDATE meal_plan_items SET recipe_id = NULL WHERE recipe_id = $1", [req.params.id]);
@@ -558,7 +579,7 @@ Return ONLY valid JSON, no markdown fences, no explanation.`,
 });
 
 // POST /api/recipes/import-from-url — extract full recipe details from a URL
-router.post("/import-from-url", async (req: Request, res: Response) => {
+router.post("/import-from-url", optionalAuth, async (req: Request, res: Response) => {
   const { url } = req.body;
   if (!url || typeof url !== "string" || !url.trim()) {
     return res.status(400).json({ error: "url is required" });
@@ -677,8 +698,8 @@ Constraints:
       INSERT INTO recipes (name, cuisine, vegetarian, protein_type, cook_minutes,
         allergens, kid_friendly, makes_leftovers, ingredients, tags,
         source_type, source_name, source_url, difficulty, leftovers_score,
-        seasonal_tags, frequency_cap_per_month)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        seasonal_tags, frequency_cap_per_month, household_id, created_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *
     `, [
       parsed.title || "Untitled Recipe",
@@ -698,6 +719,8 @@ Constraints:
       0,
       JSON.stringify([]),
       null,
+      req.householdId || null,
+      req.user?.id || null,
     ]);
 
     const recipeId = row.id;

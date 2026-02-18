@@ -1,9 +1,13 @@
 import { Router, Request, Response } from "express";
 import { query, queryOne } from "../db";
 import { validateFamily } from "../validation";
+import { requireAuth, verifyFamilyAccess } from "../middleware/auth";
 import type { Family, FamilyInput } from "../../../shared/types";
 
 const router = Router();
+
+// All family routes require auth
+router.use(requireAuth);
 
 function rowToFamily(row: any): Family {
   return {
@@ -25,14 +29,20 @@ function rowToFamily(row: any): Family {
 }
 
 // GET /api/families
-router.get("/", async (_req: Request, res: Response) => {
-  const rows = await query("SELECT * FROM families ORDER BY id DESC");
+router.get("/", async (req: Request, res: Response) => {
+  if (!req.householdId) {
+    return res.json([]);
+  }
+  const rows = await query(
+    "SELECT * FROM families WHERE household_id = $1 ORDER BY id DESC",
+    [req.householdId],
+  );
   res.json(rows.map(rowToFamily));
 });
 
 // GET /api/families/:id
 router.get("/:id", async (req: Request, res: Response) => {
-  const row = await queryOne("SELECT * FROM families WHERE id = $1", [req.params.id]);
+  const row = await verifyFamilyAccess(parseInt(req.params.id), req.householdId);
   if (!row) return res.status(404).json({ error: "Family not found" });
   res.json(rowToFamily(row));
 });
@@ -47,8 +57,8 @@ router.post("/", async (req: Request, res: Response) => {
   const f: FamilyInput = req.body;
   const created = await queryOne(`
     INSERT INTO families (name, allergies, vegetarian_ratio, gluten_free, dairy_free, nut_free,
-      max_cook_minutes_weekday, max_cook_minutes_weekend, leftovers_nights_per_week, picky_kid_mode, planning_mode)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      max_cook_minutes_weekday, max_cook_minutes_weekend, leftovers_nights_per_week, picky_kid_mode, planning_mode, household_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     RETURNING *
   `, [
     f.name,
@@ -62,13 +72,14 @@ router.post("/", async (req: Request, res: Response) => {
     f.leftovers_nights_per_week || 1,
     f.picky_kid_mode ?? false,
     f.planning_mode || "strictest_household",
+    req.householdId || null,
   ]);
   res.status(201).json(rowToFamily(created));
 });
 
 // PUT /api/families/:id
 router.put("/:id", async (req: Request, res: Response) => {
-  const existing = await queryOne("SELECT * FROM families WHERE id = $1", [req.params.id]);
+  const existing = await verifyFamilyAccess(parseInt(req.params.id), req.householdId);
   if (!existing) return res.status(404).json({ error: "Family not found" });
 
   const updates = req.body;

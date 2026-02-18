@@ -3,8 +3,12 @@
 
 import { Router } from "express";
 import { query, queryOne, transaction } from "../db";
+import { requireAuth, verifyFamilyAccess } from "../middleware/auth";
 
 const router = Router();
+
+// All cooking schedule routes require auth
+router.use(requireAuth);
 
 // ===== COOKING SCHEDULE =====
 
@@ -18,6 +22,9 @@ router.get("/", async (req, res) => {
       error: "family_id and week_start are required"
     });
   }
+
+  const family = await verifyFamilyAccess(familyId, req.householdId);
+  if (!family) return res.status(404).json({ error: "Family not found" });
 
   const schedule = (await query(
     `SELECT
@@ -69,6 +76,9 @@ router.post("/", async (req, res) => {
       error: "family_id, week_start, and schedule array are required"
     });
   }
+
+  const familyCheck = await verifyFamilyAccess(family_id, req.householdId);
+  if (!familyCheck) return res.status(404).json({ error: "Family not found" });
 
   await transaction(async (client) => {
     // Delete existing schedule for this week
@@ -131,6 +141,9 @@ router.get("/lunch", async (req, res) => {
     });
   }
 
+  const lunchFamily = await verifyFamilyAccess(familyId, req.householdId);
+  if (!lunchFamily) return res.status(404).json({ error: "Family not found" });
+
   const lunchNeeds = (await query(
     `SELECT
       id, family_id, week_start, member_id, day,
@@ -164,6 +177,9 @@ router.post("/lunch", async (req, res) => {
       error: "family_id, week_start, and lunch_needs array are required"
     });
   }
+
+  const lunchFamilyCheck = await verifyFamilyAccess(family_id, req.householdId);
+  if (!lunchFamilyCheck) return res.status(404).json({ error: "Family not found" });
 
   await transaction(async (client) => {
     // Delete existing lunch needs for this week

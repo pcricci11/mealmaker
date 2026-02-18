@@ -4,8 +4,12 @@
 import { Router, Request, Response } from "express";
 import Anthropic from "@anthropic-ai/sdk";
 import { query } from "../db";
+import { requireAuth, verifyFamilyAccess } from "../middleware/auth";
 
 const router = Router();
+
+// Require auth for smart setup
+router.use(requireAuth);
 
 const SYSTEM_PROMPT = `You are a meal planning assistant. The user will describe their week in natural language. Parse their description and return a JSON object with this exact structure:
 
@@ -54,6 +58,12 @@ router.post("/", async (req: Request, res: Response) => {
   }
   if (!family_id) {
     return res.status(400).json({ error: "family_id is required" });
+  }
+
+  // Verify family belongs to household
+  const familyCheck = await verifyFamilyAccess(family_id, req.householdId);
+  if (!familyCheck) {
+    return res.status(404).json({ error: "Family not found" });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
