@@ -132,15 +132,15 @@ export default function MyRecipes() {
       const families = await getFamilies();
       const familyId = families[0]?.id;
 
-      const [favs, plans, allRecipes] = await Promise.all([
+      const [favs, plans, allRecipes] = await Promise.allSettled([
         familyId ? getFavoriteMeals(familyId) : Promise.resolve([]),
         getMealPlanHistory(familyId),
         getRecipes(),
       ]);
 
-      setLoved(favs);
-      setHistory(plans);
-      setRecipes(allRecipes);
+      if (favs.status === "fulfilled") setLoved(favs.value);
+      if (plans.status === "fulfilled") setHistory(plans.value);
+      if (allRecipes.status === "fulfilled") setRecipes(allRecipes.value);
     } catch (err) {
       console.error("Error loading recipes data:", err);
     } finally {

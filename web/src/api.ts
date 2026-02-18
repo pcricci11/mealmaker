@@ -532,7 +532,7 @@ export async function getMealPlanHistory(familyId?: number): Promise<any[]> {
   if (familyId) {
     url += `?family_id=${familyId}`;
   }
-  const res = await fetch(url);
+  const res = await authFetch(url);
   if (!res.ok) throw new Error("Failed to fetch meal plan history");
   return res.json();
 }
