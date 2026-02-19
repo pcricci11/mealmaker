@@ -96,7 +96,7 @@ export default function App() {
           </nav>
         </div>
       </header>
-      <main className="max-w-4xl mx-auto px-4 md:px-6 py-4 md:py-6 flex-1 font-body overflow-x-hidden">
+      <main className="max-w-4xl mx-auto px-4 md:px-6 py-4 md:py-6 flex-1 font-body overflow-hidden">
         <HouseholdGuard />
       </main>
       <footer className="border-t border-stone-200 py-4 text-center text-xs text-stone-400">
