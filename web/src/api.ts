@@ -612,7 +612,7 @@ export async function generateFromConversation(text: string): Promise<Conversati
 
 // ── Auth / Households ──
 export async function syncUser(email?: string, displayName?: string): Promise<{
-  user: { id: number; clerk_id: string; email: string | null; display_name: string | null };
+  user: { id: number; clerk_id: string; email: string | null; display_name: string | null; has_seen_welcome: boolean };
   household: { id: number; name: string; invite_code: string } | null;
 }> {
   return json(
@@ -643,6 +643,10 @@ export async function createHousehold(name: string): Promise<{
       body: JSON.stringify({ name }),
     }),
   );
+}
+
+export async function markWelcomeSeen(): Promise<void> {
+  await authFetch(`${BASE}/auth/welcome-seen`, { method: "POST" });
 }
 
 export async function joinHousehold(inviteCode: string): Promise<{

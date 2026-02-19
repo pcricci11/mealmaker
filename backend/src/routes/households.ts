@@ -171,4 +171,14 @@ router.post("/auth/sync", requireAuth, async (req: Request, res: Response) => {
   res.json({ user, household });
 });
 
+// POST /api/auth/welcome-seen — mark the welcome carousel as seen
+router.post("/auth/welcome-seen", requireAuth, async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  await queryOne(
+    "UPDATE users SET has_seen_welcome = TRUE, updated_at = NOW() WHERE id = $1 RETURNING id",
+    [userId],
+  );
+  res.json({ ok: true });
+});
+
 export default router;

@@ -2,10 +2,11 @@ import { Outlet } from "react-router-dom";
 import { useUser } from "@clerk/clerk-react";
 import { useHousehold } from "../context/HouseholdContext";
 import CreateOrJoinKitchen from "./CreateOrJoinKitchen";
+import WelcomeCarousel from "./WelcomeCarousel";
 
 export default function HouseholdGuard() {
   const { isSignedIn } = useUser();
-  const { household, isLoading } = useHousehold();
+  const { household, isLoading, hasSeenWelcome, markWelcomeSeen } = useHousehold();
 
   // Signed-out users can browse freely
   if (!isSignedIn) {
@@ -26,6 +27,11 @@ export default function HouseholdGuard() {
     return <CreateOrJoinKitchen />;
   }
 
-  // Signed-in with household — proceed to app
-  return <Outlet />;
+  // Signed-in with household — proceed to app (with welcome carousel overlay if needed)
+  return (
+    <>
+      <Outlet />
+      <WelcomeCarousel open={!hasSeenWelcome} onComplete={markWelcomeSeen} />
+    </>
+  );
 }

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useUser, useAuth } from "@clerk/clerk-react";
-import { setTokenGetter, syncUser, getMyHousehold } from "../api";
+import { setTokenGetter, syncUser, getMyHousehold, markWelcomeSeen as apiMarkWelcomeSeen } from "../api";
 
 interface Household {
   id: number;
@@ -13,6 +13,8 @@ interface HouseholdContextValue {
   household: Household | null;
   familyId: number | null;
   isLoading: boolean;
+  hasSeenWelcome: boolean;
+  markWelcomeSeen: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -20,6 +22,8 @@ const HouseholdContext = createContext<HouseholdContextValue>({
   household: null,
   familyId: null,
   isLoading: false,
+  hasSeenWelcome: true,
+  markWelcomeSeen: async () => {},
   refresh: async () => {},
 });
 
@@ -33,6 +37,7 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   const [household, setHousehold] = useState<Household | null>(null);
   const [familyId, setFamilyId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasSeenWelcome, setHasSeenWelcome] = useState(true);
 
   // Wire up the token getter so all api.ts calls include the Bearer token
   useEffect(() => {
@@ -41,15 +46,29 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
     }
   }, [isSignedIn, getToken]);
 
+  const markWelcomeSeen = useCallback(async () => {
+    try {
+      await apiMarkWelcomeSeen();
+      setHasSeenWelcome(true);
+    } catch (err) {
+      console.error("Failed to mark welcome as seen:", err);
+      // Still dismiss locally so user isn't stuck
+      setHasSeenWelcome(true);
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     if (!isSignedIn || !user) return;
     setIsLoading(true);
     try {
       // Sync user with backend
-      await syncUser(
+      const syncResult = await syncUser(
         user.primaryEmailAddress?.emailAddress,
         user.fullName ?? undefined,
       );
+
+      // Track welcome carousel status
+      setHasSeenWelcome(syncResult.user.has_seen_welcome ?? true);
 
       // Fetch household info
       const data = await getMyHousehold();
@@ -85,11 +104,12 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
     } else {
       setHousehold(null);
       setFamilyId(null);
+      setHasSeenWelcome(true);
     }
   }, [isSignedIn, user, refresh]);
 
   return (
-    <HouseholdContext.Provider value={{ household, familyId, isLoading, refresh }}>
+    <HouseholdContext.Provider value={{ household, familyId, isLoading, hasSeenWelcome, markWelcomeSeen, refresh }}>
       {children}
     </HouseholdContext.Provider>
   );
