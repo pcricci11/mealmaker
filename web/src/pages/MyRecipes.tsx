@@ -555,7 +555,7 @@ export default function MyRecipes() {
           <div className="flex items-center gap-1">
             <button
               onClick={() => setQuickFilter("all")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`px-4 py-2.5 min-h-[44px] rounded-lg text-xs font-medium transition-colors ${
                 quickFilter === "all"
                   ? "bg-orange-500 text-white"
                   : "bg-white text-gray-700 hover:bg-orange-50"
@@ -565,7 +565,7 @@ export default function MyRecipes() {
             </button>
             <button
               onClick={() => setQuickFilter("loved")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`px-4 py-2.5 min-h-[44px] rounded-lg text-xs font-medium transition-colors ${
                 quickFilter === "loved"
                   ? "bg-orange-500 text-white"
                   : "bg-white text-gray-700 hover:bg-orange-50"
@@ -605,7 +605,7 @@ export default function MyRecipes() {
             <select
               value={cuisineFilter || ""}
               onChange={(e) => setCuisineFilter(e.target.value || null)}
-              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="border border-gray-300 rounded-lg px-2.5 min-h-[44px] text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="">All cuisines</option>
               {CUISINE_FILTERS.map((c) => (
@@ -619,7 +619,7 @@ export default function MyRecipes() {
                 setProteinFilter(val || null);
                 setVegetarianOnly(val === "veggie");
               }}
-              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="border border-gray-300 rounded-lg px-2.5 min-h-[44px] text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="">All proteins</option>
               {PROTEIN_FILTERS.map((p) => (
@@ -632,7 +632,7 @@ export default function MyRecipes() {
                 const ct = COOK_TIME_FILTERS.find((f) => f.label === e.target.value);
                 setCookTimeFilter(ct || null);
               }}
-              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="border border-gray-300 rounded-lg px-2.5 min-h-[44px] text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="">Any time</option>
               {COOK_TIME_FILTERS.map((ct) => (
@@ -642,7 +642,7 @@ export default function MyRecipes() {
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortOption)}
-              className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="border border-gray-300 rounded-lg px-2.5 min-h-[44px] text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="recent">Recent</option>
               <option value="loved">Loved</option>
@@ -659,7 +659,7 @@ export default function MyRecipes() {
                   setVegetarianOnly(false);
                   setCookTimeFilter(null);
                 }}
-                className="text-xs text-gray-400 hover:text-gray-600"
+                className="text-xs text-gray-400 hover:text-gray-600 min-h-[44px] px-2 flex items-center"
               >
                 Clear
               </button>
@@ -690,7 +690,7 @@ export default function MyRecipes() {
                 <Card
                   key={r.id}
                   className={cn(
-                    "px-5 py-4 transition-shadow cursor-pointer",
+                    "px-4 py-4 pb-5 md:px-5 transition-shadow cursor-pointer",
                     pickDayParam ? "hover:border-orange-500 hover:bg-orange-50" :
                     isExpanded ? "border-orange-300 shadow-sm" : "border-gray-200 hover:shadow-sm",
                     addingToDay && "opacity-50 pointer-events-none"
@@ -725,7 +725,7 @@ export default function MyRecipes() {
                         <p className="font-medium truncate group/name flex items-center">
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleLoved(r); }}
-                            className="mr-1.5 hover:scale-125 transition-transform shrink-0"
+                            className="mr-0.5 hover:scale-125 transition-transform shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center -my-2 -ml-2"
                             title={isLoved ? "Remove from loved" : "Love this recipe"}
                           >
                             {isLoved ? "❤️" : "♡"}
@@ -745,12 +745,12 @@ export default function MyRecipes() {
                           )}
                           <button
                             onClick={(e) => { e.stopPropagation(); startRename(r); }}
-                            className="ml-1.5 text-gray-300 hover:text-gray-500 opacity-0 group-hover/name:opacity-100 transition-opacity"
+                            className="ml-0.5 text-gray-300 hover:text-gray-500 md:opacity-0 md:group-hover/name:opacity-100 transition-opacity min-w-[44px] min-h-[44px] flex items-center justify-center -my-2"
                             title="Rename recipe"
                           >✏️</button>
                         </p>
                       )}
-                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      <div className="flex flex-wrap gap-1.5 mt-1.5 pb-0.5">
                         <Badge variant="outline" className={cn("border-0", cuisineClass)}>
                           {r.cuisine.replace("_", " ")}
                         </Badge>
@@ -786,7 +786,7 @@ export default function MyRecipes() {
                               key={key}
                               disabled={addingToDay !== null}
                               onClick={() => handleAddToDay(r, key)}
-                              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                              className={`px-4 py-2.5 min-h-[44px] rounded-full text-xs font-medium transition-colors ${
                                 addingToDay === key
                                   ? "bg-orange-200 text-orange-800 animate-pulse"
                                   : "bg-orange-100 text-orange-600 hover:bg-orange-200"
@@ -851,7 +851,7 @@ export default function MyRecipes() {
                         ) : (
                           <button
                             onClick={() => { setNotesOpenId(r.id); setNotesValue(""); }}
-                            className="text-xs text-orange-500 hover:text-orange-600 font-medium"
+                            className="text-xs text-orange-500 hover:text-orange-600 font-medium min-h-[44px] flex items-center"
                           >
                             + Add Notes
                           </button>
@@ -859,19 +859,19 @@ export default function MyRecipes() {
                       </div>
 
                       {/* Actions row */}
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         {isLoved && (
                           <button
                             disabled={removingLoved === r.id}
                             onClick={() => handleRemoveLoved(r)}
-                            className="text-xs text-red-500 hover:text-red-600 font-medium disabled:opacity-50"
+                            className="text-xs text-red-500 hover:text-red-600 font-medium disabled:opacity-50 min-h-[44px] px-2 flex items-center"
                           >
                             {removingLoved === r.id ? "Removing..." : "Remove from Loved"}
                           </button>
                         )}
                         <button
                           onClick={() => setConfirmDelete(r)}
-                          className="text-xs text-gray-400 hover:text-red-500 font-medium ml-auto"
+                          className="text-xs text-gray-400 hover:text-red-500 font-medium ml-auto min-h-[44px] px-2 flex items-center"
                         >
                           Delete
                         </button>
