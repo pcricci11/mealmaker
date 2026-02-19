@@ -614,7 +614,7 @@ export default function MyRecipes() {
           background: `linear-gradient(135deg, ${colors.bg} 0%, ${colors.border} 100%)`,
         }}
       >
-        <span className="text-4xl opacity-60">🍽️</span>
+        <span className="text-3xl opacity-60">🍽️</span>
       </div>
     );
   };
@@ -632,11 +632,10 @@ export default function MyRecipes() {
 
   return (
     <div className="min-h-screen bg-chef-cream overflow-x-hidden">
-      {/* build: 2026-02-19T22:10 */}
-      <div className="space-y-3 md:space-y-5">
+      <div className="space-y-2 md:space-y-5">
         {/* Pick mode banner */}
         {pickDayParam && (
-          <div className="bg-orange-50 border border-orange-300 rounded-xl px-5 py-3 flex items-center justify-between">
+          <div className="bg-orange-50 border border-orange-300 rounded-xl px-4 py-2 flex items-center justify-between">
             <p className="text-sm font-medium text-orange-800">
               Select a recipe to {pickMode === "swap" ? "swap on" : "add to"} <span className="font-bold">{pickDayParam.charAt(0).toUpperCase() + pickDayParam.slice(1)}</span>
             </p>
@@ -650,10 +649,10 @@ export default function MyRecipes() {
         )}
 
         {/* ── Header ── */}
-        <div className="flex items-end justify-between">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-display text-2xl font-bold text-stone-800">My Recipes</h1>
-            <p className="text-stone-400 text-sm font-body mt-0.5">{recipes.length} recipes in your collection</p>
+            <h1 className="font-display text-xl md:text-2xl font-bold text-stone-800">My Recipes</h1>
+            <p className="text-stone-400 text-xs md:text-sm font-body">{recipes.length} recipes</p>
           </div>
           <div className="hidden md:flex items-center gap-1 bg-white rounded-lg border border-stone-200 p-0.5">
             <button
@@ -692,7 +691,7 @@ export default function MyRecipes() {
         <div className="flex items-center gap-2 min-w-0">
           <div className="relative flex-1 min-w-0">
             <svg
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400"
               fill="none" viewBox="0 0 24 24" stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -701,8 +700,8 @@ export default function MyRecipes() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search recipes, ingredients..."
-              className="w-full pl-10 pr-9 py-2.5 bg-white border border-stone-200 rounded-xl text-sm font-body text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-chef-orange/30 focus:border-chef-orange transition-colors"
+              placeholder="Search recipes..."
+              className="w-full pl-9 pr-8 py-2 bg-white border border-stone-200 rounded-xl text-sm font-body text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-chef-orange/30 focus:border-chef-orange transition-colors"
             />
             {search && (
               <button
@@ -716,7 +715,7 @@ export default function MyRecipes() {
           {/* Mobile: Filter button */}
           <button
             onClick={() => setFilterSheetOpen(true)}
-            className="md:hidden flex items-center gap-1.5 bg-white border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors shrink-0"
+            className="md:hidden flex items-center gap-1.5 bg-white border border-stone-200 rounded-xl px-2.5 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors shrink-0"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -755,7 +754,7 @@ export default function MyRecipes() {
               key={chip.key}
               onClick={() => handleChipClick(chip.key)}
               className={cn(
-                "px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all shrink-0",
+                "px-3 py-1 rounded-full text-xs md:text-sm font-medium whitespace-nowrap transition-all shrink-0",
                 activeChip === chip.key
                   ? "bg-stone-900 text-white shadow-sm"
                   : "bg-white text-stone-600 border border-stone-200 hover:border-stone-300 hover:bg-stone-50"
