@@ -52,10 +52,20 @@ export default {
           from: { height: "var(--radix-accordion-height)" },
           to: { height: "0" },
         },
+        "slide-up": {
+          from: { transform: "translateY(100%)" },
+          to: { transform: "translateY(0)" },
+        },
+        "slide-down": {
+          from: { transform: "translateY(0)" },
+          to: { transform: "translateY(100%)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "slide-up": "slide-up 0.3s ease-out",
+        "slide-down": "slide-down 0.3s ease-out forwards",
       },
     },
   },

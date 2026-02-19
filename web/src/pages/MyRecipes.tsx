@@ -129,6 +129,38 @@ export default function MyRecipes() {
   const [vegetarianOnly, setVegetarianOnly] = useState(false);
   const [sort, setSort] = useState<SortOption>("recent");
 
+  // Mobile bottom sheet & FAB state
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [fabMenuOpen, setFabMenuOpen] = useState(false);
+
+  // Count active filters for mobile badge
+  const bottomSheetFilterCount = useMemo(() => {
+    let count = 0;
+    if (cuisineFilter) count++;
+    if (proteinFilter) count++;
+    if (cookTimeFilter) count++;
+    if (sort !== "recent") count++;
+    return count;
+  }, [cuisineFilter, proteinFilter, cookTimeFilter, sort]);
+
+  // Lock body scroll when filter sheet is open
+  useEffect(() => {
+    if (filterSheetOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [filterSheetOpen]);
+
+  // Close FAB menu on scroll
+  useEffect(() => {
+    if (!fabMenuOpen) return;
+    const handleScroll = () => setFabMenuOpen(false);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [fabMenuOpen]);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -531,7 +563,7 @@ export default function MyRecipes() {
               {recipes.length} recipes
             </span>
           </h2>
-          <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-3">
             <Button
               variant="link"
               className="h-auto p-0 text-sm font-medium text-orange-500 hover:text-orange-600 transition-colors"
@@ -600,8 +632,40 @@ export default function MyRecipes() {
             )}
           </div>
 
-          {/* Filter dropdowns */}
-          <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar -mx-4 px-4">
+          {/* Mobile: Filter button */}
+          <div className="flex md:hidden items-center gap-2">
+            <button
+              onClick={() => setFilterSheetOpen(true)}
+              className="flex items-center gap-1.5 border border-gray-300 rounded-lg px-3 min-h-[44px] text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              Filter
+              {bottomSheetFilterCount > 0 && (
+                <span className="bg-orange-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {bottomSheetFilterCount}
+                </span>
+              )}
+            </button>
+            {(bottomSheetFilterCount > 0 || cuisineFilter || proteinFilter || cookTimeFilter || sort !== "recent") && (
+              <button
+                onClick={() => {
+                  setCuisineFilter(null);
+                  setProteinFilter(null);
+                  setVegetarianOnly(false);
+                  setCookTimeFilter(null);
+                  setSort("recent");
+                }}
+                className="text-xs text-orange-500 hover:text-orange-600 font-medium min-h-[44px] flex items-center"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Desktop: Filter dropdowns */}
+          <div className="hidden md:flex items-center gap-2 overflow-x-auto hide-scrollbar -mx-4 px-4">
             <select
               value={cuisineFilter || ""}
               onChange={(e) => setCuisineFilter(e.target.value || null)}
@@ -982,6 +1046,160 @@ export default function MyRecipes() {
           {successMessage}
         </div>
       )}
+
+      {/* ── Filter Bottom Sheet (mobile only) ── */}
+      {filterSheetOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={() => setFilterSheetOpen(false)}
+          />
+          <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl animate-slide-up md:hidden">
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 bg-gray-300 rounded-full" />
+            </div>
+
+            <div className="px-5 pb-6 space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+                <button
+                  onClick={() => {
+                    setCuisineFilter(null);
+                    setProteinFilter(null);
+                    setVegetarianOnly(false);
+                    setCookTimeFilter(null);
+                    setSort("recent");
+                  }}
+                  className="text-sm text-orange-500 hover:text-orange-600 font-medium"
+                >
+                  Clear all
+                </button>
+              </div>
+
+              {/* Cuisine */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Cuisine</label>
+                <select
+                  value={cuisineFilter || ""}
+                  onChange={(e) => setCuisineFilter(e.target.value || null)}
+                  className="w-full border border-gray-300 rounded-lg px-3 min-h-[44px] text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="">All cuisines</option>
+                  {CUISINE_FILTERS.map((c) => (
+                    <option key={c} value={c}>{c.replace("_", " ")}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Protein */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Protein</label>
+                <select
+                  value={proteinFilter || ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setProteinFilter(val || null);
+                    setVegetarianOnly(val === "veggie");
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-3 min-h-[44px] text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="">All proteins</option>
+                  {PROTEIN_FILTERS.map((p) => (
+                    <option key={p.label} value={p.value ?? "veggie"}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Cook Time */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Cook Time</label>
+                <select
+                  value={cookTimeFilter ? cookTimeFilter.label : ""}
+                  onChange={(e) => {
+                    const ct = COOK_TIME_FILTERS.find((f) => f.label === e.target.value);
+                    setCookTimeFilter(ct || null);
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-3 min-h-[44px] text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="">Any time</option>
+                  {COOK_TIME_FILTERS.map((ct) => (
+                    <option key={ct.label} value={ct.label}>{ct.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sort */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">Sort</label>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as SortOption)}
+                  className="w-full border border-gray-300 rounded-lg px-3 min-h-[44px] text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="recent">Recent</option>
+                  <option value="loved">Loved</option>
+                  <option value="alpha">A–Z</option>
+                  <option value="cook_time">Fastest</option>
+                </select>
+              </div>
+
+              {/* Done button */}
+              <Button
+                className="w-full"
+                onClick={() => setFilterSheetOpen(false)}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Floating Action Button (mobile only) ── */}
+      <div className="md:hidden">
+        {/* Backdrop to close FAB menu */}
+        {fabMenuOpen && (
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setFabMenuOpen(false)}
+          />
+        )}
+
+        {/* FAB menu items */}
+        {fabMenuOpen && (
+          <div className="fixed bottom-24 right-5 z-50 flex flex-col items-end gap-2">
+            <button
+              onClick={() => { setFabMenuOpen(false); setShowAddModal(true); }}
+              className="bg-white text-gray-900 text-sm font-medium px-4 py-2.5 rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              Personal Recipe
+            </button>
+            <button
+              onClick={() => { setFabMenuOpen(false); setShowUrlModal(true); }}
+              className="bg-white text-gray-900 text-sm font-medium px-4 py-2.5 rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              URL Recipe
+            </button>
+          </div>
+        )}
+
+        {/* FAB button */}
+        <button
+          onClick={() => setFabMenuOpen((prev) => !prev)}
+          className="fixed bottom-6 right-5 z-50 w-14 h-14 rounded-full bg-orange-500 hover:bg-orange-600 text-white shadow-lg flex items-center justify-center transition-all"
+        >
+          <span
+            className={cn(
+              "text-2xl leading-none transition-transform duration-200",
+              fabMenuOpen && "rotate-45"
+            )}
+          >
+            +
+          </span>
+        </button>
+      </div>
 
       {/* Delete confirmation modal */}
       {confirmDelete && (
