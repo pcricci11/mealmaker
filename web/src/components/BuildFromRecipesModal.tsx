@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { getRecipes, getFavoriteMeals } from "../api";
 import { CUISINE_COLORS } from "./SwapMainModal";
 import type { Recipe, DayOfWeek, FamilyFavoriteMeal } from "@shared/types";
@@ -98,11 +98,20 @@ export default function BuildFromRecipesModal({
     setPickingDayForRecipe(recipe);
   };
 
+  const dayPickerRef = useRef<HTMLDivElement>(null);
+
   const handleDayPick = (day: DayOfWeek) => {
     if (!pickingDayForRecipe) return;
     setAssignments((prev) => [...prev, { recipe: pickingDayForRecipe, day }]);
     setPickingDayForRecipe(null);
   };
+
+  // Scroll the inline day picker into view when it appears
+  useEffect(() => {
+    if (pickingDayForRecipe && dayPickerRef.current) {
+      dayPickerRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [pickingDayForRecipe]);
 
   const handleDone = () => {
     const result = new Map<DayOfWeek, Recipe[]>();
@@ -122,36 +131,6 @@ export default function BuildFromRecipesModal({
           <DialogTitle className="text-lg font-bold">Pick from My Recipes</DialogTitle>
           <DialogDescription className="sr-only">Select recipes and assign them to days</DialogDescription>
         </DialogHeader>
-
-        {/* Day picker (shown when picking a day for a recipe) */}
-        {pickingDayForRecipe && (
-          <div className="border-b border-gray-200 bg-orange-50 px-4 md:px-6 py-3">
-            <div className="text-sm text-gray-700 mb-2">
-              Assign{" "}
-              <span className="font-semibold">
-                {pickingDayForRecipe.title}
-              </span>{" "}
-              to:
-            </div>
-            <div className="flex flex-wrap gap-2 items-center">
-              {DAYS.map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => handleDayPick(key)}
-                  className="px-3 py-1 rounded-full text-xs font-medium bg-white border border-orange-300 text-orange-600 hover:bg-orange-500 hover:text-white transition-colors"
-                >
-                  {label}
-                </button>
-              ))}
-              <button
-                onClick={() => setPickingDayForRecipe(null)}
-                className="text-xs text-gray-500 hover:text-gray-700 ml-2"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Search bar */}
         <div className="px-4 md:px-6 py-3 border-b border-gray-100">
@@ -178,52 +157,82 @@ export default function BuildFromRecipesModal({
               const isLoved = lovedTitles.has(recipe.title.toLowerCase());
               const assignedDays = daysForRecipe(recipe.id);
               const isAssigned = assignedDays.length > 0;
+              const isPicking = pickingDayForRecipe?.id === recipe.id;
               const cuisineClass =
                 CUISINE_COLORS[recipe.cuisine] || "bg-gray-100 text-gray-700";
               return (
-                <button
-                  key={recipe.id}
-                  onClick={() => handleRecipeClick(recipe)}
-                  className={`w-full border rounded-lg p-4 transition-colors text-left ${
-                    isAssigned
-                      ? "border-orange-500 bg-orange-50"
-                      : "border-gray-200 hover:border-orange-400 hover:bg-orange-50/50"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="font-medium text-gray-900 min-w-0">
-                      {isLoved && (
-                        <span className="text-red-500 mr-1.5">&#9829;</span>
-                      )}
-                      {recipe.title}
-                    </div>
-                    {isAssigned && (
-                      <div className="flex gap-1 shrink-0">
-                        {assignedDays.map((day) => (
-                          <span
-                            key={day}
-                            className="text-xs px-2 py-0.5 rounded-full bg-orange-200 text-orange-800 font-medium"
-                          >
-                            {dayLabel(day)}
-                          </span>
-                        ))}
+                <div key={recipe.id}>
+                  <button
+                    onClick={() => handleRecipeClick(recipe)}
+                    className={`w-full border rounded-lg p-4 transition-colors text-left ${
+                      isPicking
+                        ? "border-orange-500 bg-orange-50 rounded-b-none"
+                        : isAssigned
+                          ? "border-orange-500 bg-orange-50"
+                          : "border-gray-200 hover:border-orange-400 hover:bg-orange-50/50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-medium text-gray-900 min-w-0">
+                        {isLoved && (
+                          <span className="text-red-500 mr-1.5">&#9829;</span>
+                        )}
+                        {recipe.title}
                       </div>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <Badge variant="outline" className={cn("border-0", cuisineClass)}>
-                      {recipe.cuisine.replace("_", " ")}
-                    </Badge>
-                    <Badge variant="secondary">
-                      {recipe.cook_minutes} min
-                    </Badge>
-                    {recipe.difficulty && (
-                      <Badge variant="secondary">
-                        {recipe.difficulty}
+                      {isAssigned && (
+                        <div className="flex gap-1 shrink-0">
+                          {assignedDays.map((day) => (
+                            <span
+                              key={day}
+                              className="text-xs px-2 py-0.5 rounded-full bg-orange-200 text-orange-800 font-medium"
+                            >
+                              {dayLabel(day)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                      <Badge variant="outline" className={cn("border-0", cuisineClass)}>
+                        {recipe.cuisine.replace("_", " ")}
                       </Badge>
-                    )}
-                  </div>
-                </button>
+                      <Badge variant="secondary">
+                        {recipe.cook_minutes} min
+                      </Badge>
+                      {recipe.difficulty && (
+                        <Badge variant="secondary">
+                          {recipe.difficulty}
+                        </Badge>
+                      )}
+                    </div>
+                  </button>
+                  {/* Inline day picker — appears directly below the selected card */}
+                  {isPicking && (
+                    <div
+                      ref={dayPickerRef}
+                      className="border border-t-0 border-orange-500 bg-orange-50 rounded-b-lg px-4 py-3"
+                    >
+                      <div className="text-xs text-gray-500 mb-2">Which day?</div>
+                      <div className="flex flex-wrap gap-2 items-center">
+                        {DAYS.map(({ key, label }) => (
+                          <button
+                            key={key}
+                            onClick={() => handleDayPick(key)}
+                            className="px-3 py-1 rounded-full text-xs font-medium bg-white border border-orange-300 text-orange-600 hover:bg-orange-500 hover:text-white transition-colors"
+                          >
+                            {label}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => setPickingDayForRecipe(null)}
+                          className="text-xs text-gray-400 hover:text-gray-600 ml-1"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               );
             })
           )}

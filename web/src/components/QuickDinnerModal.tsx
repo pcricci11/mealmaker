@@ -37,6 +37,7 @@ interface MainConfig {
   cuisines: Cuisine[];
   source: SourceType;
   chefPreference: string;
+  ingredients: string;
   dietary: {
     vegetarian: boolean;
     glutenFree: boolean;
@@ -60,6 +61,7 @@ const DEFAULT_CONFIG: MainConfig = {
   cuisines: [],
   source: "search_web",
   chefPreference: "",
+  ingredients: "",
   dietary: { ...DEFAULT_DIETARY },
 };
 
@@ -86,6 +88,8 @@ function buildSearchQuery(config: MainConfig): string {
   if (config.cuisines.length > 0)
     parts.push(config.cuisines.map((c) => c.replace("_", " ")).join(" or "));
   if (config.source === "surprise_me") parts.push("surprise me");
+  if (config.ingredients.trim())
+    parts.push(`using ${config.ingredients.trim()}`);
   parts.push("dinner recipe");
   if (config.dietary.vegetarian) parts.push("vegetarian");
   if (config.dietary.glutenFree) parts.push("gluten-free");
@@ -500,6 +504,19 @@ export default function QuickDinnerModal({
                 </div>
               </div>
 
+              {/* Ingredients on hand */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ingredients I want to use
+                </label>
+                <p className="text-xs text-gray-400 mb-2">Optional — list what you have on hand</p>
+                <Input
+                  value={configs[currentConfigIndex].ingredients}
+                  onChange={(e) => updateCurrentConfig({ ingredients: e.target.value })}
+                  placeholder="e.g. chicken thighs, broccoli, soy sauce"
+                />
+              </div>
+
               {/* Chef/Site Preference */}
               {configs[currentConfigIndex].source === "search_web" && (
                 <div>
@@ -549,6 +566,11 @@ export default function QuickDinnerModal({
                       {config.source === "search_web" && config.chefPreference.trim() && (
                         <Badge variant="outline" className="bg-purple-50 text-purple-700 border-0">
                           {config.chefPreference.trim()}
+                        </Badge>
+                      )}
+                      {config.ingredients.trim() && (
+                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-0">
+                          Using: {config.ingredients.trim()}
                         </Badge>
                       )}
                       {activeDietary.map(({ key, label }) => (

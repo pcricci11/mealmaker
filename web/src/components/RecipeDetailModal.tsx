@@ -58,6 +58,7 @@ export default function RecipeDetailModal({
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState(recipe.notes || "");
   const [imageError, setImageError] = useState(false);
+  const [showDayPicker, setShowDayPicker] = useState(false);
 
   const cuisineColor = LIGHT_CUISINE_COLORS[recipe.cuisine] || LIGHT_CUISINE_COLORS.american;
   const showImage = recipe.image_url && !imageError;
@@ -104,11 +105,22 @@ export default function RecipeDetailModal({
             )}
           </button>
 
-          {/* Title */}
-          <div className="relative z-10">
-            <h2 className="font-display text-xl md:text-2xl font-bold text-white leading-tight">
-              {recipe.title}
-            </h2>
+          {/* Title with rename on hover */}
+          <div className="relative z-10 group/title">
+            <div className="flex items-start gap-2">
+              <h2 className="font-display text-xl md:text-2xl font-bold text-white leading-tight">
+                {recipe.title}
+              </h2>
+              <button
+                onClick={(e) => { e.stopPropagation(); onRename(); }}
+                className="opacity-0 group-hover/title:opacity-100 transition-opacity mt-1 shrink-0"
+                title="Rename"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white/70 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+            </div>
             {recipe.source_name && (
               <span className="text-xs text-amber-200/90 mt-0.5 block">
                 {recipe.source_name}
@@ -149,29 +161,6 @@ export default function RecipeDetailModal({
               {recipe.source_name || "Source"}
             </a>
           )}
-        </div>
-
-        {/* Day picker */}
-        <div className="px-5 pt-4">
-          <p className="text-xs font-medium text-stone-500 mb-1.5">Add to this week:</p>
-          <div className="flex flex-wrap gap-1.5">
-            {DAY_CHIPS.map(({ key, label }) => (
-              <button
-                key={key}
-                disabled={addingToDay !== null}
-                onClick={() => onAddToDay(key)}
-                className={cn(
-                  "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
-                  addingToDay === key
-                    ? "bg-orange-200 text-orange-800 animate-pulse"
-                    : "bg-orange-50 text-chef-orange hover:bg-orange-100",
-                  "disabled:opacity-50 disabled:cursor-not-allowed"
-                )}
-              >
-                {addingToDay === key ? "Adding..." : label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Notes section */}
@@ -247,11 +236,31 @@ export default function RecipeDetailModal({
             </button>
           )}
           <button
-            onClick={onRename}
+            onClick={() => setShowDayPicker(!showDayPicker)}
             className="w-full py-2.5 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors"
           >
-            Rename
+            Add To This Week
           </button>
+          {showDayPicker && (
+            <div className="flex flex-wrap gap-1.5 pt-1 pb-1">
+              {DAY_CHIPS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  disabled={addingToDay !== null}
+                  onClick={() => onAddToDay(key)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
+                    addingToDay === key
+                      ? "bg-orange-200 text-orange-800 animate-pulse"
+                      : "bg-orange-50 text-chef-orange hover:bg-orange-100",
+                    "disabled:opacity-50 disabled:cursor-not-allowed"
+                  )}
+                >
+                  {addingToDay === key ? "Adding..." : label}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             onClick={onDelete}
             className="w-full py-2.5 rounded-lg text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"

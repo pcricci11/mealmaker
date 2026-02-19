@@ -653,14 +653,20 @@ export default function Plan() {
   const handleEditWeek = async () => {
     if (!plan) return;
     const allFetchedRecipes = await getRecipes();
-    const entries: Array<[DayOfWeek, Recipe]> = [];
+    const newDraft = new Map<DayOfWeek, Recipe[]>();
     for (const item of plan.items) {
       if (item.meal_type === "main" && item.recipe_id) {
         const recipe = allFetchedRecipes.find((r) => r.id === item.recipe_id);
-        if (recipe) entries.push([item.day, recipe]);
+        if (recipe) {
+          const existing = newDraft.get(item.day) || [];
+          existing.push(recipe);
+          newDraft.set(item.day, existing);
+        }
       }
     }
-    navigate("/plan", { state: { draftRecipes: entries } });
+    setPlan(null);
+    setDraftRecipes(newDraft);
+    setLockState('idle');
   };
 
   const handleStartFresh = () => {
@@ -840,7 +846,7 @@ export default function Plan() {
           </h1>
           <p className="text-stone-400 text-sm mb-5">
             {hasPlan
-              ? "Your plan is set. Make changes or start fresh."
+              ? "Your plan is here. Add sides, make changes, or start fresh."
               : "Tell me about your week and I'll plan your meals"}
           </p>
 
@@ -962,48 +968,48 @@ export default function Plan() {
           <div className="absolute bottom-3 right-3 w-8 h-8 border-b-2 border-r-2 border-chef-gold/20 rounded-br-lg" />
 
           {/* Header */}
-          <div className="relative z-10 px-5 pt-5 pb-3 flex items-start justify-between">
-            <div>
-              <h2 className="font-display text-lg md:text-xl font-bold text-stone-900">
-                {hasPlan ? "This Week's Menu" : "Your Plan"}
-              </h2>
-              <p className="text-stone-500 text-xs mt-0.5">
+          <div className="relative z-10 px-5 pt-5 pb-3">
+            <h2 className="font-display text-lg md:text-xl font-bold text-stone-900">
+              {hasPlan ? "This Week's Menu" : "Your Plan"}
+            </h2>
+            <div className="flex items-center justify-between mt-0.5">
+              <p className="text-stone-500 text-xs">
                 {plan?.week_start ? `Week of ${plan.week_start}` : getWeekDateRange()} &middot; {totalMeals} meal{totalMeals !== 1 ? "s" : ""}
               </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {hasPlan && (
-                <>
-                  <button
-                    onClick={handleEditWeek}
-                    className="text-xs text-stone-400 hover:text-stone-700 transition-colors"
-                  >
-                    Edit Week
-                  </button>
-                  <button
-                    onClick={handleStartFresh}
-                    className="text-xs text-stone-400 hover:text-red-500 transition-colors"
-                  >
-                    Start Over
-                  </button>
-                </>
-              )}
-              {!hasPlan && hasDrafts && (
-                <>
-                  <button
-                    onClick={() => setShowBuildFromRecipes(true)}
-                    className="text-xs text-chef-orange hover:text-orange-600 font-medium transition-colors"
-                  >
-                    + Add Recipes
-                  </button>
-                  <button
-                    onClick={handleStartFresh}
-                    className="text-xs text-stone-400 hover:text-red-500 transition-colors"
-                  >
-                    Start Over
-                  </button>
-                </>
-              )}
+              <div className="flex items-center gap-2">
+                {hasPlan && (
+                  <>
+                    <button
+                      onClick={handleEditWeek}
+                      className="text-xs text-stone-400 hover:text-stone-700 transition-colors"
+                    >
+                      Edit Week
+                    </button>
+                    <button
+                      onClick={handleStartFresh}
+                      className="text-xs text-stone-400 hover:text-red-500 transition-colors"
+                    >
+                      Start Over
+                    </button>
+                  </>
+                )}
+                {!hasPlan && hasDrafts && (
+                  <>
+                    <button
+                      onClick={() => setShowBuildFromRecipes(true)}
+                      className="text-xs text-chef-orange hover:text-orange-600 font-medium transition-colors"
+                    >
+                      + Add Recipes
+                    </button>
+                    <button
+                      onClick={handleStartFresh}
+                      className="text-xs text-stone-400 hover:text-red-500 transition-colors"
+                    >
+                      Start Over
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1072,12 +1078,17 @@ export default function Plan() {
                           {meal.cookMinutes}m
                         </span>
                       )}
-                      {meal.sidesCount > 0 && (
-                        <span className="text-[10px] text-stone-400">
-                          {meal.sidesCount} side{meal.sidesCount !== 1 ? "s" : ""}
-                        </span>
-                      )}
                     </div>
+                    {meal.sides && meal.sides.length > 0 && (
+                      <div className="text-[10px] text-stone-400 mt-0.5 truncate">
+                        + {meal.sides.map((s) => {
+                          const name = s.recipe_name
+                            || (s.notes && typeof s.notes === "object" && ((s.notes as any).side_name || (s.notes as any).name))
+                            || "Side";
+                          return name;
+                        }).join(", ")}
+                      </div>
+                    )}
                   </div>
 
                   {/* Hover actions */}
@@ -1194,7 +1205,7 @@ export default function Plan() {
                 className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all"
                 style={{ background: "linear-gradient(135deg, #EA580C, #C2410C)" }}
               >
-                Grocery List &rarr;
+                Generate Grocery List
               </button>
             )}
           </div>
