@@ -89,7 +89,7 @@ export async function validateRecipeUrl(
 
   try {
     const message = await createWithRetry(client, {
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
       tools: [
         { type: "web_search_20250305", name: "web_search", max_uses: 3 } as any,

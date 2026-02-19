@@ -80,7 +80,7 @@ router.post("/generate-from-conversation", async (req: Request, res: Response) =
   let parsed: any;
   try {
     const message = await client.messages.create({
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: [

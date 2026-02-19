@@ -176,7 +176,7 @@ export async function estimateSideIngredients(
     const client = new Anthropic({ apiKey });
 
     const message = await createWithRetry(client, {
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
       system: `You are a grocery list assistant. Given a side dish name and serving count, return the typical ingredients needed to make it.
 

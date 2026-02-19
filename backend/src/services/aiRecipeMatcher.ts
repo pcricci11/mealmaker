@@ -141,7 +141,7 @@ ${recipeLines.join("\n")}`;
     // 6. Call Claude
     const client = new Anthropic({ apiKey });
     const message = await createWithRetry(client, {
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 512,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],

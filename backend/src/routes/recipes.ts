@@ -673,7 +673,7 @@ router.post("/:id/suggest-ingredients", async (req: Request, res: Response) => {
 
   try {
     const message = await client.messages.create({
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
       system: `You are a cooking assistant. Given a recipe name, suggest a typical ingredient list for a family of 4. Return ONLY a JSON array of ingredients with this structure:
 [

@@ -251,7 +251,9 @@ export default function MyRecipes() {
   const handleAddToDay = async (recipe: Recipe, day: string) => {
     const currentPlanId = localStorage.getItem("currentPlanId");
     if (!currentPlanId) {
-      showToast("Generate a plan first");
+      // No plan yet — start one with this recipe as a draft
+      setSelectedRecipe(null);
+      navigate("/plan", { state: { draftRecipes: [[day, recipe]] } });
       return;
     }
     setAddingToDay(day);
