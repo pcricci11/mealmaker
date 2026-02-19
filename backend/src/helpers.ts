@@ -22,5 +22,6 @@ export function rowToRecipe(row: any): Recipe {
     seasonal_tags: JSON.parse(row.seasonal_tags ?? "[]"),
     frequency_cap_per_month: row.frequency_cap_per_month ?? null,
     notes: row.notes ?? null,
+    image_url: row.image_url ?? null,
   };
 }

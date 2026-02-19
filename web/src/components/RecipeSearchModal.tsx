@@ -115,6 +115,7 @@ export default function RecipeSearchModal({
         seasonal_tags: [],
         frequency_cap_per_month: null,
         notes: null,
+        image_url: result.image_url || null,
       }, controller.signal);
       console.log("[RecipeSearchModal] recipe saved to DB", { id: saved.id, title: saved.title });
       if (savingTimerRef.current) clearTimeout(savingTimerRef.current);

@@ -21,6 +21,7 @@ interface SpoonacularRecipe {
   summary: string;
   extendedIngredients: SpoonacularIngredient[];
   dishTypes?: string[];
+  image?: string;
 }
 
 interface SpoonacularSearchResponse {
@@ -241,6 +242,7 @@ export async function searchSpoonacular(
         description: extractDescription(recipe.summary || ""),
         ingredients,
         source: "spoonacular",
+        image_url: recipe.image || null,
       };
     });
   } catch (error: any) {

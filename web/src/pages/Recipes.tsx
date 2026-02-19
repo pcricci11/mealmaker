@@ -24,6 +24,7 @@ const defaultRecipe: RecipeInput = {
   seasonal_tags: [],
   frequency_cap_per_month: null,
   notes: null,
+  image_url: null,
 };
 
 const emptyIngredient: Ingredient = { name: "", quantity: 1, unit: "count", category: "produce" };

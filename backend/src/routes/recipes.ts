@@ -495,8 +495,8 @@ router.post("/", optionalAuth, async (req: Request, res: Response) => {
     INSERT INTO recipes (name, cuisine, vegetarian, protein_type, cook_minutes,
       allergens, kid_friendly, makes_leftovers, ingredients, tags,
       source_type, source_name, source_url, difficulty, leftovers_score,
-      seasonal_tags, frequency_cap_per_month, household_id, created_by)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      seasonal_tags, frequency_cap_per_month, household_id, created_by, image_url)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
     RETURNING *
   `, [
     r.title,           // DB column is `name`
@@ -518,6 +518,7 @@ router.post("/", optionalAuth, async (req: Request, res: Response) => {
     r.frequency_cap_per_month || null,
     req.householdId || null,
     req.user?.id || null,
+    r.image_url || null,
   ]);
 
   const recipeId = row.id;
@@ -561,7 +562,7 @@ router.put("/:id", optionalAuth, async (req: Request, res: Response) => {
     UPDATE recipes SET name=$1, cuisine=$2, vegetarian=$3, protein_type=$4, cook_minutes=$5,
       allergens=$6, kid_friendly=$7, makes_leftovers=$8, ingredients=$9, tags=$10,
       source_type=$11, source_name=$12, source_url=$13, difficulty=$14, leftovers_score=$15,
-      seasonal_tags=$16, frequency_cap_per_month=$17
+      seasonal_tags=$16, frequency_cap_per_month=$17, image_url=$19
     WHERE id=$18
   `, [
     r.title,
@@ -582,6 +583,7 @@ router.put("/:id", optionalAuth, async (req: Request, res: Response) => {
     JSON.stringify(r.seasonal_tags || []),
     r.frequency_cap_per_month || null,
     req.params.id,
+    r.image_url || null,
   ]);
 
   // Delete + reinsert recipe_ingredients
@@ -766,6 +768,7 @@ Return ONLY a JSON object with this exact structure:
   "makes_leftovers": false,
   "allergens": [],
   "tags": [],
+  "image_url": "URL of the recipe's main photo (from JSON-LD schema.org/Recipe 'image' field, og:image meta tag, or primary article image)",
   "ingredients": [
     { "name": "ingredient name", "quantity": 1.5, "unit": "lb", "category": "protein" }
   ]
@@ -843,8 +846,8 @@ Constraints:
       INSERT INTO recipes (name, cuisine, vegetarian, protein_type, cook_minutes,
         allergens, kid_friendly, makes_leftovers, ingredients, tags,
         source_type, source_name, source_url, difficulty, leftovers_score,
-        seasonal_tags, frequency_cap_per_month, household_id, created_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        seasonal_tags, frequency_cap_per_month, household_id, created_by, image_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING *
     `, [
       parsed.title || "Untitled Recipe",
@@ -866,6 +869,7 @@ Constraints:
       null,
       req.householdId || null,
       req.user?.id || null,
+      parsed.image_url || null,
     ]);
 
     const recipeId = row.id;

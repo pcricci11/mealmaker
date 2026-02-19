@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import RecipeDetailModal from "@/components/RecipeDetailModal";
 
 interface HistoryPlan {
   id: number;
@@ -109,8 +110,8 @@ export default function MyRecipes() {
   const [history, setHistory] = useState<HistoryPlan[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Expandable card actions state
-  const [expandedRecipeId, setExpandedRecipeId] = useState<number | null>(null);
+  // Recipe detail modal state
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [addingToDay, setAddingToDay] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [removingLoved, setRemovingLoved] = useState<number | null>(null);
@@ -121,8 +122,6 @@ export default function MyRecipes() {
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
-  const [notesOpenId, setNotesOpenId] = useState<number | null>(null);
-  const [notesValue, setNotesValue] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
 
   // Add recipe modal state
@@ -163,6 +162,7 @@ export default function MyRecipes() {
   // View mode and image error tracking
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [activeChip, setActiveChip] = useState<string>("all");
+  const [imageErrors, setImageErrors] = useState<Set<number>>(new Set());
 
   // Count active filters for mobile badge
   const bottomSheetFilterCount = useMemo(() => {
@@ -266,7 +266,6 @@ export default function MyRecipes() {
         console.warn("Side suggestions failed (main still added):", err);
       }
       showToast(`Added ${recipe.title} to ${DAY_LABELS[day] || day}`);
-      setExpandedRecipeId(null);
     } catch (err: any) {
       showToast(err.message || "Failed to add meal");
     } finally {
@@ -355,6 +354,7 @@ export default function MyRecipes() {
         seasonal_tags: [],
         frequency_cap_per_month: null,
         notes: null,
+        image_url: null,
       };
       const created = await createRecipe(data);
       setRecipes((prev) => [created, ...prev]);
@@ -389,13 +389,12 @@ export default function MyRecipes() {
     }
   };
 
-  const handleSaveNotes = async (recipe: Recipe, overrideValue?: string) => {
+  const handleSaveNotes = async (recipe: Recipe, notesText: string) => {
     setSavingNotes(true);
     try {
-      const trimmed = (overrideValue ?? notesValue).trim();
+      const trimmed = notesText.trim();
       const updated = await updateRecipeNotes(recipe.id, trimmed || null);
       setRecipes((prev) => prev.map((r) => r.id === recipe.id ? updated : r));
-      setNotesOpenId(null);
       showToast(trimmed ? "Notes saved" : "Notes cleared");
     } catch (err: any) {
       showToast(err.message || "Failed to save notes");
@@ -804,54 +803,58 @@ export default function MyRecipes() {
               {filteredRecipes.map((r) => {
                 const cuisineColor = LIGHT_CUISINE_COLORS[r.cuisine] || LIGHT_CUISINE_COLORS.american;
                 const isLoved = lovedNames.has(r.title.toLowerCase());
-                const isExpanded = expandedRecipeId === r.id;
+                const hasImage = r.image_url && !imageErrors.has(r.id);
                 return (
-                  <div key={r.id} className={cn(
-                    isExpanded && "col-span-2 md:col-span-3 lg:col-span-4"
-                  )}>
+                  <div key={r.id}>
                     <div
                       className={cn(
                         "bg-white rounded-2xl overflow-hidden shadow-sm border border-stone-100 cursor-pointer transition-all duration-200",
-                        pickDayParam ? "hover:border-orange-400 hover:shadow-md" :
-                        isExpanded ? "border-chef-orange/40 shadow-md" : "hover:shadow-md hover:-translate-y-0.5",
+                        pickDayParam ? "hover:border-orange-400 hover:shadow-md" : "hover:shadow-md hover:-translate-y-0.5",
                         addingToDay && "opacity-50 pointer-events-none"
                       )}
-                      onClick={() => pickDayParam ? handlePickForDay(r) : setExpandedRecipeId(isExpanded ? null : r.id)}
+                      onClick={() => pickDayParam ? handlePickForDay(r) : setSelectedRecipe(r)}
                     >
                       {/* Image area */}
-                      {!isExpanded && (
-                        <div className="relative aspect-[4/3] overflow-hidden">
+                      <div className="relative aspect-[4/3] overflow-hidden">
+                        {hasImage ? (
+                          <img
+                            src={r.image_url!}
+                            alt={r.title}
+                            className="w-full h-full object-cover"
+                            onError={() => setImageErrors((prev) => new Set(prev).add(r.id))}
+                          />
+                        ) : (
                           <PlaceholderImage cuisine={r.cuisine} />
-                          {/* Love button overlay */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); toggleLoved(r); }}
-                            className={cn(
-                              "absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm",
-                              isLoved ? "bg-white text-red-500" : "bg-white/80 text-stone-400 hover:text-red-500 hover:bg-white"
-                            )}
-                          >
-                            {isLoved ? (
-                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                              </svg>
-                            ) : (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                              </svg>
-                            )}
-                          </button>
-                          {/* Cook time badge */}
-                          <span className="absolute bottom-2 left-2 bg-stone-900/75 text-white text-[11px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm">
-                            {r.cook_minutes} min
-                          </span>
-                          {/* Vegetarian badge */}
-                          {r.vegetarian && (
-                            <span className="absolute bottom-2 right-2 bg-emerald-600/80 text-white text-[11px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm">
-                              Veggie
-                            </span>
+                        )}
+                        {/* Love button overlay */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleLoved(r); }}
+                          className={cn(
+                            "absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm",
+                            isLoved ? "bg-white text-red-500" : "bg-white/80 text-stone-400 hover:text-red-500 hover:bg-white"
                           )}
-                        </div>
-                      )}
+                        >
+                          {isLoved ? (
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                          )}
+                        </button>
+                        {/* Cook time badge */}
+                        <span className="absolute bottom-2 left-2 bg-stone-900/75 text-white text-[11px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm">
+                          {r.cook_minutes} min
+                        </span>
+                        {/* Vegetarian badge */}
+                        {r.vegetarian && (
+                          <span className="absolute bottom-2 right-2 bg-emerald-600/80 text-white text-[11px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm">
+                            Veggie
+                          </span>
+                        )}
+                      </div>
                       {/* Card body */}
                       <div className="p-3">
                         {renamingId === r.id ? (
@@ -872,18 +875,8 @@ export default function MyRecipes() {
                           </div>
                         ) : (
                           <>
-                            <h3 className="font-body font-semibold text-stone-800 text-sm leading-snug line-clamp-2 group/name">
-                              {r.source_url ? (
-                                <a
-                                  href={r.source_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="hover:text-chef-orange transition-colors"
-                                >
-                                  {r.title}
-                                </a>
-                              ) : r.title}
+                            <h3 className="font-body font-semibold text-stone-800 text-sm leading-snug line-clamp-2">
+                              {r.title}
                             </h3>
                             <div className="flex items-center gap-1.5 mt-1.5">
                               <span
@@ -904,139 +897,6 @@ export default function MyRecipes() {
                         )}
                       </div>
                     </div>
-
-                    {/* Expanded actions (below card, spanning full grid width) */}
-                    {isExpanded && (
-                      <div
-                        className="mt-2 bg-white rounded-2xl border border-stone-200 p-4 space-y-3 shadow-sm"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {/* Recipe title row with love + rename */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <button
-                              onClick={() => toggleLoved(r)}
-                              className="shrink-0 hover:scale-110 transition-transform"
-                            >
-                              {isLoved ? (
-                                <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                                </svg>
-                              ) : (
-                                <svg className="w-5 h-5 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                                </svg>
-                              )}
-                            </button>
-                            <h3 className="font-body font-semibold text-stone-800 truncate">{r.title}</h3>
-                            <button
-                              onClick={() => startRename(r)}
-                              className="text-stone-300 hover:text-stone-500 transition-colors text-xs shrink-0"
-                              title="Rename recipe"
-                            >
-                              ✏️
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="text-[11px] font-medium px-2 py-0.5 rounded-full capitalize"
-                              style={{
-                                backgroundColor: cuisineColor.bg,
-                                color: cuisineColor.text,
-                                border: `1px solid ${cuisineColor.border}`,
-                              }}
-                            >
-                              {r.cuisine.replace("_", " ")}
-                            </span>
-                            <span className="text-xs text-stone-400">{r.cook_minutes} min</span>
-                            {r.vegetarian && <span className="text-xs text-emerald-600 font-medium">Veggie</span>}
-                          </div>
-                        </div>
-
-                        {/* Day picker */}
-                        <div>
-                          <p className="text-xs font-medium text-stone-500 mb-1.5">Add to this week:</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {DAY_CHIPS.map(({ key, label }) => (
-                              <button
-                                key={key}
-                                disabled={addingToDay !== null}
-                                onClick={() => handleAddToDay(r, key)}
-                                className={cn(
-                                  "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
-                                  addingToDay === key
-                                    ? "bg-orange-200 text-orange-800 animate-pulse"
-                                    : "bg-orange-50 text-chef-orange hover:bg-orange-100",
-                                  "disabled:opacity-50 disabled:cursor-not-allowed"
-                                )}
-                              >
-                                {addingToDay === key ? "Adding..." : label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Notes section */}
-                        <div>
-                          {notesOpenId === r.id ? (
-                            <div className="space-y-2">
-                              <label className="block text-xs font-medium text-stone-500">Notes</label>
-                              <textarea
-                                value={notesValue}
-                                onChange={(e) => setNotesValue(e.target.value)}
-                                placeholder="Tips, tweaks, what the family thought..."
-                                rows={3}
-                                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-chef-orange/30 focus:border-chef-orange resize-none"
-                                autoFocus
-                              />
-                              <div className="flex items-center gap-2">
-                                <Button size="sm" className="rounded-lg" onClick={() => handleSaveNotes(r)} disabled={savingNotes}>
-                                  {savingNotes ? "Saving..." : "Save Notes"}
-                                </Button>
-                                <Button variant="ghost" size="sm" onClick={() => setNotesOpenId(null)} disabled={savingNotes}>Cancel</Button>
-                                {r.notes && (
-                                  <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 ml-auto" onClick={() => handleSaveNotes(r, "")} disabled={savingNotes}>Clear</Button>
-                                )}
-                              </div>
-                            </div>
-                          ) : r.notes ? (
-                            <div
-                              className="bg-amber-50/80 border border-amber-200/60 rounded-xl px-3 py-2 cursor-pointer hover:bg-amber-100/80 transition-colors"
-                              onClick={() => { setNotesOpenId(r.id); setNotesValue(r.notes || ""); }}
-                            >
-                              <p className="text-xs font-medium text-amber-700 mb-0.5">Notes</p>
-                              <p className="text-sm text-stone-700 whitespace-pre-wrap font-body">{r.notes}</p>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => { setNotesOpenId(r.id); setNotesValue(""); }}
-                              className="text-xs text-chef-orange hover:text-orange-600 font-medium"
-                            >
-                              + Add Notes
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Actions row */}
-                        <div className="flex items-center gap-3 pt-1 border-t border-stone-100">
-                          {isLoved && (
-                            <button
-                              disabled={removingLoved === r.id}
-                              onClick={() => handleRemoveLoved(r)}
-                              className="text-xs text-red-500 hover:text-red-600 font-medium disabled:opacity-50"
-                            >
-                              {removingLoved === r.id ? "Removing..." : "Remove from Loved"}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setConfirmDelete(r)}
-                            className="text-xs text-stone-400 hover:text-red-500 font-medium ml-auto"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -1047,21 +907,29 @@ export default function MyRecipes() {
               {filteredRecipes.map((r) => {
                 const cuisineColor = LIGHT_CUISINE_COLORS[r.cuisine] || LIGHT_CUISINE_COLORS.american;
                 const isLoved = lovedNames.has(r.title.toLowerCase());
-                const isExpanded = expandedRecipeId === r.id;
+                const hasImage = r.image_url && !imageErrors.has(r.id);
                 return (
                   <div key={r.id}>
                     <div
                       className={cn(
                         "bg-white rounded-xl border border-stone-100 p-3 flex items-center gap-3 cursor-pointer transition-all duration-200",
-                        pickDayParam ? "hover:border-orange-400 hover:shadow-sm" :
-                        isExpanded ? "border-chef-orange/40 shadow-sm" : "hover:shadow-sm hover:border-stone-200",
+                        pickDayParam ? "hover:border-orange-400 hover:shadow-sm" : "hover:shadow-sm hover:border-stone-200",
                         addingToDay && "opacity-50 pointer-events-none"
                       )}
-                      onClick={() => pickDayParam ? handlePickForDay(r) : setExpandedRecipeId(isExpanded ? null : r.id)}
+                      onClick={() => pickDayParam ? handlePickForDay(r) : setSelectedRecipe(r)}
                     >
                       {/* Thumbnail */}
                       <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0">
-                        <PlaceholderImage cuisine={r.cuisine} />
+                        {hasImage ? (
+                          <img
+                            src={r.image_url!}
+                            alt={r.title}
+                            className="w-full h-full object-cover"
+                            onError={() => setImageErrors((prev) => new Set(prev).add(r.id))}
+                          />
+                        ) : (
+                          <PlaceholderImage cuisine={r.cuisine} />
+                        )}
                       </div>
                       {/* Info */}
                       <div className="flex-1 min-w-0">
@@ -1084,17 +952,7 @@ export default function MyRecipes() {
                         ) : (
                           <>
                             <h3 className="font-body font-semibold text-stone-800 text-sm truncate">
-                              {r.source_url ? (
-                                <a
-                                  href={r.source_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="hover:text-chef-orange transition-colors"
-                                >
-                                  {r.title}
-                                </a>
-                              ) : r.title}
+                              {r.title}
                             </h3>
                             <div className="flex items-center gap-2 mt-1">
                               <span
@@ -1130,107 +988,6 @@ export default function MyRecipes() {
                         )}
                       </button>
                     </div>
-
-                    {/* Expanded actions */}
-                    {isExpanded && (
-                      <div
-                        className="mt-1 bg-white rounded-xl border border-stone-200 p-4 space-y-3 shadow-sm"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {/* Rename inline */}
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => startRename(r)}
-                            className="text-xs text-stone-400 hover:text-stone-600 font-medium"
-                          >
-                            ✏️ Rename
-                          </button>
-                        </div>
-
-                        {/* Day picker */}
-                        <div>
-                          <p className="text-xs font-medium text-stone-500 mb-1.5">Add to this week:</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {DAY_CHIPS.map(({ key, label }) => (
-                              <button
-                                key={key}
-                                disabled={addingToDay !== null}
-                                onClick={() => handleAddToDay(r, key)}
-                                className={cn(
-                                  "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
-                                  addingToDay === key
-                                    ? "bg-orange-200 text-orange-800 animate-pulse"
-                                    : "bg-orange-50 text-chef-orange hover:bg-orange-100",
-                                  "disabled:opacity-50 disabled:cursor-not-allowed"
-                                )}
-                              >
-                                {addingToDay === key ? "Adding..." : label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Notes section */}
-                        <div>
-                          {notesOpenId === r.id ? (
-                            <div className="space-y-2">
-                              <label className="block text-xs font-medium text-stone-500">Notes</label>
-                              <textarea
-                                value={notesValue}
-                                onChange={(e) => setNotesValue(e.target.value)}
-                                placeholder="Tips, tweaks, what the family thought..."
-                                rows={3}
-                                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-chef-orange/30 focus:border-chef-orange resize-none"
-                                autoFocus
-                              />
-                              <div className="flex items-center gap-2">
-                                <Button size="sm" className="rounded-lg" onClick={() => handleSaveNotes(r)} disabled={savingNotes}>
-                                  {savingNotes ? "Saving..." : "Save Notes"}
-                                </Button>
-                                <Button variant="ghost" size="sm" onClick={() => setNotesOpenId(null)} disabled={savingNotes}>Cancel</Button>
-                                {r.notes && (
-                                  <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 ml-auto" onClick={() => handleSaveNotes(r, "")} disabled={savingNotes}>Clear</Button>
-                                )}
-                              </div>
-                            </div>
-                          ) : r.notes ? (
-                            <div
-                              className="bg-amber-50/80 border border-amber-200/60 rounded-xl px-3 py-2 cursor-pointer hover:bg-amber-100/80 transition-colors"
-                              onClick={() => { setNotesOpenId(r.id); setNotesValue(r.notes || ""); }}
-                            >
-                              <p className="text-xs font-medium text-amber-700 mb-0.5">Notes</p>
-                              <p className="text-sm text-stone-700 whitespace-pre-wrap font-body">{r.notes}</p>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => { setNotesOpenId(r.id); setNotesValue(""); }}
-                              className="text-xs text-chef-orange hover:text-orange-600 font-medium"
-                            >
-                              + Add Notes
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Actions row */}
-                        <div className="flex items-center gap-3 pt-1 border-t border-stone-100">
-                          {isLoved && (
-                            <button
-                              disabled={removingLoved === r.id}
-                              onClick={() => handleRemoveLoved(r)}
-                              className="text-xs text-red-500 hover:text-red-600 font-medium disabled:opacity-50"
-                            >
-                              {removingLoved === r.id ? "Removing..." : "Remove from Loved"}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setConfirmDelete(r)}
-                            className="text-xs text-stone-400 hover:text-red-500 font-medium ml-auto"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -1656,6 +1413,26 @@ export default function MyRecipes() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Recipe Detail Modal */}
+      {selectedRecipe && (
+        <RecipeDetailModal
+          recipe={selectedRecipe}
+          isLoved={lovedNames.has(selectedRecipe.title.toLowerCase())}
+          onClose={() => setSelectedRecipe(null)}
+          onAddToDay={(day) => handleAddToDay(selectedRecipe, day)}
+          onToggleLoved={() => toggleLoved(selectedRecipe)}
+          onDelete={() => { setConfirmDelete(selectedRecipe); setSelectedRecipe(null); }}
+          onRename={() => { startRename(selectedRecipe); setSelectedRecipe(null); }}
+          onSaveNotes={async (notes) => {
+            await handleSaveNotes(selectedRecipe, notes);
+            // Update selectedRecipe with new notes to keep modal in sync
+            setSelectedRecipe((prev) => prev ? { ...prev, notes: notes.trim() || null } : null);
+          }}
+          addingToDay={addingToDay}
+          savingNotes={savingNotes}
+        />
       )}
 
       {/* URL Recipe Modal */}

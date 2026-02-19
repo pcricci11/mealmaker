@@ -105,6 +105,7 @@ export interface Recipe {
   seasonal_tags: string[];
   frequency_cap_per_month: number | null;
   notes: string | null;
+  image_url: string | null;
 }
 
 export type RecipeInput = Omit<Recipe, "id" | "notes"> & { notes?: string | null };
@@ -123,6 +124,7 @@ export interface WebSearchRecipeResult {
   is_paywalled?: boolean;
   ingredients?: Ingredient[];
   source?: "spoonacular" | "claude";
+  image_url?: string | null;
 }
 
 // ── Meal Plan ──
