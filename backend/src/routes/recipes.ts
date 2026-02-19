@@ -5,7 +5,9 @@ import { rowToRecipe } from "../helpers";
 import { validateRecipe } from "../validation";
 import { extractIngredientsFromUrl } from "../services/ingredientExtractor";
 import { createWithRetry, RateLimitError } from "../services/claudeRetry";
+import { isValidHttpUrl, isPaywalledDomain, validateRecipeUrl } from "../services/urlValidator";
 import { aiMatchRecipes } from "../services/aiRecipeMatcher";
+import { searchSpoonacular } from "../services/spoonacular";
 import { requireAuth, optionalAuth } from "../middleware/auth";
 import { verifyFamilyAccess } from "../middleware/auth";
 import type { RecipeInput } from "../../../shared/types";
@@ -45,20 +47,39 @@ async function buildSourceConstraint(familyId: number): Promise<string> {
   return "\n\n" + parts.join("\n");
 }
 
-// POST /api/recipes/search — web search for recipes via Claude
+// POST /api/recipes/search — web search for recipes (Spoonacular tier 2, Claude tier 3)
 router.post("/search", optionalAuth, async (req: Request, res: Response) => {
   const { query: searchQuery, family_id } = req.body;
   if (!searchQuery || typeof searchQuery !== "string" || !searchQuery.trim()) {
     return res.status(400).json({ error: "query is required" });
   }
 
+  const sourceConstraint = family_id ? await buildSourceConstraint(family_id) : "";
+  const hasSourcePreferences = sourceConstraint.length > 0;
+
+  // Tier 2: Try Spoonacular first (if no source preferences)
+  if (!hasSourcePreferences) {
+    try {
+      const spoonResults = await searchSpoonacular(searchQuery.trim());
+      if (spoonResults.length >= 3) {
+        console.log(`[search] Spoonacular returned ${spoonResults.length} results for "${searchQuery.trim()}"`);
+        return res.json({ results: spoonResults });
+      }
+      if (spoonResults.length > 0) {
+        console.log(`[search] Spoonacular returned only ${spoonResults.length} results for "${searchQuery.trim()}", falling through to Claude`);
+      }
+    } catch (err: any) {
+      console.error("[search] Spoonacular error, falling through to Claude:", err.message || err);
+    }
+  }
+
+  // Tier 3: Claude web search
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
   }
 
   const client = new Anthropic({ apiKey });
-  const sourceConstraint = family_id ? await buildSourceConstraint(family_id) : "";
 
   try {
     const message = await createWithRetry(client, {
@@ -132,7 +153,14 @@ YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH [ AND ENDING WITH ].` 
       return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
     }
 
-    res.json({ results });
+    // Tag paywalled results and mark source as Claude
+    const taggedResults = results.map((r: any) => ({
+      ...r,
+      is_paywalled: r.source_url ? isPaywalledDomain(r.source_url) : false,
+      source: "claude" as const,
+    }));
+
+    res.json({ results: taggedResults });
   } catch (error: any) {
     console.error("Recipe search error:", error);
     if (error instanceof RateLimitError) {
@@ -145,28 +173,74 @@ YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH [ AND ENDING WITH ].` 
   }
 });
 
-// POST /api/recipes/batch-search — batch web search for multiple recipes via Claude
+// POST /api/recipes/batch-search — batch web search (Spoonacular + Claude fallback)
 router.post("/batch-search", optionalAuth, async (req: Request, res: Response) => {
   const { queries, family_id } = req.body;
   if (!Array.isArray(queries) || queries.length === 0 || queries.some((q: any) => typeof q !== "string" || !q.trim())) {
     return res.status(400).json({ error: "queries must be a non-empty array of strings" });
   }
 
+  const cappedQueries = queries.slice(0, 5) as string[];
+  const sourceConstraint = family_id ? await buildSourceConstraint(family_id) : "";
+  const hasSourcePreferences = sourceConstraint.length > 0;
+
+  // Tier 2: Try Spoonacular for each query in parallel (if no source preferences)
+  const spoonResults: Record<string, any[]> = {};
+  const remainingQueries: string[] = [];
+
+  if (!hasSourcePreferences) {
+    const spoonPromises = cappedQueries.map(async (q) => {
+      const trimmed = q.trim();
+      try {
+        const results = await searchSpoonacular(trimmed);
+        return { query: trimmed, results };
+      } catch {
+        return { query: trimmed, results: [] };
+      }
+    });
+
+    const spoonResponses = await Promise.all(spoonPromises);
+    for (const { query: q, results } of spoonResponses) {
+      if (results.length >= 3) {
+        spoonResults[q] = results;
+        console.log(`[batch-search] Spoonacular satisfied "${q}" with ${results.length} results`);
+      } else {
+        remainingQueries.push(q);
+        if (results.length > 0) {
+          console.log(`[batch-search] Spoonacular returned only ${results.length} results for "${q}", falling through to Claude`);
+        }
+      }
+    }
+  } else {
+    remainingQueries.push(...cappedQueries.map((q) => q.trim()));
+  }
+
+  // If all queries satisfied by Spoonacular, return immediately
+  if (remainingQueries.length === 0) {
+    console.log(`[batch-search] All ${cappedQueries.length} queries satisfied by Spoonacular`);
+    return res.json({ results: spoonResults });
+  }
+
+  // Tier 3: Claude web search for remaining queries
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
+    // Return whatever Spoonacular got if Claude is unavailable
+    if (Object.keys(spoonResults).length > 0) {
+      return res.json({ results: spoonResults });
+    }
     return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
   }
 
   const client = new Anthropic({ apiKey });
-  const cappedQueries = queries.slice(0, 5);
-  const sourceConstraint = family_id ? await buildSourceConstraint(family_id) : "";
 
   try {
+    console.log(`[batch-search] Sending ${remainingQueries.length} remaining queries to Claude (${Object.keys(spoonResults).length} already satisfied by Spoonacular)`);
+
     const message = await createWithRetry(client, {
       model: "claude-sonnet-4-5-20250929",
-      max_tokens: Math.min(1500 * cappedQueries.length, 6000),
+      max_tokens: Math.min(1500 * remainingQueries.length, 6000),
       tools: [
-        { type: "web_search_20250305", name: "web_search", max_uses: Math.min(2 * cappedQueries.length, 10) } as any,
+        { type: "web_search_20250305", name: "web_search", max_uses: Math.min(2 * remainingQueries.length, 10) } as any,
       ],
       system: `Search the web for each recipe query. Return a JSON object: keys are the EXACT original query strings, values are arrays of 3-5 results. Each result: { "name": string, "source_name": string, "source_url": string, "cook_minutes": number, "cuisine": string, "vegetarian": boolean, "protein_type": string|null, "difficulty": string, "kid_friendly": boolean, "description": string (1 sentence max) }. cuisine: one of ${VALID_CUISINES.join(", ")}. difficulty: one of ${VALID_DIFFICULTIES.join(", ")}. protein_type: null if vegetarian.
 
@@ -177,7 +251,7 @@ YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH { AND ENDING WITH }.` 
       messages: [
         {
           role: "user",
-          content: `Search for recipes for each of these:\n${cappedQueries.map((q: string, i: number) => `${i + 1}. "${q.trim()}"`).join("\n")}`,
+          content: `Search for recipes for each of these:\n${remainingQueries.map((q: string, i: number) => `${i + 1}. "${q}"`).join("\n")}`,
         },
       ],
     });
@@ -191,6 +265,10 @@ YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH { AND ENDING WITH }.` 
     }
 
     if (!lastText) {
+      // Return Spoonacular results even if Claude fails
+      if (Object.keys(spoonResults).length > 0) {
+        return res.json({ results: spoonResults });
+      }
       return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
     }
 
@@ -205,21 +283,43 @@ YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH { AND ENDING WITH }.` 
     const lastBrace = cleaned.lastIndexOf("}");
     if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
       console.error("Batch search: no JSON object found in response:", cleaned.slice(0, 200));
+      if (Object.keys(spoonResults).length > 0) {
+        return res.json({ results: spoonResults });
+      }
       return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
     }
     cleaned = cleaned.slice(firstBrace, lastBrace + 1);
 
-    const parsed = JSON.parse(cleaned);
+    const claudeParsed = JSON.parse(cleaned);
 
     // Validate structure: must be an object with array values
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      console.error("Batch search: unexpected response structure:", JSON.stringify(parsed).slice(0, 200));
+    if (typeof claudeParsed !== "object" || claudeParsed === null || Array.isArray(claudeParsed)) {
+      console.error("Batch search: unexpected response structure:", JSON.stringify(claudeParsed).slice(0, 200));
+      if (Object.keys(spoonResults).length > 0) {
+        return res.json({ results: spoonResults });
+      }
       return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
     }
 
-    res.json({ results: parsed });
+    // Tag Claude results with source
+    const taggedClaude: Record<string, any[]> = {};
+    for (const [key, value] of Object.entries(claudeParsed)) {
+      if (Array.isArray(value)) {
+        taggedClaude[key] = value.map((r: any) => ({ ...r, source: "claude" }));
+      } else {
+        taggedClaude[key] = value as any;
+      }
+    }
+
+    // Merge Spoonacular + Claude results
+    const merged = { ...spoonResults, ...taggedClaude };
+    res.json({ results: merged });
   } catch (error: any) {
     console.error("Batch recipe search error:", error);
+    // Return Spoonacular results even if Claude fails
+    if (Object.keys(spoonResults).length > 0) {
+      return res.json({ results: spoonResults });
+    }
     if (error instanceof RateLimitError) {
       return res.status(429).json({ error: error.message });
     }
@@ -609,6 +709,11 @@ router.post("/import-from-url", optionalAuth, async (req: Request, res: Response
     return res.status(400).json({ error: "url is required" });
   }
 
+  // Validate URL format before any AI calls
+  if (!isValidHttpUrl(url.trim())) {
+    return res.status(400).json({ error: "Please enter a valid URL starting with http:// or https://" });
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
@@ -617,10 +722,26 @@ router.post("/import-from-url", optionalAuth, async (req: Request, res: Response
   // Check for existing recipe with same URL
   const existing = await queryOne("SELECT * FROM recipes WHERE source_url = $1", [url.trim()]);
   if (existing) {
-    return res.status(200).json({ recipe: rowToRecipe(existing), alreadyExists: true });
+    return res.status(200).json({ recipe: rowToRecipe(existing), alreadyExists: true, paywall_warning: null });
   }
 
   const client = new Anthropic({ apiKey });
+
+  // Validate that the URL points to a recipe page
+  const validation = await validateRecipeUrl(url.trim(), client);
+
+  if (validation.status === "not_recipe") {
+    return res.status(422).json({
+      error: "not_recipe",
+      reason: validation.reason || "This doesn't appear to be a recipe page.",
+      detected_recipe_name: validation.detected_recipe_name,
+      alternative_url: validation.alternative_url,
+    });
+  }
+
+  const paywallWarning = validation.status === "paywall"
+    ? "This recipe is from a paywalled source. Ingredients have been estimated by AI."
+    : null;
 
   try {
     // Step 1: Extract recipe metadata from URL
@@ -761,7 +882,7 @@ Constraints:
 
     console.log(`[import-from-url] Created recipe ${recipeId}: "${row.name}" with ${ingredients.length} ingredients`);
 
-    res.status(201).json({ recipe: rowToRecipe(row), alreadyExists: false });
+    res.status(201).json({ recipe: rowToRecipe(row), alreadyExists: false, paywall_warning: paywallWarning });
   } catch (error: any) {
     console.error("Import from URL error:", error);
     if (error instanceof RateLimitError) {

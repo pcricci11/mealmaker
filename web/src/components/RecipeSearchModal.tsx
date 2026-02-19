@@ -106,7 +106,7 @@ export default function RecipeSearchModal({
         kid_friendly: result.kid_friendly,
         makes_leftovers: false,
         leftovers_score: 0,
-        ingredients: [],
+        ingredients: result.ingredients || [],
         tags: [],
         source_type: "web_search",
         source_name: result.source_name,
@@ -305,6 +305,16 @@ export default function RecipeSearchModal({
                           {result.kid_friendly && (
                             <Badge variant="outline" className="bg-blue-100 text-blue-700 border-0">
                               Kid Friendly
+                            </Badge>
+                          )}
+                          {result.is_paywalled && (
+                            <Badge variant="outline" className="bg-amber-100 text-amber-700 border-0">
+                              Paywalled
+                            </Badge>
+                          )}
+                          {result.ingredients && result.ingredients.length > 0 && (
+                            <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-0">
+                              {result.ingredients.length} ingredients
                             </Badge>
                           )}
                         </div>

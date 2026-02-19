@@ -120,6 +120,9 @@ export interface WebSearchRecipeResult {
   difficulty: Difficulty;
   kid_friendly: boolean;
   description: string;
+  is_paywalled?: boolean;
+  ingredients?: Ingredient[];
+  source?: "spoonacular" | "claude";
 }
 
 // ── Meal Plan ──
