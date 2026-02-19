@@ -573,6 +573,48 @@ router.post("/lock", async (req: Request, res: Response) => {
       END, mpi.meal_type, mpi.main_number
     `, [mealPlanId]);
 
+    // Fill ingredient gaps BEFORE responding — so grocery list is ready immediately
+    const recipesNeedingIngredients = await query<{ id: number; name: string; source_url: string | null; ingredients: string }>(`
+      SELECT DISTINCT r.id, r.name, r.source_url, r.ingredients
+      FROM meal_plan_items mpi
+      JOIN recipes r ON r.id = mpi.recipe_id
+      WHERE mpi.meal_plan_id = $1
+        AND (r.ingredients IS NULL OR r.ingredients = '[]' OR r.ingredients = '')
+    `, [mealPlanId]);
+
+    if (recipesNeedingIngredients.length > 0) {
+      const famRow = await queryOne<{ serving_multiplier: number }>(
+        "SELECT serving_multiplier FROM families WHERE id = $1",
+        [family_id],
+      );
+      const servings = Math.round((famRow?.serving_multiplier ?? 1.0) * 4);
+
+      console.log(`[lock] Filling ingredient gaps for ${recipesNeedingIngredients.length} recipes (${servings} servings)`);
+      for (const recipe of recipesNeedingIngredients) {
+        console.log(`[lock] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
+        const extracted = recipe.source_url
+          ? await extractIngredientsFromUrl(recipe.name, recipe.source_url, servings)
+          : await extractIngredientsFromUrl(recipe.name, "", servings); // name-only search fallback
+        if (extracted.length > 0) {
+          await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
+            JSON.stringify(extracted),
+            recipe.id,
+          ]);
+          // Clear stale recipe_ingredients first, then insert fresh
+          await query("DELETE FROM recipe_ingredients WHERE recipe_id = $1", [recipe.id]);
+          for (const ing of extracted) {
+            await query(
+              "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
+              [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
+            );
+          }
+          console.log(`[lock] Extracted ${extracted.length} ingredients for #${recipe.id}`);
+        } else {
+          console.warn(`[lock] Could not extract ingredients for #${recipe.id} "${recipe.name}"`);
+        }
+      }
+    }
+
     console.log(`[lock] === Lock Plan END === planId=${mealPlanId}, items=${savedItems.length}`);
 
     res.status(201).json({
@@ -595,47 +637,6 @@ router.post("/lock", async (req: Request, res: Response) => {
         makes_leftovers: !!row.makes_leftovers,
         kid_friendly: !!row.kid_friendly,
       })),
-    });
-
-    // Fire-and-forget: extract ingredients in background for recipes that have none
-    (async () => {
-      const assignedRecipes = await query<{ id: number; name: string; source_url: string; ingredients: string }>(`
-        SELECT DISTINCT r.id, r.name, r.source_url, r.ingredients
-        FROM meal_plan_items mpi
-        JOIN recipes r ON r.id = mpi.recipe_id
-        WHERE mpi.meal_plan_id = $1
-          AND r.source_url IS NOT NULL
-          AND (r.ingredients IS NULL OR r.ingredients = '[]' OR r.ingredients = '')
-      `, [mealPlanId]);
-
-      if (assignedRecipes.length > 0) {
-        const famRow = await queryOne<{ serving_multiplier: number }>(
-          "SELECT serving_multiplier FROM families WHERE id = $1",
-          [family_id],
-        );
-        const servings = Math.round((famRow?.serving_multiplier ?? 1.0) * 4);
-
-        console.log(`[lock] Background backfill: ${assignedRecipes.length} recipes need ingredients (${servings} servings)`);
-        for (const recipe of assignedRecipes) {
-          console.log(`[lock] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
-          const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url, servings);
-          if (extracted.length > 0) {
-            await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
-              JSON.stringify(extracted),
-              recipe.id,
-            ]);
-            for (const ing of extracted) {
-              await query(
-                "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
-                [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
-              );
-            }
-            console.log(`[lock] Extracted ${extracted.length} ingredients for #${recipe.id}`);
-          }
-        }
-      }
-    })().catch((err) => {
-      console.error("[lock] Background ingredient extraction failed:", err);
     });
   } catch (error: any) {
     console.error("Lock meal plan error:", error);

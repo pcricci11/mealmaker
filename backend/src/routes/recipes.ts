@@ -833,7 +833,7 @@ Constraints:
       "produce", "dairy", "pantry", "protein", "spices", "grains", "frozen", "other",
     ]);
 
-    const ingredients = (parsed.ingredients || []).filter((ing: any) => {
+    let ingredients = (parsed.ingredients || []).filter((ing: any) => {
       if (!ing || typeof ing !== "object") return false;
       if (typeof ing.name !== "string" || !ing.name.trim()) return false;
       if (typeof ing.quantity !== "number" || ing.quantity <= 0) return false;
@@ -846,6 +846,21 @@ Constraints:
       unit: ing.unit,
       category: ing.category,
     }));
+
+    // Fallback: if inline extraction yielded 0 valid ingredients, use the dedicated extractor
+    if (ingredients.length === 0) {
+      console.log(`[import-from-url] Inline extraction yielded 0 ingredients for "${parsed.title}", falling back to extractIngredientsFromUrl`);
+      const fallbackIngredients = await extractIngredientsFromUrl(
+        parsed.title || "Untitled Recipe",
+        url.trim(),
+      );
+      if (fallbackIngredients.length > 0) {
+        ingredients = fallbackIngredients;
+        console.log(`[import-from-url] Fallback extracted ${ingredients.length} ingredients`);
+      } else {
+        console.warn(`[import-from-url] Fallback also yielded 0 ingredients for "${parsed.title}"`);
+      }
+    }
 
     // Create the recipe
     const row = await queryOne(`
