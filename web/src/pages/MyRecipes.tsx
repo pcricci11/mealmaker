@@ -631,8 +631,8 @@ export default function MyRecipes() {
   }
 
   return (
-    <div className="min-h-screen bg-chef-cream overflow-x-hidden">
-      <div className="space-y-2 md:space-y-5">
+    <div className="min-h-screen bg-chef-cream overflow-hidden w-full max-w-full">
+      <div className="space-y-2 md:space-y-5 w-full max-w-full">
         {/* Pick mode banner */}
         {pickDayParam && (
           <div className="bg-orange-50 border border-orange-300 rounded-xl px-4 py-2 flex items-center justify-between">
@@ -801,13 +801,13 @@ export default function MyRecipes() {
             </div>
           ) : viewMode === "grid" ? (
             /* ── Grid View ── */
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-3 w-full max-w-full overflow-hidden">
               {filteredRecipes.map((r) => {
                 const cuisineColor = LIGHT_CUISINE_COLORS[r.cuisine] || LIGHT_CUISINE_COLORS.american;
                 const isLoved = lovedNames.has(r.title.toLowerCase());
                 const hasImage = r.image_url && !imageErrors.has(r.id);
                 return (
-                  <div key={r.id}>
+                  <div key={r.id} className="min-w-0">
                     <div
                       className={cn(
                         "bg-white rounded-xl md:rounded-2xl overflow-hidden shadow-sm border border-stone-100 cursor-pointer transition-all duration-200",
