@@ -508,7 +508,7 @@ export default function MyRecipes() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-10 py-4">
+    <div className="max-w-3xl mx-auto space-y-10 py-4">
       {pickDayParam && (
         <div className="bg-orange-50 border border-orange-300 rounded-xl px-5 py-3 flex items-center justify-between">
           <p className="text-sm font-medium text-orange-800">
@@ -690,7 +690,7 @@ export default function MyRecipes() {
                 <Card
                   key={r.id}
                   className={cn(
-                    "px-4 py-4 pb-5 md:px-5 transition-shadow cursor-pointer",
+                    "px-3 py-4 pb-5 md:px-5 transition-shadow cursor-pointer",
                     pickDayParam ? "hover:border-orange-500 hover:bg-orange-50" :
                     isExpanded ? "border-orange-300 shadow-sm" : "border-gray-200 hover:shadow-sm",
                     addingToDay && "opacity-50 pointer-events-none"
@@ -725,7 +725,7 @@ export default function MyRecipes() {
                         <p className="font-medium truncate group/name flex items-center">
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleLoved(r); }}
-                            className="mr-1 hover:scale-125 transition-transform shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center -my-2 -ml-3"
+                            className="mr-1.5 hover:scale-125 transition-transform shrink-0 min-h-[44px] flex items-center justify-center -my-2"
                             title={isLoved ? "Remove from loved" : "Love this recipe"}
                           >
                             {isLoved ? "❤️" : "♡"}
