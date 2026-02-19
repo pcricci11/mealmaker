@@ -631,8 +631,8 @@ export default function MyRecipes() {
   }
 
   return (
-    <div className="min-h-screen bg-chef-cream overflow-hidden w-full max-w-full">
-      <div className="space-y-2 md:space-y-5 w-full max-w-full">
+    <div className="bg-chef-cream">
+      <div className="space-y-2 md:space-y-5">
         {/* Pick mode banner */}
         {pickDayParam && (
           <div className="bg-orange-50 border border-orange-300 rounded-xl px-4 py-2 flex items-center justify-between">
@@ -747,14 +747,14 @@ export default function MyRecipes() {
           </div>
         </div>
 
-        {/* ── Horizontal filter chips ── */}
-        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
+        {/* ── Horizontal filter chips (desktop only — mobile uses bottom sheet) ── */}
+        <div className="hidden md:flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
           {FILTER_CHIPS.map((chip) => (
             <button
               key={chip.key}
               onClick={() => handleChipClick(chip.key)}
               className={cn(
-                "px-3 py-1 rounded-full text-xs md:text-sm font-medium whitespace-nowrap transition-all shrink-0",
+                "px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all shrink-0",
                 activeChip === chip.key
                   ? "bg-stone-900 text-white shadow-sm"
                   : "bg-white text-stone-600 border border-stone-200 hover:border-stone-300 hover:bg-stone-50"
@@ -801,7 +801,7 @@ export default function MyRecipes() {
             </div>
           ) : viewMode === "grid" ? (
             /* ── Grid View ── */
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-3 w-full max-w-full overflow-hidden">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3">
               {filteredRecipes.map((r) => {
                 const cuisineColor = LIGHT_CUISINE_COLORS[r.cuisine] || LIGHT_CUISINE_COLORS.american;
                 const isLoved = lovedNames.has(r.title.toLowerCase());
@@ -1104,6 +1104,8 @@ export default function MyRecipes() {
                 <h3 className="font-display text-lg font-bold text-stone-800">Filters</h3>
                 <button
                   onClick={() => {
+                    setActiveChip("all");
+                    setQuickFilter("all");
                     setCuisineFilter(null);
                     setProteinFilter(null);
                     setVegetarianOnly(false);
@@ -1114,6 +1116,27 @@ export default function MyRecipes() {
                 >
                   Clear all
                 </button>
+              </div>
+
+              {/* Quick filters */}
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1.5">Quick Filters</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {FILTER_CHIPS.map((chip) => (
+                    <button
+                      key={chip.key}
+                      onClick={() => handleChipClick(chip.key)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-full text-xs font-medium transition-all",
+                        activeChip === chip.key
+                          ? "bg-stone-900 text-white"
+                          : "bg-stone-100 text-stone-600"
+                      )}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Cuisine */}
