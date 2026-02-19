@@ -555,7 +555,7 @@ export default function MyRecipes() {
           <div className="flex items-center gap-1">
             <button
               onClick={() => setQuickFilter("all")}
-              className={`px-4 py-2.5 min-h-[44px] rounded-lg text-xs font-medium transition-colors ${
+              className={`px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-medium transition-colors flex items-center ${
                 quickFilter === "all"
                   ? "bg-orange-500 text-white"
                   : "bg-white text-gray-700 hover:bg-orange-50"
@@ -565,7 +565,7 @@ export default function MyRecipes() {
             </button>
             <button
               onClick={() => setQuickFilter("loved")}
-              className={`px-4 py-2.5 min-h-[44px] rounded-lg text-xs font-medium transition-colors ${
+              className={`px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-medium transition-colors flex items-center ${
                 quickFilter === "loved"
                   ? "bg-orange-500 text-white"
                   : "bg-white text-gray-700 hover:bg-orange-50"
@@ -659,7 +659,7 @@ export default function MyRecipes() {
                   setVegetarianOnly(false);
                   setCookTimeFilter(null);
                 }}
-                className="text-xs text-gray-400 hover:text-gray-600 min-h-[44px] px-2 flex items-center"
+                className="text-xs text-gray-400 hover:text-gray-600 min-h-[44px] flex items-center"
               >
                 Clear
               </button>
@@ -725,7 +725,7 @@ export default function MyRecipes() {
                         <p className="font-medium truncate group/name flex items-center">
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleLoved(r); }}
-                            className="mr-0.5 hover:scale-125 transition-transform shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center -my-2 -ml-2"
+                            className="mr-1 hover:scale-125 transition-transform shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center -my-2 -ml-3"
                             title={isLoved ? "Remove from loved" : "Love this recipe"}
                           >
                             {isLoved ? "❤️" : "♡"}
@@ -745,7 +745,7 @@ export default function MyRecipes() {
                           )}
                           <button
                             onClick={(e) => { e.stopPropagation(); startRename(r); }}
-                            className="ml-0.5 text-gray-300 hover:text-gray-500 md:opacity-0 md:group-hover/name:opacity-100 transition-opacity min-w-[44px] min-h-[44px] flex items-center justify-center -my-2"
+                            className="ml-1.5 text-gray-300 hover:text-gray-500 opacity-0 group-hover/name:opacity-100 transition-opacity text-xs"
                             title="Rename recipe"
                           >✏️</button>
                         </p>
@@ -786,7 +786,7 @@ export default function MyRecipes() {
                               key={key}
                               disabled={addingToDay !== null}
                               onClick={() => handleAddToDay(r, key)}
-                              className={`px-4 py-2.5 min-h-[44px] rounded-full text-xs font-medium transition-colors ${
+                              className={`px-3 py-1 min-h-[44px] rounded-full text-xs font-medium transition-colors flex items-center ${
                                 addingToDay === key
                                   ? "bg-orange-200 text-orange-800 animate-pulse"
                                   : "bg-orange-100 text-orange-600 hover:bg-orange-200"
@@ -851,7 +851,7 @@ export default function MyRecipes() {
                         ) : (
                           <button
                             onClick={() => { setNotesOpenId(r.id); setNotesValue(""); }}
-                            className="text-xs text-orange-500 hover:text-orange-600 font-medium min-h-[44px] flex items-center"
+                            className="text-xs text-orange-500 hover:text-orange-600 font-medium min-h-[44px] items-center flex"
                           >
                             + Add Notes
                           </button>
@@ -859,19 +859,19 @@ export default function MyRecipes() {
                       </div>
 
                       {/* Actions row */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
                         {isLoved && (
                           <button
                             disabled={removingLoved === r.id}
                             onClick={() => handleRemoveLoved(r)}
-                            className="text-xs text-red-500 hover:text-red-600 font-medium disabled:opacity-50 min-h-[44px] px-2 flex items-center"
+                            className="text-xs text-red-500 hover:text-red-600 font-medium disabled:opacity-50 min-h-[44px] flex items-center"
                           >
                             {removingLoved === r.id ? "Removing..." : "Remove from Loved"}
                           </button>
                         )}
                         <button
                           onClick={() => setConfirmDelete(r)}
-                          className="text-xs text-gray-400 hover:text-red-500 font-medium ml-auto min-h-[44px] px-2 flex items-center"
+                          className="text-xs text-gray-400 hover:text-red-500 font-medium ml-auto min-h-[44px] flex items-center"
                         >
                           Delete
                         </button>
