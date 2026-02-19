@@ -9,7 +9,6 @@ import {
   deleteRecipe, renameRecipe, createRecipe, importRecipeFromUrl, updateRecipeNotes, cloneMealPlan,
   UrlValidationError,
 } from "../api";
-import { CUISINE_COLORS } from "../components/SwapMainModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +40,34 @@ const COOK_TIME_FILTERS = [
   { label: "Under 30min", min: 0, max: 29 },
   { label: "30–60min", min: 30, max: 60 },
   { label: "60+ min", min: 61, max: Infinity },
+] as const;
+
+// Light-theme cuisine colors for card placeholders and tags
+const LIGHT_CUISINE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  italian:        { bg: "#FEF2F2", text: "#DC2626", border: "#FECACA" },
+  american:       { bg: "#EFF6FF", text: "#2563EB", border: "#BFDBFE" },
+  french:         { bg: "#F5F3FF", text: "#7C3AED", border: "#DDD6FE" },
+  mediterranean:  { bg: "#ECFDF5", text: "#059669", border: "#A7F3D0" },
+  middle_eastern: { bg: "#FFF7ED", text: "#EA580C", border: "#FED7AA" },
+  thai:           { bg: "#FFFBEB", text: "#D97706", border: "#FDE68A" },
+  mexican:        { bg: "#FFF7ED", text: "#EA580C", border: "#FED7AA" },
+  indian:         { bg: "#FFFBEB", text: "#D97706", border: "#FDE68A" },
+  chinese:        { bg: "#FFF1F2", text: "#E11D48", border: "#FECDD3" },
+  japanese:       { bg: "#FDF2F8", text: "#DB2777", border: "#FBCFE8" },
+  korean:         { bg: "#F5F3FF", text: "#7C3AED", border: "#DDD6FE" },
+  ethiopian:      { bg: "#ECFDF5", text: "#059669", border: "#A7F3D0" },
+};
+
+// Quick filter chips for the horizontal bar
+const FILTER_CHIPS = [
+  { label: "All", key: "all" },
+  { label: "Quick (<30 min)", key: "quick" },
+  { label: "Vegetarian", key: "vegetarian" },
+  { label: "Chicken", key: "chicken" },
+  { label: "Beef", key: "beef" },
+  { label: "Salmon", key: "salmon" },
+  { label: "Pasta", key: "pasta" },
+  { label: "Loved", key: "loved" },
 ] as const;
 
 function formatWeekRange(weekStart: string): string {
@@ -132,6 +159,10 @@ export default function MyRecipes() {
   // Mobile bottom sheet & FAB state
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [fabMenuOpen, setFabMenuOpen] = useState(false);
+
+  // View mode and image error tracking
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [activeChip, setActiveChip] = useState<string>("all");
 
   // Count active filters for mobile badge
   const bottomSheetFilterCount = useMemo(() => {
@@ -398,17 +429,17 @@ export default function MyRecipes() {
     if (!trimmed) return;
     setUrlNotRecipe(null);
     try {
-      setUrlProgress("🔍 Checking out this recipe...");
+      setUrlProgress("Checking out this recipe...");
       await new Promise((r) => setTimeout(r, 800));
-      setUrlProgress("Wow, that looks delicious! Save me some! 😋");
+      setUrlProgress("Wow, that looks delicious! Save me some!");
       const { recipe, alreadyExists, paywall_warning } = await importRecipeFromUrl(trimmed);
       if (paywall_warning) {
-        setUrlProgress("🔐 Source is paywalled — estimating ingredients with AI...");
+        setUrlProgress("Source is paywalled — estimating ingredients with AI...");
         await new Promise((r) => setTimeout(r, 1000));
       }
-      setUrlProgress("📝 Reading ingredients for future grocery lists!");
+      setUrlProgress("Reading ingredients for future grocery lists!");
       await new Promise((r) => setTimeout(r, 800));
-      setUrlProgress("✅ Added to your collection!");
+      setUrlProgress("Added to your collection!");
       await new Promise((r) => setTimeout(r, 1000));
       if (alreadyExists) {
         showToast(`"${recipe.title}" was already in your collection`);
@@ -432,6 +463,43 @@ export default function MyRecipes() {
       } else {
         showToast(err.message || "Failed to import recipe");
       }
+    }
+  };
+
+  // Handle chip clicks — maps to existing filter state
+  const handleChipClick = (chipKey: string) => {
+    setActiveChip(chipKey);
+    // Reset all chip-driven filters first
+    setQuickFilter("all");
+    setCuisineFilter(null);
+    setProteinFilter(null);
+    setVegetarianOnly(false);
+    setCookTimeFilter(null);
+
+    switch (chipKey) {
+      case "all":
+        break;
+      case "quick":
+        setCookTimeFilter(COOK_TIME_FILTERS[0]); // Under 30min
+        break;
+      case "vegetarian":
+        setVegetarianOnly(true);
+        break;
+      case "chicken":
+        setProteinFilter("chicken");
+        break;
+      case "beef":
+        setProteinFilter("beef");
+        break;
+      case "salmon":
+        setProteinFilter("fish");
+        break;
+      case "pasta":
+        setCuisineFilter("italian");
+        break;
+      case "loved":
+        setQuickFilter("loved");
+        break;
     }
   };
 
@@ -535,514 +603,730 @@ export default function MyRecipes() {
 
   const hasActiveFilters = !!(search || cuisineFilter || proteinFilter || vegetarianOnly || cookTimeFilter || quickFilter !== "all");
 
+  // Placeholder image component for grid cards
+  const PlaceholderImage = ({ cuisine }: { cuisine: string }) => {
+    const colors = LIGHT_CUISINE_COLORS[cuisine] || LIGHT_CUISINE_COLORS.american;
+    return (
+      <div
+        className="w-full h-full flex items-center justify-center"
+        style={{
+          background: `linear-gradient(135deg, ${colors.bg} 0%, ${colors.border} 100%)`,
+        }}
+      >
+        <span className="text-4xl opacity-60">🍽️</span>
+      </div>
+    );
+  };
+
   if (loading) {
-    return <div className="text-center py-12 text-gray-400">Loading...</div>;
+    return (
+      <div className="min-h-screen bg-chef-cream flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 border-2 border-chef-orange border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-stone-400 text-sm font-body">Loading recipes...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-10 py-4">
-      {pickDayParam && (
-        <div className="bg-orange-50 border border-orange-300 rounded-xl px-5 py-3 flex items-center justify-between">
-          <p className="text-sm font-medium text-orange-800">
-            Select a recipe to {pickMode === "swap" ? "swap on" : "add to"} <span className="font-bold">{pickDayParam.charAt(0).toUpperCase() + pickDayParam.slice(1)}</span>
-          </p>
-          <button
-            onClick={() => navigate("/my-plan")}
-            className="text-sm font-medium text-orange-500 hover:text-orange-600"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-      <section className="space-y-4">
-        {/* Header with add buttons */}
-        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-0 md:justify-between">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-            My Recipes
-            <span className="ml-2 text-gray-300 font-normal normal-case">
-              {recipes.length} recipes
-            </span>
-          </h2>
-          <div className="hidden md:flex items-center gap-3">
-            <Button
-              variant="link"
-              className="h-auto p-0 text-sm font-medium text-orange-500 hover:text-orange-600 transition-colors"
-              onClick={() => setShowAddModal(true)}
+    <div className="min-h-screen bg-chef-cream">
+      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+        {/* Pick mode banner */}
+        {pickDayParam && (
+          <div className="bg-orange-50 border border-orange-300 rounded-xl px-5 py-3 flex items-center justify-between">
+            <p className="text-sm font-medium text-orange-800">
+              Select a recipe to {pickMode === "swap" ? "swap on" : "add to"} <span className="font-bold">{pickDayParam.charAt(0).toUpperCase() + pickDayParam.slice(1)}</span>
+            </p>
+            <button
+              onClick={() => navigate("/my-plan")}
+              className="text-sm font-medium text-orange-500 hover:text-orange-600"
             >
-              + Personal Recipe
-            </Button>
-            <Button
-              variant="link"
-              className="h-auto p-0 text-sm font-medium text-orange-500 hover:text-orange-600 transition-colors"
-              onClick={() => setShowUrlModal(true)}
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {/* ── Header ── */}
+        <div className="flex items-end justify-between">
+          <div>
+            <h1 className="font-display text-2xl font-bold text-stone-800">My Recipes</h1>
+            <p className="text-stone-400 text-sm font-body mt-0.5">{recipes.length} recipes in your collection</p>
+          </div>
+          <div className="hidden md:flex items-center gap-1 bg-white rounded-lg border border-stone-200 p-0.5">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={cn(
+                "p-1.5 rounded-md transition-colors",
+                viewMode === "grid" ? "bg-stone-900 text-white" : "text-stone-400 hover:text-stone-600"
+              )}
+              title="Grid view"
             >
-              + URL Recipe
-            </Button>
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                <rect x="1" y="1" width="6" height="6" rx="1" />
+                <rect x="9" y="1" width="6" height="6" rx="1" />
+                <rect x="1" y="9" width="6" height="6" rx="1" />
+                <rect x="9" y="9" width="6" height="6" rx="1" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={cn(
+                "p-1.5 rounded-md transition-colors",
+                viewMode === "list" ? "bg-stone-900 text-white" : "text-stone-400 hover:text-stone-600"
+              )}
+              title="List view"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                <rect x="1" y="2" width="14" height="3" rx="1" />
+                <rect x="1" y="7" width="14" height="3" rx="1" />
+                <rect x="1" y="12" width="14" height="3" rx="1" />
+              </svg>
+            </button>
           </div>
         </div>
 
-        {/* Search + Filters */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-          {/* Quick filter tabs */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setQuickFilter("all")}
-              className={`px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-medium transition-colors flex items-center ${
-                quickFilter === "all"
-                  ? "bg-orange-500 text-white"
-                  : "bg-white text-gray-700 hover:bg-orange-50"
-              }`}
-            >
-              All Recipes
-            </button>
-            <button
-              onClick={() => setQuickFilter("loved")}
-              className={`px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-medium transition-colors flex items-center ${
-                quickFilter === "loved"
-                  ? "bg-orange-500 text-white"
-                  : "bg-white text-gray-700 hover:bg-orange-50"
-              }`}
-            >
-              Loved
-            </button>
-          </div>
-
-          {/* Search bar */}
-          <div className="relative">
-            <Input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search recipes..."
-              className="pl-9"
-            />
+        {/* ── Search + Loved toggle row ── */}
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400"
               fill="none" viewBox="0 0 24 24" stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search recipes, ingredients..."
+              className="w-full pl-10 pr-9 py-2.5 bg-white border border-stone-200 rounded-xl text-sm font-body text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-chef-orange/30 focus:border-chef-orange transition-colors"
+            />
             {search && (
               <button
                 onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-sm"
               >
                 ✕
               </button>
             )}
           </div>
-
           {/* Mobile: Filter button */}
-          <div className="flex md:hidden items-center gap-2">
-            <button
-              onClick={() => setFilterSheetOpen(true)}
-              className="flex items-center gap-1.5 border border-gray-300 rounded-lg px-3 min-h-[44px] text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-              Filter
-              {bottomSheetFilterCount > 0 && (
-                <span className="bg-orange-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {bottomSheetFilterCount}
-                </span>
-              )}
-            </button>
-            {(bottomSheetFilterCount > 0 || cuisineFilter || proteinFilter || cookTimeFilter || sort !== "recent") && (
-              <button
-                onClick={() => {
-                  setCuisineFilter(null);
-                  setProteinFilter(null);
-                  setVegetarianOnly(false);
-                  setCookTimeFilter(null);
-                  setSort("recent");
-                }}
-                className="text-xs text-orange-500 hover:text-orange-600 font-medium min-h-[44px] flex items-center"
-              >
-                Clear
-              </button>
+          <button
+            onClick={() => setFilterSheetOpen(true)}
+            className="md:hidden flex items-center gap-1.5 bg-white border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-medium text-stone-600 hover:bg-stone-50 transition-colors shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            {bottomSheetFilterCount > 0 && (
+              <span className="bg-chef-orange text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                {bottomSheetFilterCount}
+              </span>
             )}
-          </div>
-
-          {/* Desktop: Filter dropdowns */}
-          <div className="hidden md:flex items-center gap-2 overflow-x-auto hide-scrollbar -mx-4 px-4">
-            <select
-              value={cuisineFilter || ""}
-              onChange={(e) => setCuisineFilter(e.target.value || null)}
-              className="border border-gray-300 rounded-lg px-2.5 min-h-[44px] text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+          </button>
+          {/* Desktop: Add buttons */}
+          <div className="hidden md:flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-sm font-medium text-chef-orange border-chef-orange/30 hover:bg-orange-50 rounded-xl"
+              onClick={() => setShowAddModal(true)}
             >
-              <option value="">All cuisines</option>
-              {CUISINE_FILTERS.map((c) => (
-                <option key={c} value={c}>{c.replace("_", " ")}</option>
-              ))}
-            </select>
-            <select
-              value={proteinFilter || ""}
-              onChange={(e) => {
-                const val = e.target.value;
-                setProteinFilter(val || null);
-                setVegetarianOnly(val === "veggie");
-              }}
-              className="border border-gray-300 rounded-lg px-2.5 min-h-[44px] text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              + Personal
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-sm font-medium text-chef-orange border-chef-orange/30 hover:bg-orange-50 rounded-xl"
+              onClick={() => setShowUrlModal(true)}
             >
-              <option value="">All proteins</option>
-              {PROTEIN_FILTERS.map((p) => (
-                <option key={p.label} value={p.value ?? "veggie"}>{p.label}</option>
-              ))}
-            </select>
-            <select
-              value={cookTimeFilter ? cookTimeFilter.label : ""}
-              onChange={(e) => {
-                const ct = COOK_TIME_FILTERS.find((f) => f.label === e.target.value);
-                setCookTimeFilter(ct || null);
-              }}
-              className="border border-gray-300 rounded-lg px-2.5 min-h-[44px] text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
-            >
-              <option value="">Any time</option>
-              {COOK_TIME_FILTERS.map((ct) => (
-                <option key={ct.label} value={ct.label}>{ct.label}</option>
-              ))}
-            </select>
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortOption)}
-              className="border border-gray-300 rounded-lg px-2.5 min-h-[44px] text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
-            >
-              <option value="recent">Recent</option>
-              <option value="loved">Loved</option>
-              <option value="alpha">A–Z</option>
-              <option value="cook_time">Fastest</option>
-            </select>
-            {hasActiveFilters && (
-              <button
-                onClick={() => {
-                  setSearch("");
-                  setQuickFilter("all");
-                  setCuisineFilter(null);
-                  setProteinFilter(null);
-                  setVegetarianOnly(false);
-                  setCookTimeFilter(null);
-                }}
-                className="text-xs text-gray-400 hover:text-gray-600 min-h-[44px] flex items-center"
-              >
-                Clear
-              </button>
-            )}
+              + URL
+            </Button>
           </div>
         </div>
 
-        {/* Recipe list */}
-        {filteredRecipes.length === 0 ? (
-          <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-8 text-center text-gray-400 text-sm">
-            {hasActiveFilters
-              ? "No recipes match your filters. Try broadening your search."
-              : "No recipes yet. Add some from your meal plans!"}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-xs text-gray-400">
-              {filteredRecipes.length === recipes.length
-                ? `${recipes.length} recipes`
-                : `${filteredRecipes.length} of ${recipes.length} recipes`}
-            </p>
-            {filteredRecipes.map((r) => {
-              const cuisineClass =
-                CUISINE_COLORS[r.cuisine] || "bg-gray-100 text-gray-700";
-              const isLoved = lovedNames.has(r.title.toLowerCase());
-              const isExpanded = expandedRecipeId === r.id;
-              return (
-                <Card
-                  key={r.id}
-                  className={cn(
-                    "px-3 py-4 pb-5 md:px-5 transition-shadow cursor-pointer",
-                    pickDayParam ? "hover:border-orange-500 hover:bg-orange-50" :
-                    isExpanded ? "border-orange-300 shadow-sm" : "border-gray-200 hover:shadow-sm",
-                    addingToDay && "opacity-50 pointer-events-none"
-                  )}
-                  onClick={() => pickDayParam ? handlePickForDay(r) : setExpandedRecipeId(isExpanded ? null : r.id)}
+        {/* ── Horizontal filter chips ── */}
+        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar -mx-4 px-4 pb-1">
+          {FILTER_CHIPS.map((chip) => (
+            <button
+              key={chip.key}
+              onClick={() => handleChipClick(chip.key)}
+              className={cn(
+                "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all shrink-0",
+                activeChip === chip.key
+                  ? "bg-stone-900 text-white shadow-sm"
+                  : "bg-white text-stone-600 border border-stone-200 hover:border-stone-300 hover:bg-stone-50"
+              )}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Recipe results count ── */}
+        {filteredRecipes.length > 0 && filteredRecipes.length !== recipes.length && (
+          <p className="text-xs text-stone-400 font-body">
+            {filteredRecipes.length} of {recipes.length} recipes
+          </p>
+        )}
+
+        {/* ── Recipe grid/list ── */}
+        <section>
+          {filteredRecipes.length === 0 ? (
+            <div className="bg-white border border-dashed border-stone-300 rounded-2xl p-12 text-center">
+              <span className="text-4xl block mb-3">🍳</span>
+              <p className="text-stone-500 text-sm font-body">
+                {hasActiveFilters
+                  ? "No recipes match your filters. Try broadening your search."
+                  : "No recipes yet. Add some from your meal plans!"}
+              </p>
+              {hasActiveFilters && (
+                <button
+                  onClick={() => {
+                    setSearch("");
+                    setActiveChip("all");
+                    setQuickFilter("all");
+                    setCuisineFilter(null);
+                    setProteinFilter(null);
+                    setVegetarianOnly(false);
+                    setCookTimeFilter(null);
+                  }}
+                  className="mt-3 text-sm text-chef-orange hover:text-orange-600 font-medium"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      {renamingId === r.id ? (
-                        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            ref={renameInputRef}
-                            value={renameValue}
-                            onChange={(e) => setRenameValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleRename(r);
-                              if (e.key === "Escape") setRenamingId(null);
-                            }}
-                            className="font-medium text-gray-900 bg-white border border-orange-300 rounded px-2 py-0.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-orange-500"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => handleRename(r)}
-                            className="text-xs text-orange-500 hover:text-orange-600 font-medium shrink-0"
-                          >Save</button>
-                          <button
-                            onClick={() => setRenamingId(null)}
-                            className="text-xs text-gray-400 hover:text-gray-600 font-medium shrink-0"
-                          >Cancel</button>
-                        </div>
-                      ) : (
-                        <div className="font-medium group/name flex items-center min-w-0">
+                  Clear all filters
+                </button>
+              )}
+            </div>
+          ) : viewMode === "grid" ? (
+            /* ── Grid View ── */
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {filteredRecipes.map((r) => {
+                const cuisineColor = LIGHT_CUISINE_COLORS[r.cuisine] || LIGHT_CUISINE_COLORS.american;
+                const isLoved = lovedNames.has(r.title.toLowerCase());
+                const isExpanded = expandedRecipeId === r.id;
+                return (
+                  <div key={r.id} className={cn(
+                    isExpanded && "col-span-2 md:col-span-3 lg:col-span-4"
+                  )}>
+                    <div
+                      className={cn(
+                        "bg-white rounded-2xl overflow-hidden shadow-sm border border-stone-100 cursor-pointer transition-all duration-200",
+                        pickDayParam ? "hover:border-orange-400 hover:shadow-md" :
+                        isExpanded ? "border-chef-orange/40 shadow-md" : "hover:shadow-md hover:-translate-y-0.5",
+                        addingToDay && "opacity-50 pointer-events-none"
+                      )}
+                      onClick={() => pickDayParam ? handlePickForDay(r) : setExpandedRecipeId(isExpanded ? null : r.id)}
+                    >
+                      {/* Image area */}
+                      {!isExpanded && (
+                        <div className="relative aspect-[4/3] overflow-hidden">
+                          <PlaceholderImage cuisine={r.cuisine} />
+                          {/* Love button overlay */}
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleLoved(r); }}
-                            className="mr-1.5 hover:scale-125 transition-transform shrink-0"
-                            title={isLoved ? "Remove from loved" : "Love this recipe"}
-                          >
-                            {isLoved ? "❤️" : "♡"}
-                          </button>
-                          <span className="truncate min-w-0">
-                            {r.source_url ? (
-                              <a
-                                href={r.source_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-blue-600 hover:underline cursor-pointer"
-                              >
-                                {r.title}
-                              </a>
-                            ) : (
-                              <span className="text-gray-900">{r.title}</span>
+                            className={cn(
+                              "absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm",
+                              isLoved ? "bg-white text-red-500" : "bg-white/80 text-stone-400 hover:text-red-500 hover:bg-white"
                             )}
+                          >
+                            {isLoved ? (
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                              </svg>
+                            )}
+                          </button>
+                          {/* Cook time badge */}
+                          <span className="absolute bottom-2 left-2 bg-stone-900/75 text-white text-[11px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm">
+                            {r.cook_minutes} min
                           </span>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); startRename(r); }}
-                            className="ml-1.5 text-gray-300 hover:text-gray-500 opacity-0 group-hover/name:opacity-100 transition-opacity text-xs shrink-0"
-                            title="Rename recipe"
-                          >✏️</button>
+                          {/* Vegetarian badge */}
+                          {r.vegetarian && (
+                            <span className="absolute bottom-2 right-2 bg-emerald-600/80 text-white text-[11px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm">
+                              Veggie
+                            </span>
+                          )}
                         </div>
                       )}
-                      <div className="flex flex-wrap gap-1.5 mt-1.5 pb-0.5">
-                        <Badge variant="outline" className={cn("border-0", cuisineClass)}>
-                          {r.cuisine.replace("_", " ")}
-                        </Badge>
-                        <Badge variant="secondary">
-                          {r.cook_minutes} min
-                        </Badge>
-                        <Badge variant="secondary">
-                          {r.difficulty}
-                        </Badge>
-                        {r.vegetarian && (
-                          <Badge variant="outline" className="bg-green-100 text-green-700 border-0">
-                            Vegetarian
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-xs text-gray-400 shrink-0">
-                      {isExpanded ? "▲" : "▼"}
-                    </span>
-                  </div>
-
-                  {isExpanded && (
-                    <div
-                      className="mt-3 pt-3 border-t border-gray-100 space-y-3"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* Day picker */}
-                      <div>
-                        <p className="text-xs font-medium text-gray-500 mb-1.5">Add to this week:</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {DAY_CHIPS.map(({ key, label }) => (
-                            <button
-                              key={key}
-                              disabled={addingToDay !== null}
-                              onClick={() => handleAddToDay(r, key)}
-                              className={`px-3 py-1 min-h-[44px] rounded-full text-xs font-medium transition-colors flex items-center ${
-                                addingToDay === key
-                                  ? "bg-orange-200 text-orange-800 animate-pulse"
-                                  : "bg-orange-100 text-orange-600 hover:bg-orange-200"
-                              } disabled:opacity-50 disabled:cursor-not-allowed`}
-                            >
-                              {addingToDay === key ? "Plating up! 🍽️" : label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Notes section */}
-                      <div>
-                        {notesOpenId === r.id ? (
-                          <div className="space-y-2">
-                            <label className="block text-xs font-medium text-gray-500">Notes</label>
-                            <textarea
-                              value={notesValue}
-                              onChange={(e) => setNotesValue(e.target.value)}
-                              placeholder="Tips, tweaks, what the family thought..."
-                              rows={3}
-                              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+                      {/* Card body */}
+                      <div className="p-3">
+                        {renamingId === r.id ? (
+                          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              ref={renameInputRef}
+                              value={renameValue}
+                              onChange={(e) => setRenameValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleRename(r);
+                                if (e.key === "Escape") setRenamingId(null);
+                              }}
+                              className="font-medium text-stone-900 bg-white border border-chef-orange/40 rounded-lg px-2 py-0.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
                               autoFocus
                             />
-                            <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => handleSaveNotes(r)}
-                                disabled={savingNotes}
-                              >
-                                {savingNotes ? "Saving..." : "Save Notes"}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setNotesOpenId(null)}
-                                disabled={savingNotes}
-                              >
-                                Cancel
-                              </Button>
-                              {r.notes && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-red-500 hover:text-red-600 ml-auto"
-                                  onClick={() => handleSaveNotes(r, "")}
-                                  disabled={savingNotes}
-                                >
-                                  Clear
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ) : r.notes ? (
-                          <div
-                            className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-amber-100 transition-colors"
-                            onClick={() => { setNotesOpenId(r.id); setNotesValue(r.notes || ""); }}
-                          >
-                            <p className="text-xs font-medium text-amber-700 mb-0.5">Notes</p>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{r.notes}</p>
+                            <button onClick={() => handleRename(r)} className="text-xs text-chef-orange hover:text-orange-600 font-medium shrink-0">Save</button>
+                            <button onClick={() => setRenamingId(null)} className="text-xs text-stone-400 hover:text-stone-600 font-medium shrink-0">Cancel</button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => { setNotesOpenId(r.id); setNotesValue(""); }}
-                            className="text-xs text-orange-500 hover:text-orange-600 font-medium min-h-[44px] items-center flex"
-                          >
-                            + Add Notes
-                          </button>
+                          <>
+                            <h3 className="font-body font-semibold text-stone-800 text-sm leading-snug line-clamp-2 group/name">
+                              {r.source_url ? (
+                                <a
+                                  href={r.source_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="hover:text-chef-orange transition-colors"
+                                >
+                                  {r.title}
+                                </a>
+                              ) : r.title}
+                            </h3>
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                              <span
+                                className="text-[11px] font-medium px-2 py-0.5 rounded-full capitalize"
+                                style={{
+                                  backgroundColor: cuisineColor.bg,
+                                  color: cuisineColor.text,
+                                  border: `1px solid ${cuisineColor.border}`,
+                                }}
+                              >
+                                {r.cuisine.replace("_", " ")}
+                              </span>
+                            </div>
+                            {r.source_name && (
+                              <p className="text-[11px] text-stone-400 mt-1 truncate">{r.source_name}</p>
+                            )}
+                          </>
                         )}
-                      </div>
-
-                      {/* Actions row */}
-                      <div className="flex items-center gap-3">
-                        {isLoved && (
-                          <button
-                            disabled={removingLoved === r.id}
-                            onClick={() => handleRemoveLoved(r)}
-                            className="text-xs text-red-500 hover:text-red-600 font-medium disabled:opacity-50 min-h-[44px] flex items-center"
-                          >
-                            {removingLoved === r.id ? "Removing..." : "Remove from Loved"}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setConfirmDelete(r)}
-                          className="text-xs text-gray-400 hover:text-red-500 font-medium ml-auto min-h-[44px] flex items-center"
-                        >
-                          Delete
-                        </button>
                       </div>
                     </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </section>
 
-      {/* ── Past Meal Plans ── */}
-      <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-          Past Meal Plans
-        </h2>
+                    {/* Expanded actions (below card, spanning full grid width) */}
+                    {isExpanded && (
+                      <div
+                        className="mt-2 bg-white rounded-2xl border border-stone-200 p-4 space-y-3 shadow-sm"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* Recipe title row with love + rename */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <button
+                              onClick={() => toggleLoved(r)}
+                              className="shrink-0 hover:scale-110 transition-transform"
+                            >
+                              {isLoved ? (
+                                <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                                </svg>
+                              ) : (
+                                <svg className="w-5 h-5 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                                </svg>
+                              )}
+                            </button>
+                            <h3 className="font-body font-semibold text-stone-800 truncate">{r.title}</h3>
+                            <button
+                              onClick={() => startRename(r)}
+                              className="text-stone-300 hover:text-stone-500 transition-colors text-xs shrink-0"
+                              title="Rename recipe"
+                            >
+                              ✏️
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-[11px] font-medium px-2 py-0.5 rounded-full capitalize"
+                              style={{
+                                backgroundColor: cuisineColor.bg,
+                                color: cuisineColor.text,
+                                border: `1px solid ${cuisineColor.border}`,
+                              }}
+                            >
+                              {r.cuisine.replace("_", " ")}
+                            </span>
+                            <span className="text-xs text-stone-400">{r.cook_minutes} min</span>
+                            {r.vegetarian && <span className="text-xs text-emerald-600 font-medium">Veggie</span>}
+                          </div>
+                        </div>
 
-        {history.length === 0 ? (
-          <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-8 text-center text-gray-400 text-sm">
-            No past plans yet.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {history.map((plan) => {
-              const mainNames = (plan.items ?? [])
-                .filter((i) => i.meal_type === "main" && i.recipe_name)
-                .map((i) => i.recipe_name!);
-              const preview = mainNames.slice(0, 3).join(", ");
-              const extra = mainNames.length > 3 ? ` +${mainNames.length - 3} more` : "";
+                        {/* Day picker */}
+                        <div>
+                          <p className="text-xs font-medium text-stone-500 mb-1.5">Add to this week:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {DAY_CHIPS.map(({ key, label }) => (
+                              <button
+                                key={key}
+                                disabled={addingToDay !== null}
+                                onClick={() => handleAddToDay(r, key)}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
+                                  addingToDay === key
+                                    ? "bg-orange-200 text-orange-800 animate-pulse"
+                                    : "bg-orange-50 text-chef-orange hover:bg-orange-100",
+                                  "disabled:opacity-50 disabled:cursor-not-allowed"
+                                )}
+                              >
+                                {addingToDay === key ? "Adding..." : label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
 
-              return (
-                <Card
-                  key={plan.id}
-                  className="px-5 py-4 flex items-center justify-between hover:shadow-sm transition-shadow"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-900">
-                      {plan.week_start
-                        ? formatWeekRange(plan.week_start)
-                        : timeAgo(plan.created_at)}
-                    </p>
-                    {preview && (
-                      <p className="text-sm text-gray-500 truncate mt-0.5">
-                        {preview}{extra}
-                      </p>
+                        {/* Notes section */}
+                        <div>
+                          {notesOpenId === r.id ? (
+                            <div className="space-y-2">
+                              <label className="block text-xs font-medium text-stone-500">Notes</label>
+                              <textarea
+                                value={notesValue}
+                                onChange={(e) => setNotesValue(e.target.value)}
+                                placeholder="Tips, tweaks, what the family thought..."
+                                rows={3}
+                                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-chef-orange/30 focus:border-chef-orange resize-none"
+                                autoFocus
+                              />
+                              <div className="flex items-center gap-2">
+                                <Button size="sm" className="rounded-lg" onClick={() => handleSaveNotes(r)} disabled={savingNotes}>
+                                  {savingNotes ? "Saving..." : "Save Notes"}
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => setNotesOpenId(null)} disabled={savingNotes}>Cancel</Button>
+                                {r.notes && (
+                                  <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 ml-auto" onClick={() => handleSaveNotes(r, "")} disabled={savingNotes}>Clear</Button>
+                                )}
+                              </div>
+                            </div>
+                          ) : r.notes ? (
+                            <div
+                              className="bg-amber-50/80 border border-amber-200/60 rounded-xl px-3 py-2 cursor-pointer hover:bg-amber-100/80 transition-colors"
+                              onClick={() => { setNotesOpenId(r.id); setNotesValue(r.notes || ""); }}
+                            >
+                              <p className="text-xs font-medium text-amber-700 mb-0.5">Notes</p>
+                              <p className="text-sm text-stone-700 whitespace-pre-wrap font-body">{r.notes}</p>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setNotesOpenId(r.id); setNotesValue(""); }}
+                              className="text-xs text-chef-orange hover:text-orange-600 font-medium"
+                            >
+                              + Add Notes
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Actions row */}
+                        <div className="flex items-center gap-3 pt-1 border-t border-stone-100">
+                          {isLoved && (
+                            <button
+                              disabled={removingLoved === r.id}
+                              onClick={() => handleRemoveLoved(r)}
+                              className="text-xs text-red-500 hover:text-red-600 font-medium disabled:opacity-50"
+                            >
+                              {removingLoved === r.id ? "Removing..." : "Remove from Loved"}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setConfirmDelete(r)}
+                            className="text-xs text-stone-400 hover:text-red-500 font-medium ml-auto"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 ml-4 text-sm font-medium text-orange-500 hover:text-orange-600 border-orange-200 hover:bg-orange-50"
-                    disabled={cloningPlanId === plan.id}
-                    onClick={async () => {
-                      // Check if current week already has meals
-                      let hasExistingMeals = false;
+                );
+              })}
+            </div>
+          ) : (
+            /* ── List View ── */
+            <div className="space-y-2">
+              {filteredRecipes.map((r) => {
+                const cuisineColor = LIGHT_CUISINE_COLORS[r.cuisine] || LIGHT_CUISINE_COLORS.american;
+                const isLoved = lovedNames.has(r.title.toLowerCase());
+                const isExpanded = expandedRecipeId === r.id;
+                return (
+                  <div key={r.id}>
+                    <div
+                      className={cn(
+                        "bg-white rounded-xl border border-stone-100 p-3 flex items-center gap-3 cursor-pointer transition-all duration-200",
+                        pickDayParam ? "hover:border-orange-400 hover:shadow-sm" :
+                        isExpanded ? "border-chef-orange/40 shadow-sm" : "hover:shadow-sm hover:border-stone-200",
+                        addingToDay && "opacity-50 pointer-events-none"
+                      )}
+                      onClick={() => pickDayParam ? handlePickForDay(r) : setExpandedRecipeId(isExpanded ? null : r.id)}
+                    >
+                      {/* Thumbnail */}
+                      <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0">
+                        <PlaceholderImage cuisine={r.cuisine} />
+                      </div>
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        {renamingId === r.id ? (
+                          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              ref={renameInputRef}
+                              value={renameValue}
+                              onChange={(e) => setRenameValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleRename(r);
+                                if (e.key === "Escape") setRenamingId(null);
+                              }}
+                              className="font-medium text-stone-900 bg-white border border-chef-orange/40 rounded-lg px-2 py-0.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
+                              autoFocus
+                            />
+                            <button onClick={() => handleRename(r)} className="text-xs text-chef-orange hover:text-orange-600 font-medium shrink-0">Save</button>
+                            <button onClick={() => setRenamingId(null)} className="text-xs text-stone-400 hover:text-stone-600 font-medium shrink-0">Cancel</button>
+                          </div>
+                        ) : (
+                          <>
+                            <h3 className="font-body font-semibold text-stone-800 text-sm truncate">
+                              {r.source_url ? (
+                                <a
+                                  href={r.source_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="hover:text-chef-orange transition-colors"
+                                >
+                                  {r.title}
+                                </a>
+                              ) : r.title}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span
+                                className="text-[11px] font-medium px-2 py-0.5 rounded-full capitalize"
+                                style={{
+                                  backgroundColor: cuisineColor.bg,
+                                  color: cuisineColor.text,
+                                  border: `1px solid ${cuisineColor.border}`,
+                                }}
+                              >
+                                {r.cuisine.replace("_", " ")}
+                              </span>
+                              <span className="text-[11px] text-stone-400">{r.cook_minutes} min</span>
+                              {r.vegetarian && <span className="text-[11px] text-emerald-600 font-medium">Veggie</span>}
+                              {r.source_name && <span className="text-[11px] text-stone-400 truncate">{r.source_name}</span>}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      {/* Love button */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleLoved(r); }}
+                        className="shrink-0 hover:scale-110 transition-transform"
+                      >
+                        {isLoved ? (
+                          <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                          </svg>
+                        ) : (
+                          <svg className="w-5 h-5 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
 
-                      // First check loaded history for this week
-                      const today = new Date();
-                      const dow = today.getDay();
-                      const diff = dow === 0 ? -6 : 1 - dow;
-                      const monday = new Date(today);
-                      monday.setDate(today.getDate() + diff);
-                      const thisWeek = monday.toISOString().split("T")[0];
+                    {/* Expanded actions */}
+                    {isExpanded && (
+                      <div
+                        className="mt-1 bg-white rounded-xl border border-stone-200 p-4 space-y-3 shadow-sm"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* Rename inline */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => startRename(r)}
+                            className="text-xs text-stone-400 hover:text-stone-600 font-medium"
+                          >
+                            ✏️ Rename
+                          </button>
+                        </div>
 
-                      const currentWeekPlan = history.find(
-                        (h) => h.week_start === thisWeek && h.items?.length > 0
-                      );
-                      if (currentWeekPlan) {
-                        hasExistingMeals = true;
-                      } else {
-                        // Fallback: check via currentPlanId in case history is stale
-                        const currentPlanId = localStorage.getItem("currentPlanId");
-                        if (currentPlanId) {
-                          try {
-                            const livePlan = await getMealPlan(parseInt(currentPlanId));
-                            if (livePlan?.items?.length > 0) {
-                              hasExistingMeals = true;
+                        {/* Day picker */}
+                        <div>
+                          <p className="text-xs font-medium text-stone-500 mb-1.5">Add to this week:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {DAY_CHIPS.map(({ key, label }) => (
+                              <button
+                                key={key}
+                                disabled={addingToDay !== null}
+                                onClick={() => handleAddToDay(r, key)}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
+                                  addingToDay === key
+                                    ? "bg-orange-200 text-orange-800 animate-pulse"
+                                    : "bg-orange-50 text-chef-orange hover:bg-orange-100",
+                                  "disabled:opacity-50 disabled:cursor-not-allowed"
+                                )}
+                              >
+                                {addingToDay === key ? "Adding..." : label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Notes section */}
+                        <div>
+                          {notesOpenId === r.id ? (
+                            <div className="space-y-2">
+                              <label className="block text-xs font-medium text-stone-500">Notes</label>
+                              <textarea
+                                value={notesValue}
+                                onChange={(e) => setNotesValue(e.target.value)}
+                                placeholder="Tips, tweaks, what the family thought..."
+                                rows={3}
+                                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-chef-orange/30 focus:border-chef-orange resize-none"
+                                autoFocus
+                              />
+                              <div className="flex items-center gap-2">
+                                <Button size="sm" className="rounded-lg" onClick={() => handleSaveNotes(r)} disabled={savingNotes}>
+                                  {savingNotes ? "Saving..." : "Save Notes"}
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => setNotesOpenId(null)} disabled={savingNotes}>Cancel</Button>
+                                {r.notes && (
+                                  <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 ml-auto" onClick={() => handleSaveNotes(r, "")} disabled={savingNotes}>Clear</Button>
+                                )}
+                              </div>
+                            </div>
+                          ) : r.notes ? (
+                            <div
+                              className="bg-amber-50/80 border border-amber-200/60 rounded-xl px-3 py-2 cursor-pointer hover:bg-amber-100/80 transition-colors"
+                              onClick={() => { setNotesOpenId(r.id); setNotesValue(r.notes || ""); }}
+                            >
+                              <p className="text-xs font-medium text-amber-700 mb-0.5">Notes</p>
+                              <p className="text-sm text-stone-700 whitespace-pre-wrap font-body">{r.notes}</p>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setNotesOpenId(r.id); setNotesValue(""); }}
+                              className="text-xs text-chef-orange hover:text-orange-600 font-medium"
+                            >
+                              + Add Notes
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Actions row */}
+                        <div className="flex items-center gap-3 pt-1 border-t border-stone-100">
+                          {isLoved && (
+                            <button
+                              disabled={removingLoved === r.id}
+                              onClick={() => handleRemoveLoved(r)}
+                              className="text-xs text-red-500 hover:text-red-600 font-medium disabled:opacity-50"
+                            >
+                              {removingLoved === r.id ? "Removing..." : "Remove from Loved"}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setConfirmDelete(r)}
+                            className="text-xs text-stone-400 hover:text-red-500 font-medium ml-auto"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* ── Past Meal Plans ── */}
+        <section className="space-y-4 pt-4">
+          <h2 className="font-display text-lg font-bold text-stone-800">Past Meal Plans</h2>
+
+          {history.length === 0 ? (
+            <div className="bg-white border border-dashed border-stone-300 rounded-2xl p-8 text-center">
+              <span className="text-3xl block mb-2">📋</span>
+              <p className="text-stone-400 text-sm font-body">No past plans yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {history.map((plan) => {
+                const mainNames = (plan.items ?? [])
+                  .filter((i) => i.meal_type === "main" && i.recipe_name)
+                  .map((i) => i.recipe_name!);
+                const preview = mainNames.slice(0, 3).join(", ");
+                const extra = mainNames.length > 3 ? ` +${mainNames.length - 3} more` : "";
+
+                return (
+                  <div
+                    key={plan.id}
+                    className="bg-white rounded-xl border border-stone-100 px-4 py-3 flex items-center justify-between hover:shadow-sm transition-shadow"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-body font-semibold text-stone-800 text-sm">
+                        {plan.week_start
+                          ? formatWeekRange(plan.week_start)
+                          : timeAgo(plan.created_at)}
+                      </p>
+                      {preview && (
+                        <p className="text-xs text-stone-400 truncate mt-0.5 font-body">
+                          {preview}{extra}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 ml-4 text-sm font-medium text-chef-orange hover:text-orange-600 border-chef-orange/30 hover:bg-orange-50 rounded-xl"
+                      disabled={cloningPlanId === plan.id}
+                      onClick={async () => {
+                        let hasExistingMeals = false;
+
+                        const today = new Date();
+                        const dow = today.getDay();
+                        const diff = dow === 0 ? -6 : 1 - dow;
+                        const monday = new Date(today);
+                        monday.setDate(today.getDate() + diff);
+                        const thisWeek = monday.toISOString().split("T")[0];
+
+                        const currentWeekPlan = history.find(
+                          (h) => h.week_start === thisWeek && h.items?.length > 0
+                        );
+                        if (currentWeekPlan) {
+                          hasExistingMeals = true;
+                        } else {
+                          const currentPlanId = localStorage.getItem("currentPlanId");
+                          if (currentPlanId) {
+                            try {
+                              const livePlan = await getMealPlan(parseInt(currentPlanId));
+                              if (livePlan?.items?.length > 0) {
+                                hasExistingMeals = true;
+                              }
+                            } catch {
+                              // Plan doesn't exist — no conflict
                             }
-                          } catch {
-                            // Plan doesn't exist — no conflict
                           }
                         }
-                      }
 
-                      if (hasExistingMeals) {
-                        setReuseConfirmPlan(plan);
-                      } else {
-                        handleReusePlan(plan.id, "replace");
-                      }
-                    }}
-                  >
-                    {cloningPlanId === plan.id ? "Cloning..." : "Reuse This Week"}
-                  </Button>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                        if (hasExistingMeals) {
+                          setReuseConfirmPlan(plan);
+                        } else {
+                          handleReusePlan(plan.id, "replace");
+                        }
+                      }}
+                    >
+                      {cloningPlanId === plan.id ? "Cloning..." : "Reuse This Week"}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
 
       {/* Toast notification */}
       {successMessage && (
-        <div className="fixed top-4 right-4 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg animate-fade-in">
+        <div className="fixed top-4 right-4 z-50 bg-stone-900 text-white text-sm px-4 py-2.5 rounded-xl shadow-lg animate-fade-in font-body">
           {successMessage}
         </div>
       )}
@@ -1057,13 +1341,13 @@ export default function MyRecipes() {
           <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl animate-slide-up md:hidden">
             {/* Drag handle */}
             <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 bg-gray-300 rounded-full" />
+              <div className="w-10 h-1 bg-stone-300 rounded-full" />
             </div>
 
             <div className="px-5 pb-6 space-y-4">
               {/* Header */}
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+                <h3 className="font-display text-lg font-bold text-stone-800">Filters</h3>
                 <button
                   onClick={() => {
                     setCuisineFilter(null);
@@ -1072,7 +1356,7 @@ export default function MyRecipes() {
                     setCookTimeFilter(null);
                     setSort("recent");
                   }}
-                  className="text-sm text-orange-500 hover:text-orange-600 font-medium"
+                  className="text-sm text-chef-orange hover:text-orange-600 font-medium"
                 >
                   Clear all
                 </button>
@@ -1080,11 +1364,11 @@ export default function MyRecipes() {
 
               {/* Cuisine */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Cuisine</label>
+                <label className="block text-xs font-medium text-stone-500 mb-1.5">Cuisine</label>
                 <select
                   value={cuisineFilter || ""}
                   onChange={(e) => setCuisineFilter(e.target.value || null)}
-                  className="w-full border border-gray-300 rounded-lg px-3 min-h-[44px] text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full border border-stone-200 rounded-xl px-3 min-h-[44px] text-sm text-stone-700 font-body focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
                 >
                   <option value="">All cuisines</option>
                   {CUISINE_FILTERS.map((c) => (
@@ -1095,7 +1379,7 @@ export default function MyRecipes() {
 
               {/* Protein */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Protein</label>
+                <label className="block text-xs font-medium text-stone-500 mb-1.5">Protein</label>
                 <select
                   value={proteinFilter || ""}
                   onChange={(e) => {
@@ -1103,7 +1387,7 @@ export default function MyRecipes() {
                     setProteinFilter(val || null);
                     setVegetarianOnly(val === "veggie");
                   }}
-                  className="w-full border border-gray-300 rounded-lg px-3 min-h-[44px] text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full border border-stone-200 rounded-xl px-3 min-h-[44px] text-sm text-stone-700 font-body focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
                 >
                   <option value="">All proteins</option>
                   {PROTEIN_FILTERS.map((p) => (
@@ -1114,14 +1398,14 @@ export default function MyRecipes() {
 
               {/* Cook Time */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Cook Time</label>
+                <label className="block text-xs font-medium text-stone-500 mb-1.5">Cook Time</label>
                 <select
                   value={cookTimeFilter ? cookTimeFilter.label : ""}
                   onChange={(e) => {
                     const ct = COOK_TIME_FILTERS.find((f) => f.label === e.target.value);
                     setCookTimeFilter(ct || null);
                   }}
-                  className="w-full border border-gray-300 rounded-lg px-3 min-h-[44px] text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full border border-stone-200 rounded-xl px-3 min-h-[44px] text-sm text-stone-700 font-body focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
                 >
                   <option value="">Any time</option>
                   {COOK_TIME_FILTERS.map((ct) => (
@@ -1132,11 +1416,11 @@ export default function MyRecipes() {
 
               {/* Sort */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">Sort</label>
+                <label className="block text-xs font-medium text-stone-500 mb-1.5">Sort</label>
                 <select
                   value={sort}
                   onChange={(e) => setSort(e.target.value as SortOption)}
-                  className="w-full border border-gray-300 rounded-lg px-3 min-h-[44px] text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full border border-stone-200 rounded-xl px-3 min-h-[44px] text-sm text-stone-700 font-body focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
                 >
                   <option value="recent">Recent</option>
                   <option value="loved">Loved</option>
@@ -1147,7 +1431,7 @@ export default function MyRecipes() {
 
               {/* Done button */}
               <Button
-                className="w-full"
+                className="w-full rounded-xl"
                 onClick={() => setFilterSheetOpen(false)}
               >
                 Done
@@ -1162,23 +1446,23 @@ export default function MyRecipes() {
         {/* Backdrop to close FAB menu */}
         {fabMenuOpen && (
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-40 bg-black/20"
             onClick={() => setFabMenuOpen(false)}
           />
         )}
 
         {/* FAB menu items */}
         {fabMenuOpen && (
-          <div className="fixed bottom-24 right-5 z-50 flex flex-col items-end gap-2">
+          <div className="fixed bottom-24 right-5 z-50 flex flex-col items-end gap-2 animate-slide-up-fade">
             <button
               onClick={() => { setFabMenuOpen(false); setShowAddModal(true); }}
-              className="bg-white text-gray-900 text-sm font-medium px-4 py-2.5 rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              className="bg-white text-stone-800 text-sm font-medium px-5 py-3 rounded-2xl shadow-lg border border-stone-100 hover:bg-stone-50 transition-colors font-body"
             >
               Personal Recipe
             </button>
             <button
               onClick={() => { setFabMenuOpen(false); setShowUrlModal(true); }}
-              className="bg-white text-gray-900 text-sm font-medium px-4 py-2.5 rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              className="bg-white text-stone-800 text-sm font-medium px-5 py-3 rounded-2xl shadow-lg border border-stone-100 hover:bg-stone-50 transition-colors font-body"
             >
               URL Recipe
             </button>
@@ -1188,11 +1472,15 @@ export default function MyRecipes() {
         {/* FAB button */}
         <button
           onClick={() => setFabMenuOpen((prev) => !prev)}
-          className="fixed bottom-6 right-5 z-50 w-14 h-14 rounded-full bg-orange-500 hover:bg-orange-600 text-white shadow-lg flex items-center justify-center transition-all"
+          className="fixed bottom-6 right-5 z-50 w-14 h-14 rounded-full text-white shadow-lg flex items-center justify-center transition-all"
+          style={{
+            background: "linear-gradient(135deg, #EA580C, #DC2626)",
+            boxShadow: "0 4px 14px rgba(234, 88, 12, 0.4)",
+          }}
         >
           <span
             className={cn(
-              "text-2xl leading-none transition-transform duration-200",
+              "text-2xl leading-none transition-transform duration-200 font-light",
               fabMenuOpen && "rotate-45"
             )}
           >
@@ -1241,7 +1529,7 @@ export default function MyRecipes() {
 
             <div className="space-y-3 px-6">
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Recipe name</label>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Recipe name</label>
                 <Input
                   type="text"
                   value={addForm.name}
@@ -1254,11 +1542,11 @@ export default function MyRecipes() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Cuisine</label>
+                  <label className="block text-xs font-medium text-stone-500 mb-1">Cuisine</label>
                   <select
                     value={addForm.cuisine}
                     onChange={(e) => setAddForm({ ...addForm, cuisine: e.target.value as Cuisine })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
                   >
                     {VALID_CUISINES.map((c) => (
                       <option key={c} value={c}>{c.replace("_", " ")}</option>
@@ -1266,7 +1554,7 @@ export default function MyRecipes() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Protein</label>
+                  <label className="block text-xs font-medium text-stone-500 mb-1">Protein</label>
                   <Input
                     type="text"
                     value={addForm.protein_type}
@@ -1279,21 +1567,21 @@ export default function MyRecipes() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Cook time (min)</label>
+                  <label className="block text-xs font-medium text-stone-500 mb-1">Cook time (min)</label>
                   <input
                     type="number"
                     value={addForm.cook_minutes}
                     onChange={(e) => setAddForm({ ...addForm, cook_minutes: parseInt(e.target.value) || 0 })}
                     min={0}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Difficulty</label>
+                  <label className="block text-xs font-medium text-stone-500 mb-1">Difficulty</label>
                   <select
                     value={addForm.difficulty}
                     onChange={(e) => setAddForm({ ...addForm, difficulty: e.target.value as Difficulty })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
                   >
                     {VALID_DIFFICULTIES.map((d) => (
                       <option key={d} value={d}>{d}</option>
@@ -1307,9 +1595,9 @@ export default function MyRecipes() {
                   type="checkbox"
                   checked={addForm.vegetarian}
                   onChange={(e) => setAddForm({ ...addForm, vegetarian: e.target.checked, protein_type: e.target.checked ? "" : addForm.protein_type })}
-                  className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                  className="rounded border-stone-300 text-chef-orange focus:ring-chef-orange"
                 />
-                <span className="text-sm text-gray-700">Vegetarian</span>
+                <span className="text-sm text-stone-700 font-body">Vegetarian</span>
               </label>
             </div>
 
@@ -1340,7 +1628,7 @@ export default function MyRecipes() {
             </DialogHeader>
             <p className="text-sm text-muted-foreground px-6">
               How would you like to add the meals from{" "}
-              <span className="font-medium text-gray-700">
+              <span className="font-medium text-stone-700">
                 {reuseConfirmPlan.week_start
                   ? formatWeekRange(reuseConfirmPlan.week_start)
                   : "this plan"}
@@ -1380,22 +1668,22 @@ export default function MyRecipes() {
 
             {urlProgress ? (
               <div className="py-8 text-center space-y-3 px-6">
-                <p className="text-sm text-gray-700 font-medium">{urlProgress}</p>
-                {!urlProgress.startsWith("✅") && (
+                <p className="text-sm text-stone-700 font-medium font-body">{urlProgress}</p>
+                {!urlProgress.startsWith("Added") && (
                   <div className="flex justify-center">
-                    <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-6 h-6 border-2 border-chef-orange border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
               </div>
             ) : urlNotRecipe ? (
               <div className="px-6 py-4 space-y-4">
-                <div className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
+                <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
                   <p className="text-sm font-medium text-amber-800 mb-1">That doesn't look like a recipe page</p>
-                  <p className="text-sm text-amber-700">{urlNotRecipe.reason}</p>
+                  <p className="text-sm text-amber-700 font-body">{urlNotRecipe.reason}</p>
                 </div>
                 {urlNotRecipe.alternative_url && (
                   <div className="space-y-2">
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-stone-600 font-body">
                       {urlNotRecipe.detected_recipe_name
                         ? `Did you mean "${urlNotRecipe.detected_recipe_name}"?`
                         : "We found a recipe you might be looking for:"}
@@ -1410,7 +1698,7 @@ export default function MyRecipes() {
                 )}
                 <button
                   onClick={() => { setUrlNotRecipe(null); }}
-                  className="text-sm text-orange-500 hover:text-orange-600 font-medium"
+                  className="text-sm text-chef-orange hover:text-orange-600 font-medium"
                 >
                   Try a Different URL
                 </button>
@@ -1418,7 +1706,7 @@ export default function MyRecipes() {
             ) : (
               <>
                 <div className="px-6">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Paste recipe URL here</label>
+                  <label className="block text-xs font-medium text-stone-500 mb-1">Paste recipe URL here</label>
                   <Input
                     type="url"
                     value={urlInput}
