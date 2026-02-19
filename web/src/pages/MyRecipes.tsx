@@ -614,7 +614,7 @@ export default function MyRecipes() {
           background: `linear-gradient(135deg, ${colors.bg} 0%, ${colors.border} 100%)`,
         }}
       >
-        <span className="text-3xl opacity-60">🍽️</span>
+        <span className="text-2xl opacity-60">🍽️</span>
       </div>
     );
   };
@@ -801,7 +801,7 @@ export default function MyRecipes() {
             </div>
           ) : viewMode === "grid" ? (
             /* ── Grid View ── */
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5 md:gap-3">
               {filteredRecipes.map((r) => {
                 const cuisineColor = LIGHT_CUISINE_COLORS[r.cuisine] || LIGHT_CUISINE_COLORS.american;
                 const isLoved = lovedNames.has(r.title.toLowerCase());
@@ -810,14 +810,14 @@ export default function MyRecipes() {
                   <div key={r.id} className="min-w-0">
                     <div
                       className={cn(
-                        "bg-white rounded-xl md:rounded-2xl overflow-hidden shadow-sm border border-stone-100 cursor-pointer transition-all duration-200",
+                        "bg-white rounded-lg md:rounded-2xl overflow-hidden shadow-sm border border-stone-100 cursor-pointer transition-all duration-200",
                         pickDayParam ? "hover:border-orange-400 hover:shadow-md" : "hover:shadow-md hover:-translate-y-0.5",
                         addingToDay && "opacity-50 pointer-events-none"
                       )}
                       onClick={() => pickDayParam ? handlePickForDay(r) : setSelectedRecipe(r)}
                     >
-                      {/* Image area — hard-capped height for mobile density */}
-                      <div className="relative overflow-hidden h-[110px] md:h-[160px]">
+                      {/* Image area — compact on mobile */}
+                      <div className="relative overflow-hidden h-[80px] md:h-[160px]">
                         {hasImage ? (
                           <img
                             src={r.image_url!}
@@ -832,33 +832,33 @@ export default function MyRecipes() {
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleLoved(r); }}
                           className={cn(
-                            "absolute top-1.5 right-1.5 w-7 h-7 rounded-full flex items-center justify-center transition-all shadow-sm",
+                            "absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center transition-all shadow-sm",
                             isLoved ? "bg-white text-red-500" : "bg-white/80 text-stone-400 hover:text-red-500 hover:bg-white"
                           )}
                         >
                           {isLoved ? (
-                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                             </svg>
                           ) : (
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                             </svg>
                           )}
                         </button>
                         {/* Cook time badge */}
-                        <span className="absolute bottom-1.5 left-1.5 bg-stone-900/75 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full backdrop-blur-sm">
+                        <span className="absolute bottom-1 left-1 bg-stone-900/75 text-white text-[9px] font-medium px-1 py-px rounded-full backdrop-blur-sm">
                           {r.cook_minutes}m
                         </span>
                         {/* Vegetarian badge */}
                         {r.vegetarian && (
-                          <span className="absolute bottom-1.5 right-1.5 bg-emerald-600/80 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full backdrop-blur-sm">
-                            Veggie
+                          <span className="absolute bottom-1 right-1 bg-emerald-600/80 text-white text-[9px] font-medium px-1 py-px rounded-full backdrop-blur-sm">
+                            Veg
                           </span>
                         )}
                       </div>
                       {/* Card body */}
-                      <div className="px-2 py-1.5 md:p-3">
+                      <div className="px-1.5 py-1 md:p-3">
                         {renamingId === r.id ? (
                           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                             <input
@@ -869,19 +869,19 @@ export default function MyRecipes() {
                                 if (e.key === "Enter") handleRename(r);
                                 if (e.key === "Escape") setRenamingId(null);
                               }}
-                              className="font-medium text-stone-900 bg-white border border-chef-orange/40 rounded-lg px-2 py-0.5 text-xs w-full focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
+                              className="font-medium text-stone-900 bg-white border border-chef-orange/40 rounded-lg px-1.5 py-0.5 text-[11px] w-full focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
                               autoFocus
                             />
-                            <button onClick={() => handleRename(r)} className="text-[10px] text-chef-orange hover:text-orange-600 font-medium shrink-0">Save</button>
-                            <button onClick={() => setRenamingId(null)} className="text-[10px] text-stone-400 hover:text-stone-600 font-medium shrink-0">Cancel</button>
+                            <button onClick={() => handleRename(r)} className="text-[10px] text-chef-orange hover:text-orange-600 font-medium shrink-0">OK</button>
+                            <button onClick={() => setRenamingId(null)} className="text-[10px] text-stone-400 hover:text-stone-600 font-medium shrink-0">X</button>
                           </div>
                         ) : (
                           <>
-                            <h3 className="font-body font-semibold text-stone-800 text-xs md:text-sm leading-tight line-clamp-1 md:line-clamp-2">
+                            <h3 className="font-body font-semibold text-stone-800 text-[11px] md:text-sm leading-tight line-clamp-1 md:line-clamp-2">
                               {r.title}
                             </h3>
                             <span
-                              className="inline-block mt-0.5 text-[10px] font-medium px-1.5 py-px rounded-full capitalize"
+                              className="inline-block mt-px text-[9px] md:text-[10px] font-medium px-1 py-px rounded-full capitalize"
                               style={{
                                 backgroundColor: cuisineColor.bg,
                                 color: cuisineColor.text,
