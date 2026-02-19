@@ -631,8 +631,8 @@ export default function MyRecipes() {
   }
 
   return (
-    <div className="min-h-screen bg-chef-cream">
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <div className="min-h-screen bg-chef-cream overflow-x-hidden">
+      <div className="space-y-5">
         {/* Pick mode banner */}
         {pickDayParam && (
           <div className="bg-orange-50 border border-orange-300 rounded-xl px-5 py-3 flex items-center justify-between">
@@ -688,8 +688,8 @@ export default function MyRecipes() {
         </div>
 
         {/* ── Search + Loved toggle row ── */}
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="relative flex-1 min-w-0">
             <svg
               className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400"
               fill="none" viewBox="0 0 24 24" stroke="currentColor"
@@ -748,13 +748,13 @@ export default function MyRecipes() {
         </div>
 
         {/* ── Horizontal filter chips ── */}
-        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar -mx-4 px-4 pb-1">
+        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
           {FILTER_CHIPS.map((chip) => (
             <button
               key={chip.key}
               onClick={() => handleChipClick(chip.key)}
               className={cn(
-                "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all shrink-0",
+                "px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all shrink-0",
                 activeChip === chip.key
                   ? "bg-stone-900 text-white shadow-sm"
                   : "bg-white text-stone-600 border border-stone-200 hover:border-stone-300 hover:bg-stone-50"
@@ -801,7 +801,7 @@ export default function MyRecipes() {
             </div>
           ) : viewMode === "grid" ? (
             /* ── Grid View ── */
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-3">
               {filteredRecipes.map((r) => {
                 const cuisineColor = LIGHT_CUISINE_COLORS[r.cuisine] || LIGHT_CUISINE_COLORS.american;
                 const isLoved = lovedNames.has(r.title.toLowerCase());
