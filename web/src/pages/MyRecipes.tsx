@@ -632,7 +632,8 @@ export default function MyRecipes() {
 
   return (
     <div className="min-h-screen bg-chef-cream overflow-x-hidden">
-      <div className="space-y-5">
+      {/* build: 2026-02-19T22:10 */}
+      <div className="space-y-3 md:space-y-5">
         {/* Pick mode banner */}
         {pickDayParam && (
           <div className="bg-orange-50 border border-orange-300 rounded-xl px-5 py-3 flex items-center justify-between">
@@ -810,14 +811,14 @@ export default function MyRecipes() {
                   <div key={r.id}>
                     <div
                       className={cn(
-                        "bg-white rounded-2xl overflow-hidden shadow-sm border border-stone-100 cursor-pointer transition-all duration-200",
+                        "bg-white rounded-xl md:rounded-2xl overflow-hidden shadow-sm border border-stone-100 cursor-pointer transition-all duration-200",
                         pickDayParam ? "hover:border-orange-400 hover:shadow-md" : "hover:shadow-md hover:-translate-y-0.5",
                         addingToDay && "opacity-50 pointer-events-none"
                       )}
                       onClick={() => pickDayParam ? handlePickForDay(r) : setSelectedRecipe(r)}
                     >
-                      {/* Image area */}
-                      <div className="relative aspect-[4/3] overflow-hidden">
+                      {/* Image area — fixed 4:3 aspect ratio */}
+                      <div className="relative overflow-hidden" style={{ aspectRatio: "4/3" }}>
                         {hasImage ? (
                           <img
                             src={r.image_url!}
@@ -832,33 +833,33 @@ export default function MyRecipes() {
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleLoved(r); }}
                           className={cn(
-                            "absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm",
+                            "absolute top-1.5 right-1.5 w-7 h-7 rounded-full flex items-center justify-center transition-all shadow-sm",
                             isLoved ? "bg-white text-red-500" : "bg-white/80 text-stone-400 hover:text-red-500 hover:bg-white"
                           )}
                         >
                           {isLoved ? (
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                             </svg>
                           ) : (
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                             </svg>
                           )}
                         </button>
                         {/* Cook time badge */}
-                        <span className="absolute bottom-2 left-2 bg-stone-900/75 text-white text-[11px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm">
-                          {r.cook_minutes} min
+                        <span className="absolute bottom-1.5 left-1.5 bg-stone-900/75 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full backdrop-blur-sm">
+                          {r.cook_minutes}m
                         </span>
                         {/* Vegetarian badge */}
                         {r.vegetarian && (
-                          <span className="absolute bottom-2 right-2 bg-emerald-600/80 text-white text-[11px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm">
+                          <span className="absolute bottom-1.5 right-1.5 bg-emerald-600/80 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full backdrop-blur-sm">
                             Veggie
                           </span>
                         )}
                       </div>
                       {/* Card body */}
-                      <div className="p-3">
+                      <div className="p-2 md:p-3">
                         {renamingId === r.id ? (
                           <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                             <input
@@ -869,20 +870,20 @@ export default function MyRecipes() {
                                 if (e.key === "Enter") handleRename(r);
                                 if (e.key === "Escape") setRenamingId(null);
                               }}
-                              className="font-medium text-stone-900 bg-white border border-chef-orange/40 rounded-lg px-2 py-0.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
+                              className="font-medium text-stone-900 bg-white border border-chef-orange/40 rounded-lg px-2 py-0.5 text-xs w-full focus:outline-none focus:ring-2 focus:ring-chef-orange/30"
                               autoFocus
                             />
-                            <button onClick={() => handleRename(r)} className="text-xs text-chef-orange hover:text-orange-600 font-medium shrink-0">Save</button>
-                            <button onClick={() => setRenamingId(null)} className="text-xs text-stone-400 hover:text-stone-600 font-medium shrink-0">Cancel</button>
+                            <button onClick={() => handleRename(r)} className="text-[10px] text-chef-orange hover:text-orange-600 font-medium shrink-0">Save</button>
+                            <button onClick={() => setRenamingId(null)} className="text-[10px] text-stone-400 hover:text-stone-600 font-medium shrink-0">Cancel</button>
                           </div>
                         ) : (
                           <>
                             <h3 className="font-body font-semibold text-stone-800 text-sm leading-snug line-clamp-2">
                               {r.title}
                             </h3>
-                            <div className="flex items-center gap-1.5 mt-1.5">
+                            <div className="flex items-center gap-1 mt-1">
                               <span
-                                className="text-[11px] font-medium px-2 py-0.5 rounded-full capitalize"
+                                className="text-[10px] md:text-[11px] font-medium px-1.5 py-0.5 rounded-full capitalize"
                                 style={{
                                   backgroundColor: cuisineColor.bg,
                                   color: cuisineColor.text,
@@ -893,7 +894,7 @@ export default function MyRecipes() {
                               </span>
                             </div>
                             {r.source_name && (
-                              <p className="text-[11px] text-stone-400 mt-1 truncate">{r.source_name}</p>
+                              <p className="text-[10px] md:text-[11px] text-stone-400 mt-0.5 truncate">{r.source_name}</p>
                             )}
                           </>
                         )}
