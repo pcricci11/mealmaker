@@ -487,6 +487,11 @@ router.post("/", optionalAuth, async (req: Request, res: Response) => {
       [r.source_url],
     );
     if (existing) {
+      // Backfill image_url if the existing record is missing it but the new request has one
+      if (!existing.image_url && r.image_url) {
+        await query("UPDATE recipes SET image_url = $1 WHERE id = $2", [r.image_url, existing.id]);
+        existing.image_url = r.image_url;
+      }
       return res.status(200).json(rowToRecipe(existing));
     }
   }
@@ -724,6 +729,7 @@ router.post("/import-from-url", optionalAuth, async (req: Request, res: Response
   // Check for existing recipe with same URL
   const existing = await queryOne("SELECT * FROM recipes WHERE source_url = $1", [url.trim()]);
   if (existing) {
+    // image_url will be backfilled after re-extraction if missing (but we return early here)
     return res.status(200).json({ recipe: rowToRecipe(existing), alreadyExists: true, paywall_warning: null });
   }
 
@@ -941,6 +947,46 @@ router.post("/backfill-ingredients", async (_req: Request, res: Response) => {
   } catch (error: any) {
     console.error("Backfill error:", error);
     res.status(500).json({ error: error.message || "Failed to backfill ingredients" });
+  }
+});
+
+// POST /api/recipes/backfill-images — backfill image_url for recipes missing it via Spoonacular
+router.post("/backfill-images", async (_req: Request, res: Response) => {
+  try {
+    const missing = await query<{ id: number; name: string; source_url: string | null }>(
+      `SELECT id, name, source_url FROM recipes
+       WHERE image_url IS NULL
+         AND source_type = 'web_search'
+       ORDER BY id DESC
+       LIMIT 50`,
+    );
+
+    if (missing.length === 0) {
+      return res.json({ message: "No recipes need image backfill", backfilled: 0 });
+    }
+
+    console.log(`[backfill-images] Found ${missing.length} recipes missing images`);
+
+    let backfilled = 0;
+
+    // Batch by small groups to respect Spoonacular rate limits
+    for (const recipe of missing) {
+      try {
+        const results = await searchSpoonacular(recipe.name, { number: 1 });
+        if (results.length > 0 && results[0].image_url) {
+          await query("UPDATE recipes SET image_url = $1 WHERE id = $2", [results[0].image_url, recipe.id]);
+          backfilled++;
+          console.log(`[backfill-images] Recipe ${recipe.id} "${recipe.name}": set image_url`);
+        }
+      } catch (err: any) {
+        console.warn(`[backfill-images] Failed for recipe ${recipe.id}:`, err.message);
+      }
+    }
+
+    res.json({ message: `Backfilled ${backfilled}/${missing.length} recipe images`, backfilled, total: missing.length });
+  } catch (error: any) {
+    console.error("Backfill images error:", error);
+    res.status(500).json({ error: error.message || "Failed to backfill images" });
   }
 });
 
