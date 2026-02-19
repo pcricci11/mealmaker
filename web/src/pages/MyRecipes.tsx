@@ -601,7 +601,7 @@ export default function MyRecipes() {
           </div>
 
           {/* Filter dropdowns */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar -mx-4 px-4">
             <select
               value={cuisineFilter || ""}
               onChange={(e) => setCuisineFilter(e.target.value || null)}
@@ -722,33 +722,35 @@ export default function MyRecipes() {
                           >Cancel</button>
                         </div>
                       ) : (
-                        <p className="font-medium truncate group/name flex items-center">
+                        <div className="font-medium group/name flex items-center min-w-0">
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleLoved(r); }}
-                            className="mr-1.5 hover:scale-125 transition-transform shrink-0 min-h-[44px] flex items-center justify-center -my-2"
+                            className="mr-1.5 hover:scale-125 transition-transform shrink-0"
                             title={isLoved ? "Remove from loved" : "Love this recipe"}
                           >
                             {isLoved ? "❤️" : "♡"}
                           </button>
-                          {r.source_url ? (
-                            <a
-                              href={r.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-blue-600 hover:underline cursor-pointer"
-                            >
-                              {r.title}
-                            </a>
-                          ) : (
-                            <span className="text-gray-900">{r.title}</span>
-                          )}
+                          <span className="truncate min-w-0">
+                            {r.source_url ? (
+                              <a
+                                href={r.source_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-blue-600 hover:underline cursor-pointer"
+                              >
+                                {r.title}
+                              </a>
+                            ) : (
+                              <span className="text-gray-900">{r.title}</span>
+                            )}
+                          </span>
                           <button
                             onClick={(e) => { e.stopPropagation(); startRename(r); }}
-                            className="ml-1.5 text-gray-300 hover:text-gray-500 opacity-0 group-hover/name:opacity-100 transition-opacity text-xs"
+                            className="ml-1.5 text-gray-300 hover:text-gray-500 opacity-0 group-hover/name:opacity-100 transition-opacity text-xs shrink-0"
                             title="Rename recipe"
                           >✏️</button>
-                        </p>
+                        </div>
                       )}
                       <div className="flex flex-wrap gap-1.5 mt-1.5 pb-0.5">
                         <Badge variant="outline" className={cn("border-0", cuisineClass)}>
