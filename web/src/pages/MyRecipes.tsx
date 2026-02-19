@@ -816,8 +816,8 @@ export default function MyRecipes() {
                       )}
                       onClick={() => pickDayParam ? handlePickForDay(r) : setSelectedRecipe(r)}
                     >
-                      {/* Image area — fixed 4:3 aspect ratio */}
-                      <div className="relative overflow-hidden" style={{ aspectRatio: "4/3" }}>
+                      {/* Image area — hard-capped height for mobile density */}
+                      <div className="relative overflow-hidden h-[110px] md:h-[160px]">
                         {hasImage ? (
                           <img
                             src={r.image_url!}
@@ -858,9 +858,9 @@ export default function MyRecipes() {
                         )}
                       </div>
                       {/* Card body */}
-                      <div className="p-2 md:p-3">
+                      <div className="px-2 py-1.5 md:p-3">
                         {renamingId === r.id ? (
-                          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                             <input
                               ref={renameInputRef}
                               value={renameValue}
@@ -877,24 +877,19 @@ export default function MyRecipes() {
                           </div>
                         ) : (
                           <>
-                            <h3 className="font-body font-semibold text-stone-800 text-sm leading-snug line-clamp-2">
+                            <h3 className="font-body font-semibold text-stone-800 text-xs md:text-sm leading-tight line-clamp-1 md:line-clamp-2">
                               {r.title}
                             </h3>
-                            <div className="flex items-center gap-1 mt-1">
-                              <span
-                                className="text-[10px] md:text-[11px] font-medium px-1.5 py-0.5 rounded-full capitalize"
-                                style={{
-                                  backgroundColor: cuisineColor.bg,
-                                  color: cuisineColor.text,
-                                  border: `1px solid ${cuisineColor.border}`,
-                                }}
-                              >
-                                {r.cuisine.replace("_", " ")}
-                              </span>
-                            </div>
-                            {r.source_name && (
-                              <p className="text-[10px] md:text-[11px] text-stone-400 mt-0.5 truncate">{r.source_name}</p>
-                            )}
+                            <span
+                              className="inline-block mt-0.5 text-[10px] font-medium px-1.5 py-px rounded-full capitalize"
+                              style={{
+                                backgroundColor: cuisineColor.bg,
+                                color: cuisineColor.text,
+                                border: `1px solid ${cuisineColor.border}`,
+                              }}
+                            >
+                              {r.cuisine.replace("_", " ")}
+                            </span>
                           </>
                         )}
                       </div>
