@@ -123,6 +123,21 @@ export async function deleteFamilyMember(id: number): Promise<void> {
   }
 }
 
+// ── URL Validation Error ──
+export class UrlValidationError extends Error {
+  data: {
+    error: string;
+    reason: string;
+    detected_recipe_name: string | null;
+    alternative_url: string | null;
+  };
+  constructor(data: { error: string; reason: string; detected_recipe_name: string | null; alternative_url: string | null }) {
+    super(data.reason);
+    this.name = "UrlValidationError";
+    this.data = data;
+  }
+}
+
 // ── Recipes ──
 export async function getRecipes(): Promise<Recipe[]> {
   return json(await authFetch(`${BASE}/recipes`));
@@ -171,14 +186,19 @@ export async function createRecipe(data: RecipeInput, signal?: AbortSignal): Pro
   );
 }
 
-export async function importRecipeFromUrl(url: string): Promise<{ recipe: Recipe; alreadyExists: boolean }> {
-  return json(
-    await authFetch(`${BASE}/recipes/import-from-url`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    }),
-  );
+export async function importRecipeFromUrl(url: string): Promise<{ recipe: Recipe; alreadyExists: boolean; paywall_warning: string | null }> {
+  const res = await authFetch(`${BASE}/recipes/import-from-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+
+  if (res.status === 422) {
+    const body = await res.json();
+    throw new UrlValidationError(body);
+  }
+
+  return json(res);
 }
 
 export async function matchRecipeInDb(query: string, signal?: AbortSignal): Promise<{ matches: Array<{ recipe: Recipe; score: number }> }> {

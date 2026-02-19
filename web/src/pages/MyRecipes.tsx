@@ -7,6 +7,7 @@ import {
   addMealToDay, swapMainRecipe, deleteFavoriteMeal, createFavoriteMeal,
   getSideSuggestions, addSide,
   deleteRecipe, renameRecipe, createRecipe, importRecipeFromUrl, updateRecipeNotes, cloneMealPlan,
+  UrlValidationError,
 } from "../api";
 import { CUISINE_COLORS } from "../components/SwapMainModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -113,6 +114,11 @@ export default function MyRecipes() {
   const [showUrlModal, setShowUrlModal] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [urlProgress, setUrlProgress] = useState<string | null>(null);
+  const [urlNotRecipe, setUrlNotRecipe] = useState<{
+    reason: string;
+    detected_recipe_name: string | null;
+    alternative_url: string | null;
+  } | null>(null);
 
   // Search & filter state
   const [search, setSearch] = useState("");
@@ -355,14 +361,19 @@ export default function MyRecipes() {
     }
   };
 
-  const handleImportFromUrl = async () => {
-    const trimmed = urlInput.trim();
+  const handleImportFromUrl = async (overrideUrl?: string) => {
+    const trimmed = (overrideUrl || urlInput).trim();
     if (!trimmed) return;
+    setUrlNotRecipe(null);
     try {
       setUrlProgress("🔍 Checking out this recipe...");
       await new Promise((r) => setTimeout(r, 800));
       setUrlProgress("Wow, that looks delicious! Save me some! 😋");
-      const { recipe, alreadyExists } = await importRecipeFromUrl(trimmed);
+      const { recipe, alreadyExists, paywall_warning } = await importRecipeFromUrl(trimmed);
+      if (paywall_warning) {
+        setUrlProgress("🔐 Source is paywalled — estimating ingredients with AI...");
+        await new Promise((r) => setTimeout(r, 1000));
+      }
       setUrlProgress("📝 Reading ingredients for future grocery lists!");
       await new Promise((r) => setTimeout(r, 800));
       setUrlProgress("✅ Added to your collection!");
@@ -371,14 +382,24 @@ export default function MyRecipes() {
         showToast(`"${recipe.title}" was already in your collection`);
       } else {
         setRecipes((prev) => [recipe, ...prev]);
-        showToast(`Added "${recipe.title}" with ${recipe.ingredients?.length || 0} ingredients`);
+        const suffix = paywall_warning ? " (ingredients estimated by AI)" : "";
+        showToast(`Added "${recipe.title}" with ${recipe.ingredients?.length || 0} ingredients${suffix}`);
       }
       setShowUrlModal(false);
       setUrlInput("");
       setUrlProgress(null);
+      setUrlNotRecipe(null);
     } catch (err: any) {
       setUrlProgress(null);
-      showToast(err.message || "Failed to import recipe");
+      if (err instanceof UrlValidationError) {
+        setUrlNotRecipe({
+          reason: err.data.reason,
+          detected_recipe_name: err.data.detected_recipe_name,
+          alternative_url: err.data.alternative_url,
+        });
+      } else {
+        showToast(err.message || "Failed to import recipe");
+      }
     }
   };
 
@@ -1131,7 +1152,7 @@ export default function MyRecipes() {
 
       {/* URL Recipe Modal */}
       {showUrlModal && (
-        <Dialog open={true} onOpenChange={(open) => { if (!open) { setShowUrlModal(false); setUrlInput(""); } }}>
+        <Dialog open={true} onOpenChange={(open) => { if (!open) { setShowUrlModal(false); setUrlInput(""); setUrlNotRecipe(null); setUrlProgress(null); } }}>
           <DialogContent fullScreenMobile={false}>
             <DialogHeader>
               <DialogTitle>Add Recipe from URL</DialogTitle>
@@ -1145,6 +1166,34 @@ export default function MyRecipes() {
                     <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
+              </div>
+            ) : urlNotRecipe ? (
+              <div className="px-6 py-4 space-y-4">
+                <div className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
+                  <p className="text-sm font-medium text-amber-800 mb-1">That doesn't look like a recipe page</p>
+                  <p className="text-sm text-amber-700">{urlNotRecipe.reason}</p>
+                </div>
+                {urlNotRecipe.alternative_url && (
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-600">
+                      {urlNotRecipe.detected_recipe_name
+                        ? `Did you mean "${urlNotRecipe.detected_recipe_name}"?`
+                        : "We found a recipe you might be looking for:"}
+                    </p>
+                    <Button
+                      className="w-full"
+                      onClick={() => handleImportFromUrl(urlNotRecipe.alternative_url!)}
+                    >
+                      Import from {new URL(urlNotRecipe.alternative_url).hostname}
+                    </Button>
+                  </div>
+                )}
+                <button
+                  onClick={() => { setUrlNotRecipe(null); }}
+                  className="text-sm text-orange-500 hover:text-orange-600 font-medium"
+                >
+                  Try a Different URL
+                </button>
               </div>
             ) : (
               <>
@@ -1168,7 +1217,7 @@ export default function MyRecipes() {
                     Cancel
                   </Button>
                   <Button
-                    onClick={handleImportFromUrl}
+                    onClick={() => handleImportFromUrl()}
                     disabled={!urlInput.trim()}
                   >
                     Add Recipe
