@@ -91,12 +91,29 @@ interface DisplayMeal {
   cookMinutes: number | null;
   sidesCount: number;
   sourceUrl: string | null;
+  imageUrl: string | null;
   isLocked: boolean;
   item?: MealPlanItemV3;
   draftRecipe?: Recipe;
   draftDayIndex?: number;
   sides?: MealPlanItemV3[];
 }
+
+// Light-theme cuisine colors for plan cards
+const LIGHT_CUISINE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  italian:        { bg: "#FEF2F2", text: "#DC2626", border: "#FECACA" },
+  american:       { bg: "#EFF6FF", text: "#2563EB", border: "#BFDBFE" },
+  french:         { bg: "#F5F3FF", text: "#7C3AED", border: "#DDD6FE" },
+  mediterranean:  { bg: "#ECFDF5", text: "#059669", border: "#A7F3D0" },
+  middle_eastern: { bg: "#FFF7ED", text: "#EA580C", border: "#FED7AA" },
+  thai:           { bg: "#FFFBEB", text: "#D97706", border: "#FDE68A" },
+  mexican:        { bg: "#FFF7ED", text: "#EA580C", border: "#FED7AA" },
+  indian:         { bg: "#FFFBEB", text: "#D97706", border: "#FDE68A" },
+  chinese:        { bg: "#FFF1F2", text: "#E11D48", border: "#FECDD3" },
+  japanese:       { bg: "#FDF2F8", text: "#DB2777", border: "#FBCFE8" },
+  korean:         { bg: "#F5F3FF", text: "#7C3AED", border: "#DDD6FE" },
+  ethiopian:      { bg: "#ECFDF5", text: "#059669", border: "#A7F3D0" },
+};
 
 export default function Plan() {
   const navigate = useNavigate();
@@ -761,6 +778,7 @@ export default function Plan() {
         cookMinutes: main.recipe?.cook_minutes ?? null,
         sidesCount: mainSides.length,
         sourceUrl: main.recipe?.source_url ?? null,
+        imageUrl: main.recipe?.image_url ?? null,
         isLocked: true,
         item: main,
         sides: mainSides,
@@ -780,6 +798,7 @@ export default function Plan() {
           cookMinutes: recipe.cook_minutes ?? null,
           sidesCount: 0,
           sourceUrl: recipe.source_url ?? null,
+          imageUrl: recipe.image_url ?? null,
           isLocked: false,
           draftRecipe: recipe,
           draftDayIndex: idx,
@@ -933,16 +952,22 @@ export default function Plan() {
       {/* 4. PLAN CONTAINER */}
       {displayMeals.length > 0 && (
         <div
-          className="rounded-2xl overflow-hidden animate-fade-in"
-          style={{ background: "linear-gradient(180deg, #3E3832 0%, #2C2824 100%)" }}
+          className="relative rounded-3xl overflow-hidden animate-fade-in"
+          style={{ background: "#FAF7F4", border: "1px solid #EDE5DB" }}
         >
+          {/* Decorative corner accents */}
+          <div className="absolute top-3 left-3 w-8 h-8 border-t-2 border-l-2 border-chef-gold/20 rounded-tl-lg" />
+          <div className="absolute top-3 right-3 w-8 h-8 border-t-2 border-r-2 border-chef-gold/20 rounded-tr-lg" />
+          <div className="absolute bottom-3 left-3 w-8 h-8 border-b-2 border-l-2 border-chef-gold/20 rounded-bl-lg" />
+          <div className="absolute bottom-3 right-3 w-8 h-8 border-b-2 border-r-2 border-chef-gold/20 rounded-br-lg" />
+
           {/* Header */}
-          <div className="px-5 pt-5 pb-3 flex items-start justify-between">
+          <div className="relative z-10 px-5 pt-5 pb-3 flex items-start justify-between">
             <div>
-              <h2 className="font-display text-lg md:text-xl font-bold text-white">
+              <h2 className="font-display text-lg md:text-xl font-bold text-stone-900">
                 {hasPlan ? "This Week's Menu" : "Your Plan"}
               </h2>
-              <p className="text-stone-400 text-xs mt-0.5">
+              <p className="text-stone-500 text-xs mt-0.5">
                 {plan?.week_start ? `Week of ${plan.week_start}` : getWeekDateRange()} &middot; {totalMeals} meal{totalMeals !== 1 ? "s" : ""}
               </p>
             </div>
@@ -951,13 +976,13 @@ export default function Plan() {
                 <>
                   <button
                     onClick={handleEditWeek}
-                    className="text-xs text-stone-400 hover:text-white transition-colors"
+                    className="text-xs text-stone-400 hover:text-stone-700 transition-colors"
                   >
                     Edit Week
                   </button>
                   <button
                     onClick={handleStartFresh}
-                    className="text-xs text-stone-500 hover:text-red-400 transition-colors"
+                    className="text-xs text-stone-400 hover:text-red-500 transition-colors"
                   >
                     Start Over
                   </button>
@@ -967,13 +992,13 @@ export default function Plan() {
                 <>
                   <button
                     onClick={() => setShowBuildFromRecipes(true)}
-                    className="text-xs text-chef-gold hover:text-white transition-colors"
+                    className="text-xs text-chef-orange hover:text-orange-600 font-medium transition-colors"
                   >
                     + Add Recipes
                   </button>
                   <button
                     onClick={handleStartFresh}
-                    className="text-xs text-stone-500 hover:text-red-400 transition-colors"
+                    className="text-xs text-stone-400 hover:text-red-500 transition-colors"
                   >
                     Start Over
                   </button>
@@ -983,9 +1008,9 @@ export default function Plan() {
           </div>
 
           {/* Meal card rows */}
-          <div className="px-3 pb-3 space-y-1.5">
+          <div className="relative z-10 px-4 pb-3 space-y-2">
             {displayMeals.map((meal, i) => {
-              const cuisineColors = meal.cuisine ? CUISINE_COLORS[meal.cuisine] : null;
+              const cuisineColors = meal.cuisine ? LIGHT_CUISINE_COLORS[meal.cuisine] : null;
               return (
                 <button
                   key={meal.id}
@@ -1000,24 +1025,33 @@ export default function Plan() {
                       });
                     }
                   }}
-                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/5 transition-colors text-left group"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white border border-stone-100 hover:border-stone-200 hover:shadow-sm transition-all text-left group"
                   style={{ animationDelay: `${i * 60}ms` }}
                 >
-                  {/* Thumbnail placeholder */}
-                  <div className="w-[52px] h-[52px] md:w-[64px] md:h-[64px] rounded-xl flex-shrink-0 flex items-center justify-center text-lg"
-                    style={{ background: "linear-gradient(135deg, #44403C, #292524)" }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3C7.03 3 3 7.03 3 12s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm0 14a5 5 0 110-10 5 5 0 010 10z" />
-                    </svg>
+                  {/* Thumbnail */}
+                  <div className="w-[52px] h-[52px] md:w-[64px] md:h-[64px] rounded-xl flex-shrink-0 overflow-hidden">
+                    {meal.imageUrl ? (
+                      <img src={meal.imageUrl} alt={meal.recipeName} className="w-full h-full object-cover" />
+                    ) : (
+                      <div
+                        className="w-full h-full flex items-center justify-center"
+                        style={{
+                          background: cuisineColors
+                            ? `linear-gradient(135deg, ${cuisineColors.bg} 0%, ${cuisineColors.border} 100%)`
+                            : "linear-gradient(135deg, #EFF6FF 0%, #BFDBFE 100%)",
+                        }}
+                      >
+                        <span className="text-2xl opacity-50">🍽️</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <span className="block text-[10px] font-medium uppercase tracking-wider text-chef-gold">
+                    <span className="block text-[10px] font-medium uppercase tracking-wider text-chef-orange">
                       {meal.dayLabel}
                     </span>
-                    <span className="block text-sm font-semibold text-white truncate leading-tight mt-0.5">
+                    <span className="block text-sm font-semibold text-stone-800 truncate leading-tight mt-0.5">
                       {meal.recipeName}
                     </span>
                     <div className="flex items-center gap-2 mt-1">
@@ -1025,20 +1059,21 @@ export default function Plan() {
                         <span
                           className="px-1.5 py-0.5 rounded text-[10px] font-medium"
                           style={{
-                            backgroundColor: cuisineColors?.bg ?? "#3E3832",
-                            color: cuisineColors?.text ?? "#a8a29e",
+                            backgroundColor: cuisineColors?.bg ?? "#EFF6FF",
+                            color: cuisineColors?.text ?? "#2563EB",
+                            border: `1px solid ${cuisineColors?.border ?? "#BFDBFE"}`,
                           }}
                         >
                           {meal.cuisine.replace("_", " ")}
                         </span>
                       )}
                       {meal.cookMinutes && (
-                        <span className="text-[10px] text-stone-500">
+                        <span className="text-[10px] text-stone-400">
                           {meal.cookMinutes}m
                         </span>
                       )}
                       {meal.sidesCount > 0 && (
-                        <span className="text-[10px] text-stone-500">
+                        <span className="text-[10px] text-stone-400">
                           {meal.sidesCount} side{meal.sidesCount !== 1 ? "s" : ""}
                         </span>
                       )}
@@ -1055,7 +1090,7 @@ export default function Plan() {
                             setMainModal({ mode: "swap", mealItemId: meal.item!.id, day: meal.day, step: "choose" });
                             setMainModalSearchQuery("");
                           }}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-500 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
                           title="Swap"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1069,7 +1104,7 @@ export default function Plan() {
                             try { await removeMealItem(meal.item!.id); await refreshPlan(); }
                             catch (err) { console.error("Failed to remove meal:", err); }
                           }}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-500 hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                           title="Remove"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1092,7 +1127,7 @@ export default function Plan() {
                           }
                           setDraftRecipes(next);
                         }}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-500 hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                         title="Remove"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1107,7 +1142,7 @@ export default function Plan() {
           </div>
 
           {/* LOCK / GROCERY CTA */}
-          <div className="px-5 pb-5">
+          <div className="relative z-10 px-5 pb-5">
             {/* Draft idle: Lock Plan button */}
             {!hasPlan && hasDrafts && lockState === 'idle' && (
               <button
@@ -1121,23 +1156,23 @@ export default function Plan() {
 
             {/* Locking */}
             {lockState === 'locking' && (
-              <div className="flex items-center justify-center gap-2 py-3 text-chef-gold">
+              <div className="flex items-center justify-center gap-2 py-3 text-chef-orange">
                 <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                <span className="text-sm font-medium">Love this plan, Chef!</span>
+                <span className="text-sm font-medium text-stone-700">Love this plan, Chef!</span>
               </div>
             )}
 
             {/* Locked — building grocery list */}
             {lockState === 'locked' && (
-              <div className="flex items-center justify-center gap-2 py-3 text-chef-gold">
+              <div className="flex items-center justify-center gap-2 py-3 text-chef-orange">
                 <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                <span className="text-sm font-medium">Building your grocery list...</span>
+                <span className="text-sm font-medium text-stone-700">Building your grocery list...</span>
               </div>
             )}
 
