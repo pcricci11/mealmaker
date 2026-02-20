@@ -74,6 +74,7 @@ export default function GroceryList() {
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [newItemInline, setNewItemInline] = useState("");
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
 
   // Suggest ingredients state
   const [suggestingFor, setSuggestingFor] = useState<number | null>(null);
@@ -151,8 +152,8 @@ export default function GroceryList() {
     saveChecked(planId, empty);
   };
 
-  const copyList = () => {
-    if (!groceries) return;
+  const buildListText = () => {
+    if (!groceries) return "";
     const grouped = new Map<string, string[]>();
     for (const item of groceries.items) {
       const key = `${item.name}|${item.unit}`;
@@ -166,17 +167,56 @@ export default function GroceryList() {
       if (!grouped.has(item.category)) grouped.set(item.category, []);
       grouped.get(item.category)!.push(`  ${item.name}`);
     });
-    const text = CATEGORY_ORDER
+    return CATEGORY_ORDER
       .filter((cat) => grouped.has(cat))
       .map((cat) => {
         const cfg = CATEGORY_CONFIG[cat];
         return `${cfg.emoji} ${cfg.label}\n${grouped.get(cat)!.join("\n")}`;
       })
       .join("\n\n");
-    navigator.clipboard.writeText(text).then(() => {
+  };
+
+  const copyList = async () => {
+    const text = buildListText();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    } catch {
+      // Fallback for insecure contexts or denied permissions
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const shareList = async () => {
+    const text = buildListText();
+    if (!text) return;
+    const shareData = { title: "Grocery List", text };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setShared(true);
+        setTimeout(() => setShared(false), 2000);
+      } catch (err: any) {
+        // User cancelled share — ignore AbortError
+        if (err.name !== "AbortError") {
+          await copyList();
+        }
+      }
+    } else {
+      // Fallback: copy to clipboard when Web Share API not available
+      await copyList();
+    }
   };
 
   const handleSuggest = async (recipeId: number) => {
@@ -614,9 +654,11 @@ export default function GroceryList() {
               {"\u{1F4CB}"} Copy to Clipboard
             </button>
             <button
+              onClick={shareList}
               className="py-3 rounded-xl font-medium flex items-center justify-center gap-2 bg-white border border-stone-200 text-stone-600 text-sm hover:bg-stone-50 transition-colors"
+              style={shared ? { background: "#ECFDF5", color: "#059669", borderColor: "#A7F3D0" } : undefined}
             >
-              {"\u{1F4E4}"} Share List
+              {shared ? "\u2713 Shared!" : "\u{1F4E4} Share List"}
             </button>
           </div>
         </div>
