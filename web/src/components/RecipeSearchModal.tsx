@@ -73,7 +73,7 @@ export default function RecipeSearchModal({
     setDidWebSearch(false);
 
     try {
-      const data = await searchRecipesWeb(trimmed, controller.signal, familyId);
+      const data = await searchRecipesWeb(trimmed, controller.signal);
       setResults(data);
       if (data.length === 0) {
         setError("Sorry Chef, nothing matched your search! Try tweaking the words or searching for something different.");

@@ -523,7 +523,7 @@ export default function MyRecipes() {
       }
 
       // Web search
-      const webResults = await searchRecipesWeb(query, abort.signal, familyId);
+      const webResults = await searchRecipesWeb(query, abort.signal);
       setSearchResults(webResults);
     } catch (err) {
       if (isAbortError(err)) return;
