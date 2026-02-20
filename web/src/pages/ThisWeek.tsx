@@ -432,6 +432,7 @@ export default function ThisWeek() {
               ? `${currentSearchIndex + 1} of ${pendingSearchMeals.length}`
               : undefined
           }
+          familyId={family?.id}
           onRecipeSelected={handleRecipeSelected}
           onClose={handleSearchSkip}
         />

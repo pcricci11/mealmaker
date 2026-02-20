@@ -47,6 +47,28 @@ async function buildSourceConstraint(familyId: number): Promise<string> {
   return "\n\n" + parts.join("\n");
 }
 
+// Helper: build household dietary context for Claude prompts
+async function buildHouseholdContext(familyId: number): Promise<string> {
+  const members = await query<{ name: string; dietary_style: string; allergies: string; dislikes: string; no_spicy: boolean }>(
+    "SELECT name, dietary_style, allergies, dislikes, no_spicy FROM family_members WHERE family_id = $1",
+    [familyId],
+  );
+  if (members.length === 0) return "";
+
+  const lines = members.map((m) => {
+    const parts = [m.name];
+    if (m.dietary_style && m.dietary_style !== "omnivore") parts.push(m.dietary_style);
+    const allergies = JSON.parse(m.allergies || "[]");
+    if (allergies.length > 0) parts.push(`${allergies.join(" & ")} allergy`);
+    const dislikes = JSON.parse(m.dislikes || "[]");
+    if (dislikes.length > 0) parts.push(`dislikes ${dislikes.join(", ")}`);
+    if (m.no_spicy) parts.push("no spicy food");
+    return `- ${parts.join(", ")}`;
+  });
+
+  return `\n\nHousehold context:\n${lines.join("\n")}\nPrioritize recipes that work for this household. Avoid allergens and strong dislikes.`;
+}
+
 // POST /api/recipes/search — web search for recipes (Spoonacular tier 2, Claude tier 3)
 router.post("/search", optionalAuth, async (req: Request, res: Response) => {
   const { query: searchQuery, family_id, skip_spoonacular } = req.body;
@@ -55,6 +77,7 @@ router.post("/search", optionalAuth, async (req: Request, res: Response) => {
   }
 
   const sourceConstraint = family_id ? await buildSourceConstraint(family_id) : "";
+  const householdContext = family_id ? await buildHouseholdContext(family_id) : "";
   const hasSourcePreferences = sourceConstraint.length > 0;
 
   // Tier 2: Try Spoonacular first (if no source preferences and not explicitly skipped)
@@ -112,7 +135,7 @@ Constraints:
 
 YOU MUST RETURN ONLY JSON. DO NOT INCLUDE ANY TEXT BEFORE OR AFTER THE JSON.
 NO EXPLANATIONS. NO PREAMBLES. NO MARKDOWN.
-YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH [ AND ENDING WITH ].` + sourceConstraint,
+YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH [ AND ENDING WITH ].` + sourceConstraint + householdContext,
       messages: [
         { role: "user", content: `Search for recipes: "${searchQuery.trim()}"` },
       ],
@@ -182,6 +205,7 @@ router.post("/batch-search", optionalAuth, async (req: Request, res: Response) =
 
   const cappedQueries = queries.slice(0, 5) as string[];
   const sourceConstraint = family_id ? await buildSourceConstraint(family_id) : "";
+  const householdContext = family_id ? await buildHouseholdContext(family_id) : "";
   const hasSourcePreferences = sourceConstraint.length > 0;
 
   // Tier 2: Try Spoonacular for each query in parallel (if no source preferences)
@@ -247,7 +271,7 @@ router.post("/batch-search", optionalAuth, async (req: Request, res: Response) =
 YOU MUST RETURN ONLY JSON. DO NOT INCLUDE ANY TEXT BEFORE OR AFTER THE JSON.
 NO EXPLANATIONS. NO PREAMBLES. NO MARKDOWN.
 Do not write "Based on" or "Here are" or any other text.
-YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH { AND ENDING WITH }.` + sourceConstraint,
+YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH { AND ENDING WITH }.` + sourceConstraint + householdContext,
       messages: [
         {
           role: "user",

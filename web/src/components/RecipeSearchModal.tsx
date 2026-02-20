@@ -16,6 +16,7 @@ interface Props {
   dayLabel?: string;
   stepLabel?: string;          // e.g. "1 of 3"
   prefetchedResults?: WebSearchRecipeResult[];
+  familyId?: number;
   onRecipeSelected: (recipe: Recipe) => void;
   onClose: () => void;
 }
@@ -25,6 +26,7 @@ export default function RecipeSearchModal({
   dayLabel,
   stepLabel,
   prefetchedResults,
+  familyId,
   onRecipeSelected,
   onClose,
 }: Props) {
@@ -71,7 +73,7 @@ export default function RecipeSearchModal({
     setDidWebSearch(false);
 
     try {
-      const data = await searchRecipesWeb(trimmed, controller.signal);
+      const data = await searchRecipesWeb(trimmed, controller.signal, familyId);
       setResults(data);
       if (data.length === 0) {
         setError("Sorry Chef, nothing matched your search! Try tweaking the words or searching for something different.");
@@ -96,7 +98,7 @@ export default function RecipeSearchModal({
     setError(null);
 
     try {
-      const data = await searchRecipesWeb(trimmed, controller.signal, undefined, { skipSpoonacular: true });
+      const data = await searchRecipesWeb(trimmed, controller.signal, familyId, { skipSpoonacular: true });
       // Append web results, deduplicating by source_url
       setResults((prev) => {
         const existingUrls = new Set(prev.map((r) => r.source_url));

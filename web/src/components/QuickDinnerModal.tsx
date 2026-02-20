@@ -375,6 +375,7 @@ export default function QuickDinnerModal({
         key={currentSearchIndex}
         initialQuery={buildSearchQuery(config)}
         stepLabel={stepLabel}
+        familyId={familyId}
         onRecipeSelected={handleRecipePicked}
         onClose={handleSearchSkip}
       />

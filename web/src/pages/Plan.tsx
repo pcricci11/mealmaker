@@ -1314,6 +1314,7 @@ export default function Plan() {
               : undefined
           }
           prefetchedResults={batchedSearchResults[pendingSearchMeals[currentSearchIndex].description]}
+          familyId={family?.id}
           onRecipeSelected={handleRecipeSelected}
           onClose={handleSearchSkip}
         />
@@ -1419,6 +1420,7 @@ export default function Plan() {
         <RecipeSearchModal
           initialQuery={mainModalSearchQuery}
           dayLabel={mainModal.day}
+          familyId={family?.id}
           onRecipeSelected={async (recipe) => {
             await handleMainModalSelect(recipe.id);
           }}
@@ -1526,6 +1528,7 @@ export default function Plan() {
         <RecipeSearchModal
           initialQuery={draftAddModal.searchQuery}
           dayLabel={DAYS.find(d => d.key === draftAddModal.day)?.fullLabel}
+          familyId={family?.id}
           onRecipeSelected={(recipe) => {
             const day = draftAddModal.day!;
             setDraftRecipes(prev => {

@@ -110,6 +110,7 @@ export default function MyRecipes() {
   const [loved, setLoved] = useState<FamilyFavoriteMeal[]>([]);
   const [history, setHistory] = useState<HistoryPlan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [familyId, setFamilyId] = useState<number | undefined>();
 
   // Recipe detail modal state
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
@@ -215,11 +216,12 @@ export default function MyRecipes() {
   const loadData = async () => {
     try {
       const families = await getFamilies();
-      const familyId = families[0]?.id;
+      const fId = families[0]?.id;
+      setFamilyId(fId);
 
       const [favs, plans, allRecipes] = await Promise.allSettled([
-        familyId ? getFavoriteMeals(familyId) : Promise.resolve([]),
-        getMealPlanHistory(familyId),
+        fId ? getFavoriteMeals(fId) : Promise.resolve([]),
+        getMealPlanHistory(fId),
         getRecipes(),
       ]);
 
@@ -521,7 +523,7 @@ export default function MyRecipes() {
       }
 
       // Web search
-      const webResults = await searchRecipesWeb(query, abort.signal);
+      const webResults = await searchRecipesWeb(query, abort.signal, familyId);
       setSearchResults(webResults);
     } catch (err) {
       if (isAbortError(err)) return;
@@ -543,7 +545,7 @@ export default function MyRecipes() {
     setSearchError(null);
 
     try {
-      const webResults = await searchRecipesWeb(query, abort.signal, undefined, { skipSpoonacular: true });
+      const webResults = await searchRecipesWeb(query, abort.signal, familyId, { skipSpoonacular: true });
       // Append web results, deduplicating by source_url
       setSearchResults((prev) => {
         const existingUrls = new Set(prev.map((r) => r.source_url));
