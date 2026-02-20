@@ -97,6 +97,7 @@ interface DisplayMeal {
   draftRecipe?: Recipe;
   draftDayIndex?: number;
   sides?: MealPlanItemV3[];
+  draftSideNames?: string[];
 }
 
 // Light-theme cuisine colors for plan cards
@@ -146,6 +147,7 @@ export default function Plan() {
   const [mainModalSearchQuery, setMainModalSearchQuery] = useState("");
   const [showBuildFromRecipes, setShowBuildFromRecipes] = useState(false);
   const [draftRecipes, setDraftRecipes] = useState<Map<DayOfWeek, Recipe[]>>(new Map());
+  const [draftSides, setDraftSides] = useState<Map<string, string[]>>(new Map());
   const [quickDinnerOpen, setQuickDinnerOpen] = useState(false);
 
   // Recipe search state for specific meal requests
@@ -185,6 +187,7 @@ export default function Plan() {
     draftRecipe?: Recipe;
     draftDay?: DayOfWeek;
     draftIndex?: number;
+    draftSideNames?: string[];
   } | null>(null);
   const [lockState, setLockState] = useState<'idle' | 'locking' | 'locked' | 'grocery-ready'>('idle');
   const [text, setText] = useState("");
@@ -613,7 +616,11 @@ export default function Plan() {
       const weekStart = getWeekStart();
 
       const items = Array.from(draftRecipes.entries()).flatMap(([day, recipes]) =>
-        recipes.map((r) => ({ day, recipe_id: r.id }))
+        recipes.map((r, idx) => ({
+          day,
+          recipe_id: r.id,
+          sides: draftSides.get(`${day}-${idx}`) || [],
+        }))
       );
 
       const progressTimer1 = setTimeout(() => setLockProgress("Saving your selections..."), 4000);
@@ -631,6 +638,7 @@ export default function Plan() {
 
       setPlan(result);
       setDraftRecipes(new Map());
+      setDraftSides(new Map());
       localStorage.setItem("currentPlanId", String(result.id));
       localStorage.setItem("lastPlanId", String(result.id));
       localStorage.setItem("lastMealPlanId", String(result.id));
@@ -666,6 +674,7 @@ export default function Plan() {
     }
     setPlan(null);
     setDraftRecipes(newDraft);
+    setDraftSides(new Map());
     setLockState('idle');
   };
 
@@ -675,6 +684,7 @@ export default function Plan() {
     localStorage.removeItem("lastMealPlanId");
     setPlan(null);
     setDraftRecipes(new Map());
+    setDraftSides(new Map());
     setError(null);
     setLockState('idle');
     if (isMyPlan) {
@@ -795,6 +805,8 @@ export default function Plan() {
     for (const [day, recipes] of draftRecipes) {
       const dayInfo = DAYS.find((d) => d.key === day);
       recipes.forEach((recipe, idx) => {
+        const sidesKey = `${day}-${idx}`;
+        const draftSidesForMeal = draftSides.get(sidesKey) || [];
         displayMeals.push({
           id: `draft-${day}-${idx}`,
           day,
@@ -802,12 +814,13 @@ export default function Plan() {
           recipeName: recipe.title,
           cuisine: recipe.cuisine ?? null,
           cookMinutes: recipe.cook_minutes ?? null,
-          sidesCount: 0,
+          sidesCount: draftSidesForMeal.length,
           sourceUrl: recipe.source_url ?? null,
           imageUrl: recipe.image_url ?? null,
           isLocked: false,
           draftRecipe: recipe,
           draftDayIndex: idx,
+          draftSideNames: draftSidesForMeal,
         });
       });
     }
@@ -1028,6 +1041,7 @@ export default function Plan() {
                         draftRecipe: meal.draftRecipe,
                         draftDay: meal.day,
                         draftIndex: meal.draftDayIndex,
+                        draftSideNames: meal.draftSideNames,
                       });
                     }
                   }}
@@ -1089,6 +1103,11 @@ export default function Plan() {
                         }).join(", ")}
                       </div>
                     )}
+                    {meal.draftSideNames && meal.draftSideNames.length > 0 && (
+                      <div className="text-[10px] text-stone-400 mt-0.5 truncate">
+                        + {meal.draftSideNames.join(", ")}
+                      </div>
+                    )}
                   </div>
 
                   {/* Hover actions */}
@@ -1128,15 +1147,30 @@ export default function Plan() {
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
+                          const removedIdx = meal.draftDayIndex ?? 0;
                           const next = new Map(draftRecipes);
                           const arr = [...(next.get(meal.day) || [])];
-                          arr.splice(meal.draftDayIndex ?? 0, 1);
+                          arr.splice(removedIdx, 1);
                           if (arr.length === 0) {
                             next.delete(meal.day);
                           } else {
                             next.set(meal.day, arr);
                           }
                           setDraftRecipes(next);
+                          // Clean up sides for removed recipe and reindex higher indices
+                          setDraftSides((prev) => {
+                            const updated = new Map(prev);
+                            updated.delete(`${meal.day}-${removedIdx}`);
+                            for (let i = removedIdx + 1; i <= arr.length; i++) {
+                              const oldKey = `${meal.day}-${i}`;
+                              const newKey = `${meal.day}-${i - 1}`;
+                              if (updated.has(oldKey)) {
+                                updated.set(newKey, updated.get(oldKey)!);
+                                updated.delete(oldKey);
+                              }
+                            }
+                            return updated;
+                          });
                         }}
                         className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                         title="Remove"
@@ -1402,6 +1436,47 @@ export default function Plan() {
           day={selectedMeal.item?.day ?? selectedMeal.draftDay ?? "monday"}
           isLocked={!!selectedMeal.item}
           sides={selectedMeal.item ? displayMeals.find((m) => m.item?.id === selectedMeal.item?.id)?.sides : undefined}
+          draftSideNames={selectedMeal.draftSideNames}
+          onAddDraftSide={
+            selectedMeal.draftRecipe && selectedMeal.draftDay != null
+              ? (name: string) => {
+                  const key = `${selectedMeal.draftDay}-${selectedMeal.draftIndex ?? 0}`;
+                  setDraftSides((prev) => {
+                    const updated = new Map(prev);
+                    const existing = updated.get(key) || [];
+                    updated.set(key, [...existing, name]);
+                    return updated;
+                  });
+                  setSelectedMeal((prev) =>
+                    prev ? { ...prev, draftSideNames: [...(prev.draftSideNames || []), name] } : prev
+                  );
+                }
+              : undefined
+          }
+          onRemoveDraftSide={
+            selectedMeal.draftRecipe && selectedMeal.draftDay != null
+              ? (index: number) => {
+                  const key = `${selectedMeal.draftDay}-${selectedMeal.draftIndex ?? 0}`;
+                  setDraftSides((prev) => {
+                    const updated = new Map(prev);
+                    const existing = [...(updated.get(key) || [])];
+                    existing.splice(index, 1);
+                    if (existing.length === 0) {
+                      updated.delete(key);
+                    } else {
+                      updated.set(key, existing);
+                    }
+                    return updated;
+                  });
+                  setSelectedMeal((prev) => {
+                    if (!prev) return prev;
+                    const names = [...(prev.draftSideNames || [])];
+                    names.splice(index, 1);
+                    return { ...prev, draftSideNames: names };
+                  });
+                }
+              : undefined
+          }
           onClose={() => setSelectedMeal(null)}
           onSwapMain={
             selectedMeal.item
@@ -1450,15 +1525,31 @@ export default function Plan() {
           onRemoveDraft={
             selectedMeal.draftRecipe && selectedMeal.draftDay != null
               ? () => {
+                  const removedIdx = selectedMeal.draftIndex ?? 0;
+                  const day = selectedMeal.draftDay!;
                   const next = new Map(draftRecipes);
-                  const arr = [...(next.get(selectedMeal.draftDay!) || [])];
-                  arr.splice(selectedMeal.draftIndex ?? 0, 1);
+                  const arr = [...(next.get(day) || [])];
+                  arr.splice(removedIdx, 1);
                   if (arr.length === 0) {
-                    next.delete(selectedMeal.draftDay!);
+                    next.delete(day);
                   } else {
-                    next.set(selectedMeal.draftDay!, arr);
+                    next.set(day, arr);
                   }
                   setDraftRecipes(next);
+                  // Clean up sides for removed recipe and reindex higher indices
+                  setDraftSides((prev) => {
+                    const updated = new Map(prev);
+                    updated.delete(`${day}-${removedIdx}`);
+                    for (let i = removedIdx + 1; i <= arr.length; i++) {
+                      const oldKey = `${day}-${i}`;
+                      const newKey = `${day}-${i - 1}`;
+                      if (updated.has(oldKey)) {
+                        updated.set(newKey, updated.get(oldKey)!);
+                        updated.delete(oldKey);
+                      }
+                    }
+                    return updated;
+                  });
                   setSelectedMeal(null);
                 }
               : undefined

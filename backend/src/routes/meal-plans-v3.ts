@@ -511,7 +511,7 @@ router.post("/lock", async (req: Request, res: Response) => {
     const { family_id, week_start, items } = req.body as {
       family_id: number;
       week_start: string;
-      items: Array<{ day: string; recipe_id: number }>;
+      items: Array<{ day: string; recipe_id: number; sides?: string[] }>;
     };
 
     if (!family_id || !week_start || !items || items.length === 0) {
@@ -550,11 +550,23 @@ router.post("/lock", async (req: Request, res: Response) => {
     const dayMainCount: Record<string, number> = {};
     for (const item of items) {
       dayMainCount[item.day] = (dayMainCount[item.day] || 0) + 1;
-      await query(
+      const mainRow = await queryOne<{ id: number }>(
         `INSERT INTO meal_plan_items (meal_plan_id, day, recipe_id, meal_type, main_number, locked)
-         VALUES ($1, $2, $3, 'main', $4, TRUE)`,
+         VALUES ($1, $2, $3, 'main', $4, TRUE)
+         RETURNING id`,
         [mealPlanId, item.day, item.recipe_id, dayMainCount[item.day]],
       );
+      if (item.sides?.length && mainRow) {
+        for (const sideName of item.sides) {
+          await query(
+            `INSERT INTO meal_plan_items
+             (meal_plan_id, day, meal_type, main_number, parent_meal_item_id, is_custom, locked, notes)
+             VALUES ($1, $2, 'side', $3, $4, TRUE, TRUE, $5)`,
+            [mealPlanId, item.day, dayMainCount[item.day], mainRow.id,
+             JSON.stringify({ custom_side: true, side_name: sideName })],
+          );
+        }
+      }
     }
     console.log(`[lock] Inserted ${items.length} items`);
 

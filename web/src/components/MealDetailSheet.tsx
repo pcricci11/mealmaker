@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { MealPlanItemV3, DayOfWeek, Recipe } from "@shared/types";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
@@ -41,6 +42,9 @@ interface Props {
   onRemoveDraft?: () => void;
   onViewRecipe?: () => void;
   sides?: MealPlanItemV3[];
+  draftSideNames?: string[];
+  onAddDraftSide?: (name: string) => void;
+  onRemoveDraftSide?: (index: number) => void;
 }
 
 export default function MealDetailSheet({
@@ -57,7 +61,11 @@ export default function MealDetailSheet({
   onRemoveDraft,
   onViewRecipe,
   sides = [],
+  draftSideNames,
+  onAddDraftSide,
+  onRemoveDraftSide,
 }: Props) {
+  const [newSideName, setNewSideName] = useState("");
   const recipe = item?.recipe ?? draftRecipe;
   const recipeName = item?.recipe_name ?? draftRecipe?.title ?? "Unknown Recipe";
   const cuisine = recipe?.cuisine ?? null;
@@ -115,6 +123,57 @@ export default function MealDetailSheet({
             </span>
           )}
         </div>
+
+        {/* Sides section (draft) */}
+        {!isLocked && onAddDraftSide && (
+          <div className="px-5 pt-4">
+            {draftSideNames && draftSideNames.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">Sides</span>
+                {draftSideNames.map((name, i) => (
+                  <div key={i} className="flex items-center justify-between bg-stone-50 rounded-lg px-3 py-2">
+                    <span className="text-sm text-stone-700">{name}</span>
+                    {onRemoveDraftSide && (
+                      <button
+                        onClick={() => onRemoveDraftSide(i)}
+                        className="text-stone-400 hover:text-red-500 transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const trimmed = newSideName.trim();
+                if (!trimmed) return;
+                onAddDraftSide(trimmed);
+                setNewSideName("");
+              }}
+              className="mt-2 flex gap-2"
+            >
+              <input
+                type="text"
+                value={newSideName}
+                onChange={(e) => setNewSideName(e.target.value)}
+                placeholder="e.g., roasted broccoli"
+                className="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-chef-orange/40 focus:border-chef-orange"
+              />
+              <button
+                type="submit"
+                disabled={!newSideName.trim()}
+                className="px-3 py-2 rounded-lg text-sm font-medium text-chef-orange border border-chef-orange hover:bg-orange-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                + Add
+              </button>
+            </form>
+          </div>
+        )}
 
         {/* Sides section (locked only) */}
         {isLocked && (

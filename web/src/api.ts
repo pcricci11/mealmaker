@@ -537,7 +537,7 @@ export async function generateMealPlanV3(request: GeneratePlanRequestV3): Promis
 export async function lockMealPlan(request: {
   family_id: number;
   week_start: string;
-  items: Array<{ day: string; recipe_id: number }>;
+  items: Array<{ day: string; recipe_id: number; sides?: string[] }>;
 }, signal?: AbortSignal): Promise<MealPlan> {
   return json(
     await authFetch(`${BASE}/meal-plans/lock`, {
