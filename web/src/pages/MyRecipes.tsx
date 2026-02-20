@@ -1723,7 +1723,23 @@ export default function MyRecipes() {
                                   disabled={savingRecipeIndex !== null || searchingWeb}
                                   className="w-full text-left bg-white hover:bg-orange-50 border border-stone-150 hover:border-orange-200 rounded-xl px-3 py-3 transition-colors disabled:opacity-50"
                                 >
-                                  <p className="text-sm font-semibold text-stone-800 leading-tight">{result.name}</p>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <p className="text-sm font-semibold text-stone-800 leading-tight">{result.name}</p>
+                                    {result.source_url && (
+                                      <a
+                                        href={result.source_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="text-orange-500 hover:text-orange-600 shrink-0 mt-0.5"
+                                        title="View original recipe"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                        </svg>
+                                      </a>
+                                    )}
+                                  </div>
                                   {result.description && (
                                     <p className="text-xs text-stone-500 mt-1 line-clamp-2 font-body">{result.description}</p>
                                   )}

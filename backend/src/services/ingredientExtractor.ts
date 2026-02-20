@@ -91,6 +91,89 @@ function findRecipeIngredients(data: any): string[] | null {
   return null;
 }
 
+/** Recursively find image in JSON-LD Recipe data */
+function findRecipeImage(data: any): string | null {
+  if (!data || typeof data !== "object") return null;
+
+  const isRecipe =
+    data["@type"] === "Recipe" ||
+    (Array.isArray(data["@type"]) && data["@type"].includes("Recipe"));
+
+  if (isRecipe && data.image) {
+    // image can be a string, array of strings, or ImageObject
+    if (typeof data.image === "string") return data.image;
+    if (Array.isArray(data.image)) {
+      const first = data.image[0];
+      if (typeof first === "string") return first;
+      if (first && typeof first === "object" && first.url) return first.url;
+    }
+    if (typeof data.image === "object" && data.image.url) return data.image.url;
+  }
+
+  if (Array.isArray(data["@graph"])) {
+    for (const item of data["@graph"]) {
+      const result = findRecipeImage(item);
+      if (result) return result;
+    }
+  }
+
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      const result = findRecipeImage(item);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract a recipe image URL from a source URL.
+ * Tries JSON-LD schema.org/Recipe "image" first, then og:image meta tag.
+ */
+export async function extractImageFromUrl(sourceUrl: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(sourceUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return null;
+
+    const html = await response.text();
+
+    // Try JSON-LD first
+    const scriptRegex = /<script[^>]+type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    let match;
+    while ((match = scriptRegex.exec(html)) !== null) {
+      try {
+        const data = JSON.parse(match[1]);
+        const imageUrl = findRecipeImage(data);
+        if (imageUrl) return imageUrl;
+      } catch {
+        // Invalid JSON, try next block
+      }
+    }
+
+    // Fallback: og:image meta tag
+    const ogMatch = html.match(/<meta[^>]+property\s*=\s*["']og:image["'][^>]+content\s*=\s*["']([^"']+)["']/i)
+      || html.match(/<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+property\s*=\s*["']og:image["']/i);
+    if (ogMatch?.[1]) return ogMatch[1];
+
+    return null;
+  } catch (error) {
+    console.warn(`[extractImageFromUrl] Failed for ${sourceUrl}:`, (error as Error).message);
+    return null;
+  }
+}
+
 /**
  * Structure raw ingredient strings into our Ingredient format using Haiku.
  */
