@@ -1161,7 +1161,7 @@ export default function Plan() {
                 className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all"
                 style={{ background: "linear-gradient(135deg, #059669, #047857)" }}
               >
-                Lock Plan & Build Grocery List
+                Adjust Plan & Build Grocery List
               </button>
             )}
 
