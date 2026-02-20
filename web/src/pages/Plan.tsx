@@ -3,6 +3,10 @@ import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   generateMealPlanV3,
   lockMealPlan,
+  lockPlan,
+  unlockPlan,
+  startFreshPlan,
+  getActivePlan,
   getFamilies,
   smartSetup,
   getRecipes,
@@ -17,9 +21,9 @@ import {
   addMealToDay,
   matchRecipeInDb,
   aiMatchRecipe,
-  batchSearchRecipesWeb,
   isAbortError,
 } from "../api";
+import { formatApiError } from "../utils/errorFormatter";
 import RecipeSearchModal from "../components/RecipeSearchModal";
 import QuickDinnerModal from "../components/QuickDinnerModal";
 import SmartSetupProgressModal from "../components/SmartSetupProgressModal";
@@ -37,7 +41,6 @@ import type {
   MealPlan,
   MealPlanItemV3,
   FamilyMemberV3,
-  WebSearchRecipeResult,
 } from "@shared/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -94,10 +97,7 @@ interface DisplayMeal {
   imageUrl: string | null;
   isLocked: boolean;
   item?: MealPlanItemV3;
-  draftRecipe?: Recipe;
-  draftDayIndex?: number;
   sides?: MealPlanItemV3[];
-  draftSideNames?: string[];
 }
 
 // Light-theme cuisine colors for plan cards
@@ -152,8 +152,7 @@ export default function Plan() {
     searchQuery?: string;
   } | null>(null);
   const [draftAddSearchQuery, setDraftAddSearchQuery] = useState("");
-  const [draftRecipes, setDraftRecipes] = useState<Map<DayOfWeek, Recipe[]>>(new Map());
-  const [draftSides, setDraftSides] = useState<Map<string, string[]>>(new Map());
+  // Draft state removed — all items are now persisted in DB via plan.items
   const [quickDinnerOpen, setQuickDinnerOpen] = useState(false);
 
   // Recipe search state for specific meal requests
@@ -165,9 +164,6 @@ export default function Plan() {
     Array<{ day: string; recipe_id: number }>
   >([]);
   const [allRecipes, setAllRecipes] = useState<Recipe[]>([]);
-  const [batchedSearchResults, setBatchedSearchResults] = useState<
-    Record<string, WebSearchRecipeResult[]>
-  >({});
   const shouldAutoGenerate = useRef(false);
 
   // DB match confirmation state
@@ -190,10 +186,6 @@ export default function Plan() {
   // New state for redesign
   const [selectedMeal, setSelectedMeal] = useState<{
     item?: MealPlanItemV3;
-    draftRecipe?: Recipe;
-    draftDay?: DayOfWeek;
-    draftIndex?: number;
-    draftSideNames?: string[];
   } | null>(null);
   const [lockState, setLockState] = useState<'idle' | 'locking' | 'locked' | 'grocery-ready'>('idle');
   const [sideInputDay, setSideInputDay] = useState<string | null>(null);
@@ -247,52 +239,64 @@ export default function Plan() {
     setListening(true);
   }, [listening]);
 
-  // Load family/members on mount; load saved plan only on /my-plan
+  // Load family/members on mount; always load active plan from server
   useEffect(() => {
-    const loadFamilyData = async () => {
+    const loadData = async () => {
       try {
         const families = await getFamilies();
         if (families.length > 0) {
           setFamily(families[0]);
           const membersData = await getFamilyMembers(families[0].id);
           setMembers(membersData);
+
+          // Load active plan from server
+          let loadedPlan = false;
+          const paramId = searchParams.get("id");
+          if (paramId) {
+            setLoading(true);
+            try {
+              const result = await getMealPlan(Number(paramId));
+              setPlan(result);
+              if (result.status === 'locked') setLockState('idle');
+              setSearchParams({}, { replace: true });
+              loadedPlan = true;
+            } catch {
+              // fall through to getActivePlan
+            }
+            setLoading(false);
+          }
+
+          if (!loadedPlan) {
+            setLoading(true);
+            try {
+              const weekStart = getWeekStart();
+              const activePlan = await getActivePlan(families[0].id, weekStart);
+              setPlan(activePlan);
+              if (activePlan.status === 'locked') setLockState('idle');
+            } catch (err) {
+              console.error("Failed to load active plan:", err);
+            }
+            setLoading(false);
+          }
         }
       } catch (err) {
         console.error("Failed to load family data:", err);
       }
     };
-    loadFamilyData();
+    loadData();
 
-    const paramId = searchParams.get("id");
-    const planIdToLoad = isMyPlan
-      ? (paramId || localStorage.getItem("currentPlanId"))
-      : paramId;
-    if (planIdToLoad) {
-      setLoading(true);
-      getMealPlan(Number(planIdToLoad))
-        .then((result) => {
-          setPlan(result);
-          localStorage.setItem("currentPlanId", String(result.id));
-          if (paramId) {
-            setSearchParams({}, { replace: true });
-          }
-        })
-        .catch(() => {
-          localStorage.removeItem("currentPlanId");
-        })
-        .finally(() => setLoading(false));
-    }
-
+    // Handle draft recipes passed via navigation state (from BuildFromRecipes etc.)
     if (!isMyPlan) {
       const state = location.state as { draftRecipes?: Array<[DayOfWeek, Recipe]> } | null;
       if (state?.draftRecipes) {
-        const grouped = new Map<DayOfWeek, Recipe[]>();
-        for (const [day, recipe] of state.draftRecipes) {
-          const existing = grouped.get(day) || [];
-          existing.push(recipe);
-          grouped.set(day, existing);
-        }
-        setDraftRecipes(grouped);
+        // Add these to the active plan via API
+        (async () => {
+          if (!plan) return;
+          for (const [day, recipe] of state.draftRecipes!) {
+            await addMealToDay(plan.id, day, recipe.id, "main");
+          }
+          await refreshPlan();
+        })();
         window.history.replaceState({}, "");
       }
     }
@@ -317,24 +321,6 @@ export default function Plan() {
     return nextMonday.toISOString().split("T")[0];
   };
 
-  const staggerRevealResults = async (
-    queries: Array<{ query: string; status: "searching" | "found" | "not_found" }>,
-    results: Record<string, WebSearchRecipeResult[]>,
-  ) => {
-    for (let i = 0; i < queries.length; i++) {
-      await new Promise((r) => setTimeout(r, 400));
-      setSetupProgress((prev) => {
-        if (!prev) return prev;
-        const updated = [...prev.searchQueries];
-        updated[i] = {
-          ...updated[i],
-          status: (results[queries[i].query]?.length ?? 0) > 0 ? "found" : "not_found",
-        };
-        return { ...prev, searchQueries: updated };
-      });
-    }
-  };
-
   const handleCancelSetup = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -346,7 +332,6 @@ export default function Plan() {
     setPendingConfirmations([]);
     setCurrentConfirmIndex(0);
     setResolvedSpecificMeals([]);
-    setBatchedSearchResults({});
     pendingWebSearchRef.current = [];
     shouldAutoGenerate.current = false;
     showToast("Search cancelled");
@@ -371,6 +356,12 @@ export default function Plan() {
       if (!familyId) throw new Error("No family found. Please create a family first.");
 
       const weekStart = getWeekStart();
+
+      // Ensure we have an active plan
+      if (!plan) {
+        const activePlan = await getActivePlan(familyId, weekStart);
+        setPlan(activePlan);
+      }
       const result = await smartSetup(familyId, inputText, signal);
       console.log("[Plan] smartSetup result", result);
 
@@ -453,7 +444,7 @@ export default function Plan() {
     } catch (err: any) {
       if (isAbortError(err)) return;
       console.error("[Plan] handleSmartSetup error", err);
-      setError(err.message || "Smart setup failed. Please try again.");
+      setError(formatApiError(err));
     } finally {
       setSetupProgress(null);
     }
@@ -463,54 +454,22 @@ export default function Plan() {
     unmatched: Array<{ day: string; description: string }>,
     resolved: Array<{ day: string; recipe_id: number }>,
     fetchedRecipes: Recipe[],
-    signal?: AbortSignal,
-    familyId?: number,
+    _signal?: AbortSignal,
+    _familyId?: number,
   ) => {
     if (unmatched.length > 0) {
-      const searchQueries = unmatched.map((m) => ({
-        query: m.description,
-        status: "searching" as const,
-      }));
-      setSetupProgress({
-        phase: "searching",
-        message: "Sizzling up some recipe ideas...",
-        searchQueries,
-      });
-
-      let batchResults: Record<string, WebSearchRecipeResult[]> = {};
-      try {
-        batchResults = await batchSearchRecipesWeb(
-          unmatched.map((m) => m.description),
-          signal,
-          familyId,
-        );
-        console.log("[Plan] batch search results", batchResults);
-        setBatchedSearchResults(batchResults);
-      } catch (err) {
-        console.warn("[Plan] batch search failed, modals will search individually", err);
-        setBatchedSearchResults({});
-      }
-
-      await staggerRevealResults(searchQueries, batchResults);
-
-      setSetupProgress({ phase: "done", message: "Found some delicious options! Let's plate up", searchQueries: [] });
-      await new Promise((r) => setTimeout(r, 600));
+      // Open RecipeSearchModal directly — it handles the 3-tier progressive search
       setSetupProgress(null);
-
       setPendingSearchMeals(unmatched);
       setCurrentSearchIndex(0);
     } else {
-      const newDraft = new Map(draftRecipes);
-      for (const lock of resolved) {
-        const recipe = fetchedRecipes.find((r) => r.id === lock.recipe_id);
-        if (recipe) {
-          const day = lock.day as DayOfWeek;
-          const existing = newDraft.get(day) || [];
-          existing.push(recipe);
-          newDraft.set(day, existing);
+      // Add resolved meals to the plan via API
+      if (plan) {
+        for (const lock of resolved) {
+          await addMealToDay(plan.id, lock.day, lock.recipe_id, "main");
         }
+        await refreshPlan();
       }
-      setDraftRecipes(newDraft);
       setSetupProgress(null);
     }
   };
@@ -551,27 +510,24 @@ export default function Plan() {
   };
 
   const finishSearchFlow = useCallback(
-    (finalResolved: Array<{ day: string; recipe_id: number }>, recipes: Recipe[]) => {
+    async (finalResolved: Array<{ day: string; recipe_id: number }>, recipes: Recipe[]) => {
       console.log("[Plan] finishSearchFlow", { finalResolved, recipesCount: recipes.length });
       setPendingSearchMeals([]);
       setCurrentSearchIndex(0);
-      const newDraft = new Map(draftRecipes);
-      for (const lock of finalResolved) {
-        const recipe = recipes.find((r) => r.id === lock.recipe_id);
-        if (recipe) {
-          const day = lock.day as DayOfWeek;
-          const existing = newDraft.get(day) || [];
-          existing.push(recipe);
-          newDraft.set(day, existing);
+
+      // Add resolved meals to the plan via API
+      if (plan) {
+        for (const lock of finalResolved) {
+          await addMealToDay(plan.id, lock.day, lock.recipe_id, "main");
         }
+        await refreshPlan();
       }
-      setDraftRecipes(newDraft);
       shouldAutoGenerate.current = false;
     },
-    [cookingSchedule, draftRecipes],
+    [cookingSchedule, plan],
   );
 
-  const handleRecipeSelected = (recipe: Recipe) => {
+  const handleRecipeSelected = async (recipe: Recipe) => {
     console.log("[Plan] handleRecipeSelected", { recipeId: recipe.id, title: recipe.title });
     const meal = pendingSearchMeals[currentSearchIndex];
     const updatedLocks = [
@@ -585,31 +541,32 @@ export default function Plan() {
     if (currentSearchIndex < pendingSearchMeals.length - 1) {
       setCurrentSearchIndex((prev) => prev + 1);
     } else {
-      finishSearchFlow(updatedLocks, updatedRecipes);
+      await finishSearchFlow(updatedLocks, updatedRecipes);
     }
   };
 
-  const handleSearchSkip = () => {
+  const handleSearchSkip = async () => {
     console.log("[Plan] handleSearchSkip", { currentSearchIndex, total: pendingSearchMeals.length });
     if (currentSearchIndex < pendingSearchMeals.length - 1) {
       setCurrentSearchIndex((prev) => prev + 1);
     } else {
-      finishSearchFlow(resolvedSpecificMeals, allRecipes);
+      await finishSearchFlow(resolvedSpecificMeals, allRecipes);
     }
   };
 
-  const handleRecipesSelected = (assignments: Map<DayOfWeek, Recipe[]>) => {
+  const handleRecipesSelected = async (assignments: Map<DayOfWeek, Recipe[]>) => {
     setShowBuildFromRecipes(false);
-    const merged = new Map(draftRecipes);
+    if (!plan) return;
     for (const [day, recipes] of assignments) {
-      const existing = merged.get(day) || [];
-      existing.push(...recipes);
-      merged.set(day, existing);
+      for (const recipe of recipes) {
+        await addMealToDay(plan.id, day, recipe.id, "main");
+      }
     }
-    setDraftRecipes(merged);
+    await refreshPlan();
   };
 
   const handleLockPlan = async () => {
+    if (!plan) return;
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -618,44 +575,22 @@ export default function Plan() {
     setLockProgress("Locking in your meal plan...");
     setError(null);
     try {
-      const families = await getFamilies();
-      const fam = families[0];
-      if (!fam?.id) throw new Error("No family found.");
-      const weekStart = getWeekStart();
-
-      const items = Array.from(draftRecipes.entries()).flatMap(([day, recipes]) =>
-        recipes.map((r, idx) => ({
-          day,
-          recipe_id: r.id,
-          sides: draftSides.get(`${day}-${idx}`) || [],
-        }))
-      );
-
       const progressTimer1 = setTimeout(() => setLockProgress("Gathering ingredients..."), 3000);
       const progressTimer2 = setTimeout(() => setLockProgress("Almost done..."), 8000);
       lockTimersRef.current = [progressTimer1, progressTimer2];
 
-      const result = await lockMealPlan({
-        family_id: fam.id,
-        week_start: weekStart,
-        items,
-      }, controller.signal);
+      const result = await lockPlan(plan.id, controller.signal);
 
       lockTimersRef.current.forEach(clearTimeout);
       lockTimersRef.current = [];
 
       setPlan(result);
-      setDraftRecipes(new Map());
-      setDraftSides(new Map());
-      localStorage.setItem("currentPlanId", String(result.id));
-      localStorage.setItem("lastPlanId", String(result.id));
-      localStorage.setItem("lastMealPlanId", String(result.id));
 
       setLockState('locked');
       setTimeout(() => setLockState('grocery-ready'), 6000);
     } catch (err: any) {
       if (isAbortError(err)) return;
-      setError(err.message || "Failed to lock plan");
+      setError(formatApiError(err));
       setLockState('idle');
     } finally {
       lockTimersRef.current.forEach(clearTimeout);
@@ -668,35 +603,30 @@ export default function Plan() {
 
   const handleEditWeek = async () => {
     if (!plan) return;
-    const allFetchedRecipes = await getRecipes();
-    const newDraft = new Map<DayOfWeek, Recipe[]>();
-    for (const item of plan.items) {
-      if (item.meal_type === "main" && item.recipe_id) {
-        const recipe = allFetchedRecipes.find((r) => r.id === item.recipe_id);
-        if (recipe) {
-          const existing = newDraft.get(item.day) || [];
-          existing.push(recipe);
-          newDraft.set(item.day, existing);
-        }
-      }
+    try {
+      const result = await unlockPlan(plan.id);
+      setPlan(result);
+      setLockState('idle');
+    } catch (err: any) {
+      console.error("Failed to unlock plan:", err);
+      setError(formatApiError(err));
     }
-    setPlan(null);
-    setDraftRecipes(newDraft);
-    setDraftSides(new Map());
-    setLockState('idle');
   };
 
-  const handleStartFresh = () => {
-    localStorage.removeItem("currentPlanId");
-    localStorage.removeItem("lastPlanId");
-    localStorage.removeItem("lastMealPlanId");
-    setPlan(null);
-    setDraftRecipes(new Map());
-    setDraftSides(new Map());
-    setError(null);
-    setLockState('idle');
-    if (isMyPlan) {
-      navigate("/plan", { replace: true });
+  const handleStartFresh = async () => {
+    if (!plan) return;
+    if (!confirm("This will remove all meals and their ingredients from your grocery list. Your custom items will stay. Are you sure?")) return;
+    try {
+      const result = await startFreshPlan(plan.id);
+      setPlan(result);
+      setError(null);
+      setLockState('idle');
+      if (isMyPlan) {
+        navigate("/plan", { replace: true });
+      }
+    } catch (err: any) {
+      console.error("Failed to start fresh:", err);
+      setError(formatApiError(err));
     }
   };
 
@@ -742,18 +672,18 @@ export default function Plan() {
   };
 
   const getSideNames = (meal: DisplayMeal): string[] => {
-    if (meal.isLocked && meal.sides) {
+    if (meal.sides) {
       return meal.sides.map((s) => {
         return s.recipe_name
           || (s.notes && typeof s.notes === "object" && ((s.notes as any).side_name || (s.notes as any).name))
           || "Side";
       });
     }
-    return meal.draftSideNames || [];
+    return [];
   };
 
   const handleRemoveMeal = async (meal: DisplayMeal) => {
-    if (meal.isLocked && meal.item) {
+    if (meal.item) {
       if (!confirm("Remove this meal?")) return;
       try {
         await removeMealItem(meal.item.id);
@@ -761,77 +691,30 @@ export default function Plan() {
       } catch (err) {
         console.error("Failed to remove meal:", err);
       }
-    } else {
-      const removedIdx = meal.draftDayIndex ?? 0;
-      const next = new Map(draftRecipes);
-      const arr = [...(next.get(meal.day) || [])];
-      arr.splice(removedIdx, 1);
-      if (arr.length === 0) {
-        next.delete(meal.day);
-      } else {
-        next.set(meal.day, arr);
-      }
-      setDraftRecipes(next);
-      setDraftSides((prev) => {
-        const updated = new Map(prev);
-        updated.delete(`${meal.day}-${removedIdx}`);
-        for (let i = removedIdx + 1; i <= arr.length; i++) {
-          const oldKey = `${meal.day}-${i}`;
-          const newKey = `${meal.day}-${i - 1}`;
-          if (updated.has(oldKey)) {
-            updated.set(newKey, updated.get(oldKey)!);
-            updated.delete(oldKey);
-          }
-        }
-        return updated;
-      });
     }
   };
 
   const handleAddInlineSide = async (meal: DisplayMeal, text: string) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    if (meal.isLocked && meal.item) {
-      try {
-        await addSide(meal.item.id, undefined, trimmed);
-        await refreshPlan();
-      } catch (err) {
-        console.error("Failed to add inline side:", err);
-      }
-    } else {
-      const key = `${meal.day}-${meal.draftDayIndex ?? 0}`;
-      setDraftSides((prev) => {
-        const updated = new Map(prev);
-        const existing = updated.get(key) || [];
-        updated.set(key, [...existing, trimmed]);
-        return updated;
-      });
+    if (!trimmed || !meal.item) return;
+    try {
+      await addSide(meal.item.id, undefined, trimmed);
+      await refreshPlan();
+    } catch (err) {
+      console.error("Failed to add inline side:", err);
     }
     setSideText("");
     setSideInputDay(null);
   };
 
   const handleRemoveInlineSide = async (meal: DisplayMeal, sideIndex: number) => {
-    if (meal.isLocked && meal.sides && meal.sides[sideIndex]) {
+    if (meal.sides && meal.sides[sideIndex]) {
       try {
         await removeSide(meal.sides[sideIndex].id);
         await refreshPlan();
       } catch (err) {
         console.error("Failed to remove side:", err);
       }
-    } else {
-      const key = `${meal.day}-${meal.draftDayIndex ?? 0}`;
-      setDraftSides((prev) => {
-        const updated = new Map(prev);
-        const existing = [...(updated.get(key) || [])];
-        existing.splice(sideIndex, 1);
-        if (existing.length === 0) {
-          updated.delete(key);
-        } else {
-          updated.set(key, existing);
-        }
-        return updated;
-      });
     }
   };
 
@@ -870,11 +753,10 @@ export default function Plan() {
     handleSmartSetup(trimmed);
   };
 
-  // Build displayMeals array
+  // Build displayMeals array — all items come from plan.items
   const displayMeals: DisplayMeal[] = [];
 
   if (plan && plan.items) {
-    // Locked plan items
     const mains = plan.items.filter((i) => i.meal_type === "main");
     const allSides = plan.items.filter((i) => i.meal_type === "side");
     for (const main of mains) {
@@ -888,7 +770,7 @@ export default function Plan() {
       );
       const dayInfo = DAYS.find((d) => d.key === main.day);
       displayMeals.push({
-        id: `locked-${main.id}`,
+        id: `item-${main.id}`,
         day: main.day,
         dayLabel: dayInfo?.fullLabel ?? main.day,
         recipeName: main.recipe_name || main.recipe?.title || "Unknown Recipe",
@@ -897,33 +779,9 @@ export default function Plan() {
         sidesCount: mainSides.length,
         sourceUrl: main.recipe?.source_url ?? null,
         imageUrl: main.recipe?.image_url ?? null,
-        isLocked: true,
+        isLocked: !!main.locked,
         item: main,
         sides: mainSides,
-      });
-    }
-  } else if (draftRecipes.size > 0) {
-    // Draft recipes
-    for (const [day, recipes] of draftRecipes) {
-      const dayInfo = DAYS.find((d) => d.key === day);
-      recipes.forEach((recipe, idx) => {
-        const sidesKey = `${day}-${idx}`;
-        const draftSidesForMeal = draftSides.get(sidesKey) || [];
-        displayMeals.push({
-          id: `draft-${day}-${idx}`,
-          day,
-          dayLabel: dayInfo?.fullLabel ?? day,
-          recipeName: recipe.title,
-          cuisine: recipe.cuisine ?? null,
-          cookMinutes: recipe.cook_minutes ?? null,
-          sidesCount: draftSidesForMeal.length,
-          sourceUrl: recipe.source_url ?? null,
-          imageUrl: recipe.image_url ?? null,
-          isLocked: false,
-          draftRecipe: recipe,
-          draftDayIndex: idx,
-          draftSideNames: draftSidesForMeal,
-        });
       });
     }
   }
@@ -951,9 +809,10 @@ export default function Plan() {
     : 0;
 
   const hasPlan = plan !== null;
-  const hasDrafts = draftRecipes.size > 0;
+  const isLocked = plan?.status === 'locked';
+  const hasMeals = displayMeals.length > 0;
   const showInput = !loading && !setupProgress && lockState !== 'locking' && lockState !== 'locked';
-  const showEmptyState = !hasPlan && !hasDrafts && !loading && !setupProgress;
+  const showEmptyState = !hasMeals && !loading && !setupProgress;
 
   // Week date range for display
   const getWeekDateRange = () => {
@@ -974,15 +833,17 @@ export default function Plan() {
       {showInput && (
         <div className="text-center mb-8 animate-fade-in">
           <h1 className="font-display text-2xl md:text-3xl font-bold text-stone-800 mb-2">
-            {hasPlan || hasDrafts ? "Looking good, Chef" : "What's Cooking, Chef?"}
+            {hasMeals ? "Looking good, Chef" : "What's Cooking, Chef?"}
           </h1>
           <p className="text-stone-400 text-sm mb-5">
-            {hasPlan
+            {isLocked
               ? "Your plan is here. Add sides, make changes, or start fresh."
-              : "Tell me about your week and I'll plan your meals"}
+              : hasMeals
+                ? "Add meals, sides, then lock your plan."
+                : "Tell me about your week and I'll plan your meals"}
           </p>
 
-          {!hasPlan && (
+          {!isLocked && !hasMeals && (
             <>
               <div className="relative max-w-xl mx-auto">
                 <textarea
@@ -1088,7 +949,7 @@ export default function Plan() {
       )}
 
       {/* 4. PLAN CONTAINER */}
-      {(displayMeals.length > 0 || hasPlan || hasDrafts) && (displayMeals.length > 0) && (
+      {hasMeals && (
         <div
           className="relative rounded-3xl overflow-hidden animate-fade-in"
           style={{ background: "#FAF7F4", border: "1px solid #EDE5DB" }}
@@ -1102,45 +963,35 @@ export default function Plan() {
           {/* Header */}
           <div className="relative z-10 px-5 pt-5 pb-3">
             <h2 className="font-display text-lg md:text-xl font-bold text-stone-900">
-              {hasPlan ? "This Week's Menu" : "Your Plan"}
+              {isLocked ? "This Week's Menu" : "Your Plan"}
             </h2>
             <div className="flex items-center justify-between mt-0.5">
               <p className="text-stone-500 text-xs">
                 {plan?.week_start ? `Week of ${plan.week_start}` : getWeekDateRange()} &middot; {totalMeals} meal{totalMeals !== 1 ? "s" : ""}{totalSides > 0 ? ` \u00b7 ${totalSides} side${totalSides !== 1 ? "s" : ""}` : ""}
               </p>
               <div className="flex items-center gap-2">
-                {hasPlan && (
-                  <>
-                    <button
-                      onClick={handleEditWeek}
-                      className="text-xs text-stone-400 hover:text-stone-700 transition-colors"
-                    >
-                      Edit Week
-                    </button>
-                    <button
-                      onClick={handleStartFresh}
-                      className="px-3 py-1 text-xs font-medium border border-stone-300 rounded-lg text-stone-500 hover:text-red-500 hover:border-red-300 transition-colors"
-                    >
-                      Start Fresh
-                    </button>
-                  </>
+                {isLocked && (
+                  <button
+                    onClick={handleEditWeek}
+                    className="text-xs text-stone-400 hover:text-stone-700 transition-colors"
+                  >
+                    Edit Week
+                  </button>
                 )}
-                {!hasPlan && hasDrafts && (
-                  <>
-                    <button
-                      onClick={() => setDraftAddModal({ step: 'choose-source' })}
-                      className="text-xs text-chef-orange hover:text-orange-600 font-medium transition-colors"
-                    >
-                      + Add Recipes
-                    </button>
-                    <button
-                      onClick={handleStartFresh}
-                      className="px-3 py-1 text-xs font-medium border border-stone-300 rounded-lg text-stone-500 hover:text-red-500 hover:border-red-300 transition-colors"
-                    >
-                      Start Fresh
-                    </button>
-                  </>
+                {!isLocked && (
+                  <button
+                    onClick={() => setDraftAddModal({ step: 'choose-source' })}
+                    className="text-xs text-chef-orange hover:text-orange-600 font-medium transition-colors"
+                  >
+                    + Add Recipes
+                  </button>
                 )}
+                <button
+                  onClick={handleStartFresh}
+                  className="px-3 py-1 text-xs font-medium border border-stone-300 rounded-lg text-stone-500 hover:text-red-500 hover:border-red-300 transition-colors"
+                >
+                  Start Fresh
+                </button>
               </div>
             </div>
           </div>
@@ -1154,10 +1005,7 @@ export default function Plan() {
                   <button
                     key={slot.day}
                     onClick={() => {
-                      if (hasPlan && plan) {
-                        setMainModal({ mode: "add", day: slot.day, step: "choose" });
-                        setMainModalSearchQuery("");
-                      } else {
+                      if (plan) {
                         setDraftAddModal({ step: 'web-search-query', day: slot.day });
                       }
                     }}
@@ -1187,12 +1035,9 @@ export default function Plan() {
                         <div className="w-[72px] flex-shrink-0 border-r border-stone-100 flex flex-col">
                           <button
                             onClick={() => {
-                              if (meal.isLocked && meal.item) {
+                              if (meal.item) {
                                 setMainModal({ mode: "swap", mealItemId: meal.item.id, day: meal.day, step: "choose" });
                                 setMainModalSearchQuery("");
-                              } else if (meal.draftRecipe) {
-                                handleRemoveMeal(meal);
-                                setDraftAddModal({ step: 'web-search-query', day: meal.day });
                               }
                             }}
                             className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-stone-400 hover:text-chef-orange hover:bg-orange-50 transition-colors"
@@ -1228,15 +1073,8 @@ export default function Plan() {
                         <button
                           className="flex-1 min-w-0 px-3 py-2.5 text-left hover:bg-stone-50 transition-colors"
                           onClick={() => {
-                            if (meal.isLocked && meal.item) {
+                            if (meal.item) {
                               setSelectedMeal({ item: meal.item });
-                            } else if (meal.draftRecipe) {
-                              setSelectedMeal({
-                                draftRecipe: meal.draftRecipe,
-                                draftDay: meal.day,
-                                draftIndex: meal.draftDayIndex,
-                                draftSideNames: meal.draftSideNames,
-                              });
                             }
                           }}
                         >
@@ -1354,8 +1192,8 @@ export default function Plan() {
 
           {/* LOCK / GROCERY CTA */}
           <div className="relative z-10 px-5 pb-5">
-            {/* Draft idle: Lock Plan button */}
-            {!hasPlan && hasDrafts && lockState === 'idle' && (
+            {/* Unlocked: Lock Plan button */}
+            {!isLocked && hasMeals && lockState === 'idle' && (
               <button
                 onClick={handleLockPlan}
                 className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all"
@@ -1398,8 +1236,8 @@ export default function Plan() {
               </button>
             )}
 
-            {/* Already loaded plan — grocery link */}
-            {hasPlan && lockState === 'idle' && (
+            {/* Already locked plan — grocery link */}
+            {isLocked && lockState === 'idle' && (
               <button
                 onClick={() => navigate("/grocery")}
                 className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all"
@@ -1473,7 +1311,6 @@ export default function Plan() {
               ? `${currentSearchIndex + 1} of ${pendingSearchMeals.length}`
               : undefined
           }
-          prefetchedResults={batchedSearchResults[pendingSearchMeals[currentSearchIndex].description]}
           familyId={family?.id}
           onRecipeSelected={handleRecipeSelected}
           onClose={handleSearchSkip}
@@ -1484,14 +1321,14 @@ export default function Plan() {
       {quickDinnerOpen && (
         <QuickDinnerModal
           familyId={family?.id}
-          onRecipesSelected={(recipes) => {
+          onRecipesSelected={async (recipes) => {
             setQuickDinnerOpen(false);
+            if (!plan) return;
             const today = getTodayDay();
-            const next = new Map(draftRecipes);
-            const existing = next.get(today) || [];
-            existing.push(...recipes);
-            next.set(today, existing);
-            setDraftRecipes(next);
+            for (const recipe of recipes) {
+              await addMealToDay(plan.id, today, recipe.id, "main");
+            }
+            await refreshPlan();
           }}
           onClose={() => setQuickDinnerOpen(false)}
         />
@@ -1689,147 +1526,49 @@ export default function Plan() {
           initialQuery={draftAddModal.searchQuery}
           dayLabel={DAYS.find(d => d.key === draftAddModal.day)?.fullLabel}
           familyId={family?.id}
-          onRecipeSelected={(recipe) => {
+          onRecipeSelected={async (recipe) => {
             const day = draftAddModal.day!;
-            setDraftRecipes(prev => {
-              const next = new Map(prev);
-              const existing = next.get(day) || [];
-              existing.push(recipe);
-              next.set(day, existing);
-              return next;
-            });
             setDraftAddModal(null);
+            if (!plan) return;
+            await addMealToDay(plan.id, day, recipe.id, "main");
+            await refreshPlan();
           }}
           onClose={() => setDraftAddModal(null)}
         />
       )}
 
       {/* 6. MealDetailSheet */}
-      {selectedMeal && (
+      {selectedMeal && selectedMeal.item && (
         <MealDetailSheet
           item={selectedMeal.item}
-          draftRecipe={selectedMeal.draftRecipe}
-          day={selectedMeal.item?.day ?? selectedMeal.draftDay ?? "monday"}
-          isLocked={!!selectedMeal.item}
-          sides={selectedMeal.item ? displayMeals.find((m) => m.item?.id === selectedMeal.item?.id)?.sides : undefined}
-          draftSideNames={selectedMeal.draftSideNames}
-          onAddDraftSide={
-            selectedMeal.draftRecipe && selectedMeal.draftDay != null
-              ? (name: string) => {
-                  const key = `${selectedMeal.draftDay}-${selectedMeal.draftIndex ?? 0}`;
-                  setDraftSides((prev) => {
-                    const updated = new Map(prev);
-                    const existing = updated.get(key) || [];
-                    updated.set(key, [...existing, name]);
-                    return updated;
-                  });
-                  setSelectedMeal((prev) =>
-                    prev ? { ...prev, draftSideNames: [...(prev.draftSideNames || []), name] } : prev
-                  );
-                }
-              : undefined
-          }
-          onRemoveDraftSide={
-            selectedMeal.draftRecipe && selectedMeal.draftDay != null
-              ? (index: number) => {
-                  const key = `${selectedMeal.draftDay}-${selectedMeal.draftIndex ?? 0}`;
-                  setDraftSides((prev) => {
-                    const updated = new Map(prev);
-                    const existing = [...(updated.get(key) || [])];
-                    existing.splice(index, 1);
-                    if (existing.length === 0) {
-                      updated.delete(key);
-                    } else {
-                      updated.set(key, existing);
-                    }
-                    return updated;
-                  });
-                  setSelectedMeal((prev) => {
-                    if (!prev) return prev;
-                    const names = [...(prev.draftSideNames || [])];
-                    names.splice(index, 1);
-                    return { ...prev, draftSideNames: names };
-                  });
-                }
-              : undefined
-          }
+          day={selectedMeal.item.day}
+          isLocked={!!selectedMeal.item.locked}
+          sides={displayMeals.find((m) => m.item?.id === selectedMeal.item?.id)?.sides}
           onClose={() => setSelectedMeal(null)}
-          onSwapMain={
-            selectedMeal.item
-              ? () => {
-                  setSelectedMeal(null);
-                  setMainModal({ mode: "swap", mealItemId: selectedMeal.item!.id, day: selectedMeal.item!.day, step: "choose" });
-                  setMainModalSearchQuery("");
-                }
-              : undefined
-          }
-          onRemoveMain={
-            selectedMeal.item
-              ? async () => {
-                  if (!confirm("Remove this meal?")) return;
-                  try {
-                    await removeMealItem(selectedMeal.item!.id);
-                    await refreshPlan();
-                    setSelectedMeal(null);
-                  } catch (err) {
-                    console.error("Failed to remove meal:", err);
-                  }
-                }
-              : undefined
-          }
-          onSwapSide={
-            selectedMeal.item
-              ? (sideId) => {
-                  setSelectedMeal(null);
-                  setSwapSideModal({ mealItemId: sideId, mainRecipeId: selectedMeal.item!.recipe_id });
-                }
-              : undefined
-          }
-          onAddSide={
-            selectedMeal.item
-              ? () => {
-                  setSelectedMeal(null);
-                  setAddSideModal(selectedMeal.item!.id);
-                }
-              : undefined
-          }
-          onRemoveSide={
-            selectedMeal.item
-              ? (sideId) => handleRemoveSide(sideId)
-              : undefined
-          }
-          onRemoveDraft={
-            selectedMeal.draftRecipe && selectedMeal.draftDay != null
-              ? () => {
-                  const removedIdx = selectedMeal.draftIndex ?? 0;
-                  const day = selectedMeal.draftDay!;
-                  const next = new Map(draftRecipes);
-                  const arr = [...(next.get(day) || [])];
-                  arr.splice(removedIdx, 1);
-                  if (arr.length === 0) {
-                    next.delete(day);
-                  } else {
-                    next.set(day, arr);
-                  }
-                  setDraftRecipes(next);
-                  // Clean up sides for removed recipe and reindex higher indices
-                  setDraftSides((prev) => {
-                    const updated = new Map(prev);
-                    updated.delete(`${day}-${removedIdx}`);
-                    for (let i = removedIdx + 1; i <= arr.length; i++) {
-                      const oldKey = `${day}-${i}`;
-                      const newKey = `${day}-${i - 1}`;
-                      if (updated.has(oldKey)) {
-                        updated.set(newKey, updated.get(oldKey)!);
-                        updated.delete(oldKey);
-                      }
-                    }
-                    return updated;
-                  });
-                  setSelectedMeal(null);
-                }
-              : undefined
-          }
+          onSwapMain={() => {
+            setSelectedMeal(null);
+            setMainModal({ mode: "swap", mealItemId: selectedMeal.item!.id, day: selectedMeal.item!.day, step: "choose" });
+            setMainModalSearchQuery("");
+          }}
+          onRemoveMain={async () => {
+            if (!confirm("Remove this meal?")) return;
+            try {
+              await removeMealItem(selectedMeal.item!.id);
+              await refreshPlan();
+              setSelectedMeal(null);
+            } catch (err) {
+              console.error("Failed to remove meal:", err);
+            }
+          }}
+          onSwapSide={(sideId) => {
+            setSelectedMeal(null);
+            setSwapSideModal({ mealItemId: sideId, mainRecipeId: selectedMeal.item!.recipe_id });
+          }}
+          onAddSide={() => {
+            setSelectedMeal(null);
+            setAddSideModal(selectedMeal.item!.id);
+          }}
+          onRemoveSide={(sideId) => handleRemoveSide(sideId)}
         />
       )}
 

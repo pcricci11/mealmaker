@@ -16,7 +16,6 @@ interface Props {
   initialQuery?: string;
   dayLabel?: string;
   stepLabel?: string;          // e.g. "1 of 3"
-  prefetchedResults?: WebSearchRecipeResult[];
   familyId?: number;
   onRecipeSelected: (recipe: Recipe) => void;
   onClose: () => void;
@@ -30,7 +29,6 @@ export default function RecipeSearchModal({
   initialQuery,
   dayLabel,
   stepLabel,
-  prefetchedResults,
   familyId,
   onRecipeSelected,
   onClose,
@@ -44,7 +42,7 @@ export default function RecipeSearchModal({
   const [savingPhase, setSavingPhase] = useState<"adding" | "ingredients" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const didAutoSearch = useRef(!!(prefetchedResults && prefetchedResults.length > 0));
+  const didAutoSearch = useRef(false);
   const savingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -164,19 +162,7 @@ export default function RecipeSearchModal({
 
   // Auto-search on mount
   useEffect(() => {
-    if (didAutoSearch.current) {
-      // Have prefetched results — still run Tier 1, then set prefetched as webResults
-      if (initialQuery) {
-        (async () => {
-          await handleSearchMyRecipes(initialQuery);
-          if (prefetchedResults && prefetchedResults.length > 0) {
-            setWebResults(prefetchedResults);
-            setCompletedTiers((prev) => new Set(prev).add("my-recipes").add("spoonacular"));
-          }
-        })();
-      }
-      return;
-    }
+    if (didAutoSearch.current) return;
     if (initialQuery) {
       didAutoSearch.current = true;
       handleSearchMyRecipes(initialQuery);
