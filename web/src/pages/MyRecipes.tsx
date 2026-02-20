@@ -1313,6 +1313,30 @@ export default function MyRecipes() {
             </DialogHeader>
 
             <div className="space-y-3 px-6">
+              {/* Recipe Capture — coming soon */}
+              <div className="relative group inline-flex">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium cursor-default border border-stone-200 bg-stone-50"
+                  style={{ color: "#A8A29E" }}
+                >
+                  {"\u{1F4F1}"} Recipe Capture
+                </button>
+                <div
+                  className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-xl whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50"
+                  style={{
+                    background: "#1C1917",
+                    color: "white",
+                    fontSize: "0.75rem",
+                    fontWeight: 500,
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                  }}
+                >
+                  Coming soon! {"\u{1F680}"}
+                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 rotate-45 w-2 h-2 bg-stone-900" />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-stone-500 mb-1">Recipe name</label>
                 <Input

@@ -196,6 +196,8 @@ export default function Plan() {
     draftSideNames?: string[];
   } | null>(null);
   const [lockState, setLockState] = useState<'idle' | 'locking' | 'locked' | 'grocery-ready'>('idle');
+  const [sideInputDay, setSideInputDay] = useState<string | null>(null);
+  const [sideText, setSideText] = useState("");
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -739,6 +741,100 @@ export default function Plan() {
     }
   };
 
+  const getSideNames = (meal: DisplayMeal): string[] => {
+    if (meal.isLocked && meal.sides) {
+      return meal.sides.map((s) => {
+        return s.recipe_name
+          || (s.notes && typeof s.notes === "object" && ((s.notes as any).side_name || (s.notes as any).name))
+          || "Side";
+      });
+    }
+    return meal.draftSideNames || [];
+  };
+
+  const handleRemoveMeal = async (meal: DisplayMeal) => {
+    if (meal.isLocked && meal.item) {
+      if (!confirm("Remove this meal?")) return;
+      try {
+        await removeMealItem(meal.item.id);
+        await refreshPlan();
+      } catch (err) {
+        console.error("Failed to remove meal:", err);
+      }
+    } else {
+      const removedIdx = meal.draftDayIndex ?? 0;
+      const next = new Map(draftRecipes);
+      const arr = [...(next.get(meal.day) || [])];
+      arr.splice(removedIdx, 1);
+      if (arr.length === 0) {
+        next.delete(meal.day);
+      } else {
+        next.set(meal.day, arr);
+      }
+      setDraftRecipes(next);
+      setDraftSides((prev) => {
+        const updated = new Map(prev);
+        updated.delete(`${meal.day}-${removedIdx}`);
+        for (let i = removedIdx + 1; i <= arr.length; i++) {
+          const oldKey = `${meal.day}-${i}`;
+          const newKey = `${meal.day}-${i - 1}`;
+          if (updated.has(oldKey)) {
+            updated.set(newKey, updated.get(oldKey)!);
+            updated.delete(oldKey);
+          }
+        }
+        return updated;
+      });
+    }
+  };
+
+  const handleAddInlineSide = async (meal: DisplayMeal, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (meal.isLocked && meal.item) {
+      try {
+        await addSide(meal.item.id, undefined, trimmed);
+        await refreshPlan();
+      } catch (err) {
+        console.error("Failed to add inline side:", err);
+      }
+    } else {
+      const key = `${meal.day}-${meal.draftDayIndex ?? 0}`;
+      setDraftSides((prev) => {
+        const updated = new Map(prev);
+        const existing = updated.get(key) || [];
+        updated.set(key, [...existing, trimmed]);
+        return updated;
+      });
+    }
+    setSideText("");
+    setSideInputDay(null);
+  };
+
+  const handleRemoveInlineSide = async (meal: DisplayMeal, sideIndex: number) => {
+    if (meal.isLocked && meal.sides && meal.sides[sideIndex]) {
+      try {
+        await removeSide(meal.sides[sideIndex].id);
+        await refreshPlan();
+      } catch (err) {
+        console.error("Failed to remove side:", err);
+      }
+    } else {
+      const key = `${meal.day}-${meal.draftDayIndex ?? 0}`;
+      setDraftSides((prev) => {
+        const updated = new Map(prev);
+        const existing = [...(updated.get(key) || [])];
+        existing.splice(sideIndex, 1);
+        if (existing.length === 0) {
+          updated.delete(key);
+        } else {
+          updated.set(key, existing);
+        }
+        return updated;
+      });
+    }
+  };
+
   const handleRemoveSide = async (mealItemId: number) => {
     if (!confirm("Remove this side?")) return;
     try {
@@ -837,6 +933,23 @@ export default function Plan() {
   displayMeals.sort((a, b) => (dayOrder[a.day] ?? 0) - (dayOrder[b.day] ?? 0));
 
   const totalMeals = displayMeals.length;
+
+  const daySlots = DAYS.map((d) => ({
+    day: d.key,
+    dayLabel: d.label,
+    fullLabel: d.fullLabel,
+    meals: displayMeals.filter((m) => m.day === d.key),
+  }));
+
+  const totalSides = displayMeals.reduce((sum, m) => {
+    const names = getSideNames(m);
+    return sum + names.length;
+  }, 0);
+  const cookingNights = daySlots.filter((d) => d.meals.length > 0).length;
+  const avgCookMinutes = totalMeals > 0
+    ? Math.round(displayMeals.reduce((sum, m) => sum + (m.cookMinutes || 0), 0) / totalMeals)
+    : 0;
+
   const hasPlan = plan !== null;
   const hasDrafts = draftRecipes.size > 0;
   const showInput = !loading && !setupProgress && lockState !== 'locking' && lockState !== 'locked';
@@ -975,7 +1088,7 @@ export default function Plan() {
       )}
 
       {/* 4. PLAN CONTAINER */}
-      {displayMeals.length > 0 && (
+      {(displayMeals.length > 0 || hasPlan || hasDrafts) && (displayMeals.length > 0) && (
         <div
           className="relative rounded-3xl overflow-hidden animate-fade-in"
           style={{ background: "#FAF7F4", border: "1px solid #EDE5DB" }}
@@ -993,7 +1106,7 @@ export default function Plan() {
             </h2>
             <div className="flex items-center justify-between mt-0.5">
               <p className="text-stone-500 text-xs">
-                {plan?.week_start ? `Week of ${plan.week_start}` : getWeekDateRange()} &middot; {totalMeals} meal{totalMeals !== 1 ? "s" : ""}
+                {plan?.week_start ? `Week of ${plan.week_start}` : getWeekDateRange()} &middot; {totalMeals} meal{totalMeals !== 1 ? "s" : ""}{totalSides > 0 ? ` \u00b7 ${totalSides} side${totalSides !== 1 ? "s" : ""}` : ""}
               </p>
               <div className="flex items-center gap-2">
                 {hasPlan && (
@@ -1006,9 +1119,9 @@ export default function Plan() {
                     </button>
                     <button
                       onClick={handleStartFresh}
-                      className="text-xs text-stone-400 hover:text-red-500 transition-colors"
+                      className="px-3 py-1 text-xs font-medium border border-stone-300 rounded-lg text-stone-500 hover:text-red-500 hover:border-red-300 transition-colors"
                     >
-                      Start Over
+                      Start Fresh
                     </button>
                   </>
                 )}
@@ -1022,9 +1135,9 @@ export default function Plan() {
                     </button>
                     <button
                       onClick={handleStartFresh}
-                      className="text-xs text-stone-400 hover:text-red-500 transition-colors"
+                      className="px-3 py-1 text-xs font-medium border border-stone-300 rounded-lg text-stone-500 hover:text-red-500 hover:border-red-300 transition-colors"
                     >
-                      Start Over
+                      Start Fresh
                     </button>
                   </>
                 )}
@@ -1032,165 +1145,212 @@ export default function Plan() {
             </div>
           </div>
 
-          {/* Meal card rows */}
+          {/* Day slots */}
           <div className="relative z-10 px-4 pb-3 space-y-2">
-            {displayMeals.map((meal, i) => {
-              const cuisineColors = meal.cuisine ? LIGHT_CUISINE_COLORS[meal.cuisine] : null;
-              return (
-                <button
-                  key={meal.id}
-                  onClick={() => {
-                    if (meal.isLocked && meal.item) {
-                      setSelectedMeal({ item: meal.item });
-                    } else if (meal.draftRecipe) {
-                      setSelectedMeal({
-                        draftRecipe: meal.draftRecipe,
-                        draftDay: meal.day,
-                        draftIndex: meal.draftDayIndex,
-                        draftSideNames: meal.draftSideNames,
-                      });
-                    }
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white border border-stone-100 hover:border-stone-200 hover:shadow-sm transition-all text-left group"
-                  style={{ animationDelay: `${i * 60}ms` }}
-                >
-                  {/* Thumbnail */}
-                  <div className="w-[52px] h-[52px] md:w-[64px] md:h-[64px] rounded-xl flex-shrink-0 overflow-hidden">
-                    {meal.imageUrl ? (
-                      <img src={meal.imageUrl} alt={meal.recipeName} className="w-full h-full object-cover" />
-                    ) : (
-                      <div
-                        className="w-full h-full flex items-center justify-center"
-                        style={{
-                          background: cuisineColors
-                            ? `linear-gradient(135deg, ${cuisineColors.bg} 0%, ${cuisineColors.border} 100%)`
-                            : "linear-gradient(135deg, #EFF6FF 0%, #BFDBFE 100%)",
+            {daySlots.map((slot) => {
+              if (slot.meals.length === 0) {
+                /* Empty day — dashed border row */
+                return (
+                  <button
+                    key={slot.day}
+                    onClick={() => {
+                      if (hasPlan && plan) {
+                        setMainModal({ mode: "add", day: slot.day, step: "choose" });
+                        setMainModalSearchQuery("");
+                      } else {
+                        setDraftAddModal({ step: 'web-search-query', day: slot.day });
+                      }
+                    }}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 border-dashed border-stone-200 hover:border-stone-300 hover:bg-white/50 transition-all text-left"
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wider text-stone-300">
+                      {slot.fullLabel}
+                    </span>
+                    <span className="text-xs font-medium text-stone-400 hover:text-chef-orange transition-colors">
+                      + Add a meal
+                    </span>
+                  </button>
+                );
+              }
+
+              /* Populated day — render each meal */
+              return slot.meals.map((meal) => {
+                const cuisineColors = meal.cuisine ? LIGHT_CUISINE_COLORS[meal.cuisine] : null;
+                const sideNames = getSideNames(meal);
+
+                return (
+                  <div key={meal.id}>
+                    {/* Main card */}
+                    <div className="rounded-xl bg-white border border-stone-100 overflow-hidden">
+                      <div className="flex">
+                        {/* LEFT — action buttons */}
+                        <div className="w-[72px] flex-shrink-0 border-r border-stone-100 flex flex-col">
+                          <button
+                            onClick={() => {
+                              if (meal.isLocked && meal.item) {
+                                setMainModal({ mode: "swap", mealItemId: meal.item.id, day: meal.day, step: "choose" });
+                                setMainModalSearchQuery("");
+                              } else if (meal.draftRecipe) {
+                                handleRemoveMeal(meal);
+                                setDraftAddModal({ step: 'web-search-query', day: meal.day });
+                              }
+                            }}
+                            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-stone-400 hover:text-chef-orange hover:bg-orange-50 transition-colors"
+                            title="Swap recipe"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            <span className="text-[9px] font-medium leading-none">Swap</span>
+                          </button>
+                          <div className="border-t border-stone-100" />
+                          <button
+                            onClick={() => {
+                              if (sideInputDay === meal.id) {
+                                setSideInputDay(null);
+                                setSideText("");
+                              } else {
+                                setSideInputDay(meal.id);
+                                setSideText("");
+                              }
+                            }}
+                            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            title="Add side"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            <span className="text-[9px] font-medium leading-none">Sides</span>
+                          </button>
+                        </div>
+
+                        {/* CENTER — clickable info */}
+                        <button
+                          className="flex-1 min-w-0 px-3 py-2.5 text-left hover:bg-stone-50 transition-colors"
+                          onClick={() => {
+                            if (meal.isLocked && meal.item) {
+                              setSelectedMeal({ item: meal.item });
+                            } else if (meal.draftRecipe) {
+                              setSelectedMeal({
+                                draftRecipe: meal.draftRecipe,
+                                draftDay: meal.day,
+                                draftIndex: meal.draftDayIndex,
+                                draftSideNames: meal.draftSideNames,
+                              });
+                            }
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-chef-orange">
+                              {meal.dayLabel}
+                            </span>
+                            {meal.cuisine && (
+                              <span
+                                className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                style={{
+                                  backgroundColor: cuisineColors?.bg ?? "#EFF6FF",
+                                  color: cuisineColors?.text ?? "#2563EB",
+                                  border: `1px solid ${cuisineColors?.border ?? "#BFDBFE"}`,
+                                }}
+                              >
+                                {meal.cuisine.replace("_", " ")}
+                              </span>
+                            )}
+                            {meal.cookMinutes && (
+                              <span className="text-[10px] text-stone-400">
+                                {meal.cookMinutes}m
+                              </span>
+                            )}
+                          </div>
+                          <span className="block text-sm font-semibold text-stone-800 truncate leading-tight mt-0.5">
+                            {meal.recipeName}
+                          </span>
+                        </button>
+
+                        {/* RIGHT — remove button */}
+                        <button
+                          onClick={() => handleRemoveMeal(meal)}
+                          className="w-10 flex-shrink-0 flex items-center justify-center text-stone-300 hover:text-red-500 hover:bg-red-50 transition-colors border-l border-stone-100"
+                          title="Remove meal"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Side pills */}
+                    {sideNames.length > 0 && (
+                      <div className="flex items-center gap-1.5 mt-1 ml-2 flex-wrap">
+                        <span className="text-stone-300 text-xs select-none">{"\u2514"}</span>
+                        {sideNames.map((name, sIdx) => (
+                          <span
+                            key={sIdx}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          >
+                            {name}
+                            <button
+                              onClick={() => handleRemoveInlineSide(meal, sIdx)}
+                              className="hover:text-red-500 transition-colors leading-none"
+                              title="Remove side"
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Inline side input */}
+                    {sideInputDay === meal.id && (
+                      <form
+                        className="flex items-center gap-2 mt-1 ml-2"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleAddInlineSide(meal, sideText);
                         }}
                       >
-                        <span className="text-2xl opacity-50">🍽️</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <span className="block text-[10px] font-medium uppercase tracking-wider text-chef-orange">
-                      {meal.dayLabel}
-                    </span>
-                    <span className="block text-sm font-semibold text-stone-800 truncate leading-tight mt-0.5">
-                      {meal.recipeName}
-                    </span>
-                    <div className="flex items-center gap-2 mt-1">
-                      {meal.cuisine && (
-                        <span
-                          className="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                          style={{
-                            backgroundColor: cuisineColors?.bg ?? "#EFF6FF",
-                            color: cuisineColors?.text ?? "#2563EB",
-                            border: `1px solid ${cuisineColors?.border ?? "#BFDBFE"}`,
-                          }}
+                        <span className="text-stone-300 text-xs select-none">{"\u2514"}</span>
+                        <input
+                          autoFocus
+                          value={sideText}
+                          onChange={(e) => setSideText(e.target.value)}
+                          placeholder="e.g. garlic bread..."
+                          className="flex-1 px-2.5 py-1 text-xs rounded-lg border border-emerald-200 bg-emerald-50/50 text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!sideText.trim()}
+                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 transition-colors"
                         >
-                          {meal.cuisine.replace("_", " ")}
-                        </span>
-                      )}
-                      {meal.cookMinutes && (
-                        <span className="text-[10px] text-stone-400">
-                          {meal.cookMinutes}m
-                        </span>
-                      )}
-                    </div>
-                    {meal.sides && meal.sides.length > 0 && (
-                      <div className="text-[10px] text-stone-400 mt-0.5 truncate">
-                        + {meal.sides.map((s) => {
-                          const name = s.recipe_name
-                            || (s.notes && typeof s.notes === "object" && ((s.notes as any).side_name || (s.notes as any).name))
-                            || "Side";
-                          return name;
-                        }).join(", ")}
-                      </div>
-                    )}
-                    {meal.draftSideNames && meal.draftSideNames.length > 0 && (
-                      <div className="text-[10px] text-stone-400 mt-0.5 truncate">
-                        + {meal.draftSideNames.join(", ")}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Hover actions */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {meal.isLocked && meal.item && (
-                      <>
-                        <span
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMainModal({ mode: "swap", mealItemId: meal.item!.id, day: meal.day, step: "choose" });
-                            setMainModalSearchQuery("");
-                          }}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
-                          title="Swap"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                        </span>
-                        <span
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            if (!confirm("Remove this meal?")) return;
-                            try { await removeMealItem(meal.item!.id); await refreshPlan(); }
-                            catch (err) { console.error("Failed to remove meal:", err); }
-                          }}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
-                          title="Remove"
+                          Add
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setSideInputDay(null); setSideText(""); }}
+                          className="text-stone-400 hover:text-stone-600 transition-colors"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
-                        </span>
-                      </>
-                    )}
-                    {!meal.isLocked && (
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const removedIdx = meal.draftDayIndex ?? 0;
-                          const next = new Map(draftRecipes);
-                          const arr = [...(next.get(meal.day) || [])];
-                          arr.splice(removedIdx, 1);
-                          if (arr.length === 0) {
-                            next.delete(meal.day);
-                          } else {
-                            next.set(meal.day, arr);
-                          }
-                          setDraftRecipes(next);
-                          // Clean up sides for removed recipe and reindex higher indices
-                          setDraftSides((prev) => {
-                            const updated = new Map(prev);
-                            updated.delete(`${meal.day}-${removedIdx}`);
-                            for (let i = removedIdx + 1; i <= arr.length; i++) {
-                              const oldKey = `${meal.day}-${i}`;
-                              const newKey = `${meal.day}-${i - 1}`;
-                              if (updated.has(oldKey)) {
-                                updated.set(newKey, updated.get(oldKey)!);
-                                updated.delete(oldKey);
-                              }
-                            }
-                            return updated;
-                          });
-                        }}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
-                        title="Remove"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </span>
+                        </button>
+                      </form>
                     )}
                   </div>
-                </button>
-              );
+                );
+              });
             })}
           </div>
+
+          {/* Quick stats bar */}
+          {totalMeals > 0 && (
+            <div className="relative z-10 border-t border-stone-200/60 mx-5 py-2.5">
+              <p className="text-xs text-stone-500 text-center">
+                {cookingNights} cooking night{cookingNights !== 1 ? "s" : ""} &middot; {avgCookMinutes} min avg &middot; {totalSides} side{totalSides !== 1 ? "s" : ""}
+              </p>
+            </div>
+          )}
 
           {/* LOCK / GROCERY CTA */}
           <div className="relative z-10 px-5 pb-5">
@@ -1201,7 +1361,7 @@ export default function Plan() {
                 className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all"
                 style={{ background: "linear-gradient(135deg, #059669, #047857)" }}
               >
-                Adjust Plan & Build Grocery List
+                Lock Plan & Build Grocery List
               </button>
             )}
 
