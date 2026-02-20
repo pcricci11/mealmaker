@@ -151,6 +151,8 @@ export default function MyRecipes() {
   const [localMatches, setLocalMatches] = useState<Recipe[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [savingRecipeIndex, setSavingRecipeIndex] = useState<number | null>(null);
+  const [searchingWeb, setSearchingWeb] = useState(false);
+  const [didWebSearch, setDidWebSearch] = useState(false);
   const addRecipeAbortRef = useRef<AbortController | null>(null);
 
   // Search & filter state
@@ -503,6 +505,7 @@ export default function MyRecipes() {
     setSearchResults([]);
     setLocalMatches([]);
     setSearchError(null);
+    setDidWebSearch(false);
 
     const abort = new AbortController();
     addRecipeAbortRef.current = abort;
@@ -527,6 +530,32 @@ export default function MyRecipes() {
       if (!abort.signal.aborted) {
         setAddRecipeMode("idle");
       }
+    }
+  };
+
+  const handleWebSearchMore = async () => {
+    const query = addRecipeInput.trim();
+    if (!query) return;
+
+    const abort = new AbortController();
+    addRecipeAbortRef.current = abort;
+    setSearchingWeb(true);
+    setSearchError(null);
+
+    try {
+      const webResults = await searchRecipesWeb(query, abort.signal, undefined, { skipSpoonacular: true });
+      // Append web results, deduplicating by source_url
+      setSearchResults((prev) => {
+        const existingUrls = new Set(prev.map((r) => r.source_url));
+        const newResults = webResults.filter((r) => !existingUrls.has(r.source_url));
+        return [...prev, ...newResults];
+      });
+      setDidWebSearch(true);
+    } catch (err) {
+      if (isAbortError(err)) return;
+      setSearchError("Web search didn't work out. Give it another try.");
+    } finally {
+      setSearchingWeb(false);
     }
   };
 
@@ -1691,7 +1720,7 @@ export default function MyRecipes() {
                                 <button
                                   key={index}
                                   onClick={() => handleSelectSearchResult(result, index)}
-                                  disabled={savingRecipeIndex !== null}
+                                  disabled={savingRecipeIndex !== null || searchingWeb}
                                   className="w-full text-left bg-white hover:bg-orange-50 border border-stone-150 hover:border-orange-200 rounded-xl px-3 py-3 transition-colors disabled:opacity-50"
                                 >
                                   <p className="text-sm font-semibold text-stone-800 leading-tight">{result.name}</p>
@@ -1724,6 +1753,24 @@ export default function MyRecipes() {
                           </div>
                         </div>
                       )}
+
+                      {/* Web search CTA / spinner */}
+                      {searchingWeb ? (
+                        <div className="text-center py-4">
+                          <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-orange-200 border-t-orange-500 mb-2" />
+                          <p className="text-xs text-stone-400">Searching the web for more...</p>
+                        </div>
+                      ) : (searchResults.length > 0 && !didWebSearch) ? (
+                        <button
+                          onClick={handleWebSearchMore}
+                          className="w-full mt-1 py-2.5 rounded-xl text-xs font-medium text-stone-400 hover:text-orange-600 hover:bg-orange-50 border border-dashed border-stone-200 hover:border-orange-300 transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                          Can't find it? Search the web for more
+                        </button>
+                      ) : null}
                     </div>
                   )}
 
