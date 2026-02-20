@@ -631,7 +631,7 @@ export default function MyRecipes() {
   }
 
   return (
-    <div className="bg-chef-cream">
+    <div className="bg-chef-cream overflow-hidden">
       <div className="space-y-2 md:space-y-5">
         {/* Pick mode banner */}
         {pickDayParam && (
@@ -688,7 +688,7 @@ export default function MyRecipes() {
         </div>
 
         {/* ── Search + Loved toggle row ── */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <div className="relative flex-1 min-w-0">
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400"
