@@ -1,13 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import type { Recipe, FamilyFavoriteMeal, RecipeInput, Cuisine, Difficulty, WebSearchRecipeResult } from "@shared/types";
+import type { Recipe, FamilyFavoriteMeal, RecipeInput, Cuisine, Difficulty } from "@shared/types";
 import { VALID_CUISINES, VALID_DIFFICULTIES } from "@shared/types";
 import {
   getFamilies, getFavoriteMeals, getMealPlanHistory, getRecipes, getMealPlan,
   addMealToDay, swapMainRecipe, deleteFavoriteMeal, createFavoriteMeal,
   getSideSuggestions, addSide,
   deleteRecipe, renameRecipe, createRecipe, importRecipeFromUrl, updateRecipeNotes, cloneMealPlan,
-  searchRecipesWeb, matchRecipeInDb, isAbortError,
   UrlValidationError,
 } from "../api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -110,7 +109,6 @@ export default function MyRecipes() {
   const [loved, setLoved] = useState<FamilyFavoriteMeal[]>([]);
   const [history, setHistory] = useState<HistoryPlan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [familyId, setFamilyId] = useState<number | undefined>();
 
   // Recipe detail modal state
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
@@ -138,23 +136,16 @@ export default function MyRecipes() {
   });
   const [addingSaving, setAddingSaving] = useState(false);
 
-  // Hybrid "Add a Recipe" modal state
+  // "Add a Recipe" (URL import) modal state
   const [showAddRecipeModal, setShowAddRecipeModal] = useState(false);
   const [addRecipeInput, setAddRecipeInput] = useState("");
-  const [addRecipeMode, setAddRecipeMode] = useState<"idle" | "url-importing" | "searching" | "saving">("idle");
+  const [addRecipeMode, setAddRecipeMode] = useState<"idle" | "url-importing">("idle");
   const [urlProgress, setUrlProgress] = useState<string | null>(null);
   const [urlNotRecipe, setUrlNotRecipe] = useState<{
     reason: string;
     detected_recipe_name: string | null;
     alternative_url: string | null;
   } | null>(null);
-  const [searchResults, setSearchResults] = useState<WebSearchRecipeResult[]>([]);
-  const [localMatches, setLocalMatches] = useState<Recipe[]>([]);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [savingRecipeIndex, setSavingRecipeIndex] = useState<number | null>(null);
-  const [searchingWeb, setSearchingWeb] = useState(false);
-  const [didWebSearch, setDidWebSearch] = useState(false);
-  const addRecipeAbortRef = useRef<AbortController | null>(null);
 
   // Search & filter state
   const [search, setSearch] = useState("");
@@ -202,13 +193,6 @@ export default function MyRecipes() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [fabMenuOpen]);
 
-  // Abort in-flight add-recipe requests on unmount
-  useEffect(() => {
-    return () => {
-      addRecipeAbortRef.current?.abort();
-    };
-  }, []);
-
   useEffect(() => {
     loadData();
   }, []);
@@ -216,12 +200,11 @@ export default function MyRecipes() {
   const loadData = async () => {
     try {
       const families = await getFamilies();
-      const fId = families[0]?.id;
-      setFamilyId(fId);
+      const familyId = families[0]?.id;
 
       const [favs, plans, allRecipes] = await Promise.allSettled([
-        fId ? getFavoriteMeals(fId) : Promise.resolve([]),
-        getMealPlanHistory(fId),
+        familyId ? getFavoriteMeals(familyId) : Promise.resolve([]),
+        getMealPlanHistory(familyId),
         getRecipes(),
       ]);
 
@@ -443,20 +426,12 @@ export default function MyRecipes() {
     }
   };
 
-  const isUrlInput = (input: string) => /^(https?:\/\/|www\.)/i.test(input.trim());
-
   const closeAddRecipeModal = () => {
-    addRecipeAbortRef.current?.abort();
-    addRecipeAbortRef.current = null;
     setShowAddRecipeModal(false);
     setAddRecipeInput("");
     setAddRecipeMode("idle");
     setUrlProgress(null);
     setUrlNotRecipe(null);
-    setSearchResults([]);
-    setLocalMatches([]);
-    setSearchError(null);
-    setSavingRecipeIndex(null);
   };
 
   const handleImportFromUrl = async (overrideUrl?: string) => {
@@ -497,112 +472,6 @@ export default function MyRecipes() {
       } else {
         showToast(err.message || "Failed to import recipe");
       }
-    }
-  };
-
-  const handleRecipeSearch = async () => {
-    const query = addRecipeInput.trim();
-    if (!query) return;
-    setAddRecipeMode("searching");
-    setSearchResults([]);
-    setLocalMatches([]);
-    setSearchError(null);
-    setDidWebSearch(false);
-
-    const abort = new AbortController();
-    addRecipeAbortRef.current = abort;
-
-    try {
-      // Local DB matches first
-      try {
-        const { matches } = await matchRecipeInDb(query, abort.signal);
-        setLocalMatches(matches.map((m) => m.recipe));
-      } catch (err) {
-        if (isAbortError(err)) return;
-        // Non-critical — continue to web search
-      }
-
-      // Web search
-      const webResults = await searchRecipesWeb(query, abort.signal);
-      setSearchResults(webResults);
-    } catch (err) {
-      if (isAbortError(err)) return;
-      setSearchError((err as Error).message || "Search failed");
-    } finally {
-      if (!abort.signal.aborted) {
-        setAddRecipeMode("idle");
-      }
-    }
-  };
-
-  const handleWebSearchMore = async () => {
-    const query = addRecipeInput.trim();
-    if (!query) return;
-
-    const abort = new AbortController();
-    addRecipeAbortRef.current = abort;
-    setSearchingWeb(true);
-    setSearchError(null);
-
-    try {
-      const webResults = await searchRecipesWeb(query, abort.signal, familyId, { skipSpoonacular: true });
-      // Append web results, deduplicating by source_url
-      setSearchResults((prev) => {
-        const existingUrls = new Set(prev.map((r) => r.source_url));
-        const newResults = webResults.filter((r) => !existingUrls.has(r.source_url));
-        return [...prev, ...newResults];
-      });
-      setDidWebSearch(true);
-    } catch (err) {
-      if (isAbortError(err)) return;
-      setSearchError("Web search didn't work out. Give it another try.");
-    } finally {
-      setSearchingWeb(false);
-    }
-  };
-
-  const handleAddRecipeSubmit = () => {
-    const trimmed = addRecipeInput.trim();
-    if (!trimmed) return;
-    if (isUrlInput(trimmed)) {
-      handleImportFromUrl();
-    } else {
-      handleRecipeSearch();
-    }
-  };
-
-  const handleSelectSearchResult = async (result: WebSearchRecipeResult, index: number) => {
-    setSavingRecipeIndex(index);
-    setAddRecipeMode("saving");
-    try {
-      const data: RecipeInput = {
-        title: result.name,
-        cuisine: result.cuisine,
-        vegetarian: result.vegetarian,
-        protein_type: result.protein_type,
-        cook_minutes: result.cook_minutes,
-        allergens: [],
-        kid_friendly: result.kid_friendly,
-        makes_leftovers: false,
-        leftovers_score: 0,
-        ingredients: result.ingredients || [],
-        tags: [],
-        source_type: "web_search",
-        source_name: result.source_name,
-        source_url: result.source_url,
-        difficulty: result.difficulty,
-        seasonal_tags: [],
-        frequency_cap_per_month: null,
-        image_url: result.image_url || null,
-      };
-      const created = await createRecipe(data);
-      setRecipes((prev) => [created, ...prev]);
-      showToast(`Added "${created.title}"`);
-      closeAddRecipeModal();
-    } catch (err: any) {
-      showToast(err.message || "Failed to save recipe");
-      setAddRecipeMode("idle");
-      setSavingRecipeIndex(null);
     }
   };
 
@@ -1594,7 +1463,7 @@ export default function MyRecipes() {
         />
       )}
 
-      {/* Add a Recipe Modal (hybrid URL + search) */}
+      {/* Add a Recipe Modal (URL import) */}
       {showAddRecipeModal && (
         <Dialog open={true} onOpenChange={(open) => { if (!open) closeAddRecipeModal(); }}>
           <DialogContent fullScreenMobile={false}>
@@ -1639,165 +1508,20 @@ export default function MyRecipes() {
                   Try Again
                 </button>
               </div>
-            ) : addRecipeMode === "searching" ? (
-              <div className="py-8 text-center space-y-3 px-6">
-                <p className="text-sm text-stone-700 font-medium font-body">Sizzling up some recipe ideas...</p>
-                <div className="flex justify-center">
-                  <div className="w-6 h-6 border-2 border-chef-orange border-t-transparent rounded-full animate-spin" />
-                </div>
-              </div>
-            ) : addRecipeMode === "saving" ? (
-              <div className="py-8 text-center space-y-3 px-6">
-                <p className="text-sm text-stone-700 font-medium font-body">Whisking this recipe into your collection...</p>
-                <div className="flex justify-center">
-                  <div className="w-6 h-6 border-2 border-chef-orange border-t-transparent rounded-full animate-spin" />
-                </div>
-              </div>
             ) : (
               <>
                 <div className="px-6 space-y-3">
-                  <div>
-                    <Input
-                      type="text"
-                      value={addRecipeInput}
-                      onChange={(e) => setAddRecipeInput(e.target.value)}
-                      placeholder="Paste a URL or search for a recipe..."
-                      autoFocus
-                      onKeyDown={(e) => { if (e.key === "Enter" && addRecipeInput.trim()) handleAddRecipeSubmit(); }}
-                    />
-                  </div>
-
-                  {searchError && (
-                    <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-                      <p className="text-sm text-red-700 font-body">{searchError}</p>
-                    </div>
-                  )}
-
-                  {/* Results area */}
-                  {(localMatches.length > 0 || searchResults.length > 0) && (
-                    <div className="max-h-[50vh] overflow-y-auto space-y-4">
-                      {/* Local matches */}
-                      {localMatches.length > 0 && (
-                        <div>
-                          <p className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">Already in your collection</p>
-                          <div className="space-y-1.5">
-                            {localMatches.map((recipe) => {
-                              const cuisineColor = LIGHT_CUISINE_COLORS[recipe.cuisine] || LIGHT_CUISINE_COLORS.american;
-                              return (
-                                <button
-                                  key={recipe.id}
-                                  onClick={() => { closeAddRecipeModal(); setSelectedRecipe(recipe); }}
-                                  className="w-full text-left bg-stone-50 hover:bg-stone-100 rounded-xl px-3 py-2.5 flex items-center gap-3 transition-colors"
-                                >
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-stone-800 truncate">{recipe.title}</p>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                      <span
-                                        className="text-[10px] font-medium px-1.5 py-0.5 rounded-full capitalize"
-                                        style={{ backgroundColor: cuisineColor.bg, color: cuisineColor.text, border: `1px solid ${cuisineColor.border}` }}
-                                      >
-                                        {recipe.cuisine.replace("_", " ")}
-                                      </span>
-                                      <span className="text-[10px] text-stone-400">{recipe.cook_minutes} min</span>
-                                    </div>
-                                  </div>
-                                  <svg className="w-4 h-4 text-stone-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                  </svg>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Web results */}
-                      {searchResults.length > 0 && (
-                        <div>
-                          <p className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">New recipes from the web</p>
-                          <div className="space-y-2">
-                            {searchResults.map((result, index) => {
-                              const cuisineColor = LIGHT_CUISINE_COLORS[result.cuisine] || LIGHT_CUISINE_COLORS.american;
-                              return (
-                                <button
-                                  key={index}
-                                  onClick={() => handleSelectSearchResult(result, index)}
-                                  disabled={savingRecipeIndex !== null || searchingWeb}
-                                  className="w-full text-left bg-white hover:bg-orange-50 border border-stone-150 hover:border-orange-200 rounded-xl px-3 py-3 transition-colors disabled:opacity-50"
-                                >
-                                  <div className="flex items-start justify-between gap-2">
-                                    <p className="text-sm font-semibold text-stone-800 leading-tight">{result.name}</p>
-                                    {result.source_url && (
-                                      <a
-                                        href={result.source_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="text-orange-500 hover:text-orange-600 shrink-0 mt-0.5"
-                                        title="View original recipe"
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                        </svg>
-                                      </a>
-                                    )}
-                                  </div>
-                                  {result.description && (
-                                    <p className="text-xs text-stone-500 mt-1 line-clamp-2 font-body">{result.description}</p>
-                                  )}
-                                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                    <span
-                                      className="text-[10px] font-medium px-1.5 py-0.5 rounded-full capitalize"
-                                      style={{ backgroundColor: cuisineColor.bg, color: cuisineColor.text, border: `1px solid ${cuisineColor.border}` }}
-                                    >
-                                      {result.cuisine.replace("_", " ")}
-                                    </span>
-                                    <span className="text-[10px] text-stone-400">{result.cook_minutes} min</span>
-                                    <span className="text-[10px] text-stone-400 capitalize">{result.difficulty}</span>
-                                    {result.vegetarian && <span className="text-[10px] text-emerald-600 font-medium">Veggie</span>}
-                                    {result.kid_friendly && <span className="text-[10px] text-blue-500 font-medium">Kid-friendly</span>}
-                                    {result.ingredients && (
-                                      <span className="text-[10px] text-stone-400">{result.ingredients.length} ingredients</span>
-                                    )}
-                                  </div>
-                                  {result.source_name && (
-                                    <p className="text-[10px] text-stone-400 mt-1.5 truncate font-body">
-                                      via {result.source_name}
-                                    </p>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Web search CTA / spinner */}
-                      {searchingWeb ? (
-                        <div className="text-center py-4">
-                          <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-orange-200 border-t-orange-500 mb-2" />
-                          <p className="text-xs text-stone-400">Searching the web for more...</p>
-                        </div>
-                      ) : (searchResults.length > 0 && !didWebSearch) ? (
-                        <button
-                          onClick={handleWebSearchMore}
-                          className="w-full mt-1 py-2.5 rounded-xl text-xs font-medium text-stone-400 hover:text-orange-600 hover:bg-orange-50 border border-dashed border-stone-200 hover:border-orange-300 transition-colors flex items-center justify-center gap-1.5"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
-                          Can't find it? Search the web for more
-                        </button>
-                      ) : null}
-                    </div>
-                  )}
-
-                  {/* Empty state */}
-                  {localMatches.length === 0 && searchResults.length === 0 && !searchError && (
-                    <p className="text-sm text-stone-400 text-center py-4 font-body">
-                      Paste a recipe URL or type a dish name to search
-                    </p>
-                  )}
+                  <Input
+                    type="text"
+                    value={addRecipeInput}
+                    onChange={(e) => setAddRecipeInput(e.target.value)}
+                    placeholder="Paste a recipe URL..."
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter" && addRecipeInput.trim()) handleImportFromUrl(); }}
+                  />
+                  <p className="text-sm text-stone-400 text-center py-2 font-body">
+                    Find a recipe on any website, copy the URL, and paste it here
+                  </p>
                 </div>
 
                 <DialogFooter>
@@ -1808,10 +1532,10 @@ export default function MyRecipes() {
                     Cancel
                   </Button>
                   <Button
-                    onClick={handleAddRecipeSubmit}
+                    onClick={() => handleImportFromUrl()}
                     disabled={!addRecipeInput.trim()}
                   >
-                    Go
+                    Add Recipe
                   </Button>
                 </DialogFooter>
               </>
