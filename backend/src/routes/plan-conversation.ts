@@ -5,6 +5,7 @@ import { Router, Request, Response } from "express";
 import Anthropic from "@anthropic-ai/sdk";
 import { query, queryOne } from "../db";
 import { generateMealPlanV3 } from "../services/mealPlanGeneratorV3";
+import { createWithRetry } from "../services/claudeRetry";
 import { requireAuth } from "../middleware/auth";
 
 const router = Router();
@@ -79,7 +80,7 @@ router.post("/generate-from-conversation", async (req: Request, res: Response) =
 
   let parsed: any;
   try {
-    const message = await client.messages.create({
+    const message = await createWithRetry(client, {
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
@@ -89,7 +90,7 @@ router.post("/generate-from-conversation", async (req: Request, res: Response) =
           content: `${memberContext}\n\nUser's description:\n"${text}"`,
         },
       ],
-    });
+    }, "plan-conversation/parse");
 
     const content = message.content[0];
     if (content.type !== "text") {

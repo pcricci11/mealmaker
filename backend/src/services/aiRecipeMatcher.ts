@@ -145,7 +145,7 @@ ${recipeLines.join("\n")}`;
       max_tokens: 512,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
-    });
+    }, "aiRecipeMatcher/match");
 
     const textBlock = message.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {

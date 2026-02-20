@@ -4,6 +4,7 @@
 import { Router, Request, Response } from "express";
 import { generateMealPlanV3 } from "../services/mealPlanGeneratorV3";
 import { extractIngredientsForRecipe } from "../services/ingredientExtractor";
+import { pMap } from "../services/concurrency";
 import { query, queryOne, queryRaw } from "../db";
 import { requireAuth, verifyFamilyAccess } from "../middleware/auth";
 
@@ -127,7 +128,7 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
         const servings = Math.round((famRow?.serving_multiplier ?? 1.0) * 4);
 
         console.log(`[generate-v3] Background backfill: ${assignedRecipes.length} recipes need ingredients (${servings} servings)`);
-        await Promise.all(assignedRecipes.map(async (recipe) => {
+        await pMap(assignedRecipes, async (recipe) => {
           console.log(`[generate-v3] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
           const { ingredients: extracted, method } = await extractIngredientsForRecipe(recipe.name, recipe.source_url, servings);
           if (extracted.length > 0) {
@@ -145,7 +146,7 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
           } else {
             console.warn(`[generate-v3] Failed to extract ingredients for #${recipe.id} "${recipe.name}"`);
           }
-        }));
+        }, 2);
       }
     })().catch((err) => {
       console.error("[generate-v3] Background ingredient extraction failed:", err);
@@ -603,7 +604,7 @@ router.post("/lock", async (req: Request, res: Response) => {
       const servings = Math.round((famRow?.serving_multiplier ?? 1.0) * 4);
 
       console.log(`[lock] Filling ingredient gaps for ${recipesNeedingIngredients.length} recipes (${servings} servings)`);
-      await Promise.all(recipesNeedingIngredients.map(async (recipe) => {
+      await pMap(recipesNeedingIngredients, async (recipe) => {
         console.log(`[lock] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
         const { ingredients: extracted, method } = await extractIngredientsForRecipe(
           recipe.name, recipe.source_url, servings,
@@ -625,7 +626,7 @@ router.post("/lock", async (req: Request, res: Response) => {
           console.warn(`[lock] Could not extract ingredients for #${recipe.id} "${recipe.name}"`);
           extractionWarnings.push({ recipe_id: recipe.id, name: recipe.name });
         }
-      }));
+      }, 2);
     }
 
     console.log(`[lock] === Lock Plan END === planId=${mealPlanId}, items=${savedItems.length}`);

@@ -4,6 +4,7 @@ import { query, queryOne } from "../db";
 import { rowToRecipe } from "../helpers";
 import { validateRecipe } from "../validation";
 import { extractIngredientsForRecipe, extractImageFromUrl } from "../services/ingredientExtractor";
+import { pMap } from "../services/concurrency";
 import { createWithRetry, RateLimitError } from "../services/claudeRetry";
 import { isValidHttpUrl, isPaywalledDomain, validateRecipeUrl } from "../services/urlValidator";
 import { aiMatchRecipes } from "../services/aiRecipeMatcher";
@@ -139,7 +140,7 @@ YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH [ AND ENDING WITH ].` 
       messages: [
         { role: "user", content: `Search for recipes: "${searchQuery.trim()}"` },
       ],
-    });
+    }, "recipes/search");
 
     // Web search produces multiple content block types; take the last text block
     let lastText = "";
@@ -278,7 +279,7 @@ YOUR ENTIRE RESPONSE MUST BE PARSEABLE JSON STARTING WITH { AND ENDING WITH }.` 
           content: `Search for recipes for each of these:\n${remainingQueries.map((q: string, i: number) => `${i + 1}. "${q}"`).join("\n")}`,
         },
       ],
-    });
+    }, "recipes/batch-search");
 
     // Web search produces multiple content block types; take the last text block
     let lastText = "";
@@ -757,7 +758,7 @@ Constraints:
       messages: [
         { role: "user", content: `Extract the full recipe details and ingredients from this URL: ${url.trim()}` },
       ],
-    });
+    }, "recipes/import-from-url");
 
     let lastText = "";
     for (const block of message.content) {
@@ -843,7 +844,8 @@ router.post("/backfill-ingredients", async (_req: Request, res: Response) => {
       `SELECT id, name, source_url FROM recipes
        WHERE source_type = 'web_search'
          AND source_url IS NOT NULL
-         AND (ingredients IS NULL OR ingredients = '[]' OR ingredients = '')`,
+         AND (ingredients IS NULL OR ingredients = '[]' OR ingredients = '')
+       LIMIT 20`,
     );
 
     if (emptyRecipes.length === 0) {
@@ -852,27 +854,25 @@ router.post("/backfill-ingredients", async (_req: Request, res: Response) => {
 
     console.log(`[backfill] Found ${emptyRecipes.length} recipes with empty ingredients:`, emptyRecipes.map(r => `${r.id}: ${r.name}`));
 
-    const results = await Promise.all(
-      emptyRecipes.map(async (recipe) => {
-        const { ingredients: extracted, method } = await extractIngredientsForRecipe(recipe.name, recipe.source_url);
-        if (extracted.length > 0) {
-          await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
-            JSON.stringify(extracted),
-            recipe.id,
-          ]);
-          for (const ing of extracted) {
-            await query(
-              "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
-              [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
-            );
-          }
-          console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extracted ${extracted.length} ingredients via ${method}`);
-        } else {
-          console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extraction failed`);
+    const results = await pMap(emptyRecipes, async (recipe) => {
+      const { ingredients: extracted, method } = await extractIngredientsForRecipe(recipe.name, recipe.source_url);
+      if (extracted.length > 0) {
+        await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
+          JSON.stringify(extracted),
+          recipe.id,
+        ]);
+        for (const ing of extracted) {
+          await query(
+            "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
+            [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
+          );
         }
-        return { id: recipe.id, name: recipe.name, ingredientCount: extracted.length };
-      })
-    );
+        console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extracted ${extracted.length} ingredients via ${method}`);
+      } else {
+        console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extraction failed`);
+      }
+      return { id: recipe.id, name: recipe.name, ingredientCount: extracted.length };
+    }, 2);
 
     res.json({ message: `Backfilled ${results.filter(r => r.ingredientCount > 0).length}/${emptyRecipes.length} recipes`, results });
   } catch (error: any) {

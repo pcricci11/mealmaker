@@ -117,7 +117,7 @@ Return ONLY valid JSON. No markdown fences, no explanation.`,
       messages: [
         { role: "user", content: `Classify this URL: ${url}` },
       ],
-    });
+    }, "urlValidator/validate");
 
     let lastText = "";
     for (const block of message.content) {

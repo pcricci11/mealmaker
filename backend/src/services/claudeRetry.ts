@@ -11,14 +11,22 @@ const RETRY_DELAY_MS = 10_000;
  * Wraps client.messages.create() with automatic retry on 429 rate limit errors.
  * Retries up to 2 times with a 10-second delay between attempts.
  * On final failure, throws a user-friendly error.
+ * Logs model, token usage, and caller for every successful call.
  */
 export async function createWithRetry(
   client: Anthropic,
   params: MessageCreateParamsNonStreaming,
+  caller?: string,
 ): Promise<Message> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await client.messages.create(params);
+      const start = Date.now();
+      const result = await client.messages.create(params);
+      const elapsed = Date.now() - start;
+      console.log(
+        `[claude-api] ${caller || "unknown"} | model=${result.model} | in=${result.usage.input_tokens} out=${result.usage.output_tokens} | ${elapsed}ms | ${new Date().toISOString()}`,
+      );
+      return result;
     } catch (error: any) {
       const isRateLimit = error?.status === 429;
       if (!isRateLimit || attempt === MAX_RETRIES) {

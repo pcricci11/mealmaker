@@ -216,7 +216,7 @@ Rules:
           content: `Parse these ingredient strings for "${recipeName}":\n${rawIngredients.map((s, i) => `${i + 1}. ${s}`).join("\n")}`,
         },
       ],
-    });
+    }, "ingredientExtractor/structure");
 
     return parseIngredientsFromResponse(message.content);
   } catch (error) {
@@ -267,7 +267,7 @@ Rules:
           content: `What ingredients are typically needed for "${recipeName}"?`,
         },
       ],
-    });
+    }, "ingredientExtractor/estimate");
 
     const ingredients = parseIngredientsFromResponse(message.content);
 
@@ -391,7 +391,7 @@ Rules:
           content: `What ingredients are typically needed for "${sideName}" serving ${servings} people?`,
         },
       ],
-    });
+    }, "ingredientExtractor/side");
 
     const ingredients = parseIngredientsFromResponse(message.content);
 
