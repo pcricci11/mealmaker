@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { query, queryOne } from "../db";
 import { rowToRecipe } from "../helpers";
 import { validateRecipe } from "../validation";
-import { extractIngredientsFromUrl } from "../services/ingredientExtractor";
+import { extractIngredientsForRecipe } from "../services/ingredientExtractor";
 import { createWithRetry, RateLimitError } from "../services/claudeRetry";
 import { isValidHttpUrl, isPaywalledDomain, validateRecipeUrl } from "../services/urlValidator";
 import { aiMatchRecipes } from "../services/aiRecipeMatcher";
@@ -656,59 +656,6 @@ router.delete("/:id", optionalAuth, async (req: Request, res: Response) => {
   res.status(204).send();
 });
 
-// POST /api/recipes/:id/suggest-ingredients
-router.post("/:id/suggest-ingredients", async (req: Request, res: Response) => {
-  const recipe = await queryOne<{ id: number; name: string }>(
-    "SELECT id, name FROM recipes WHERE id = $1",
-    [req.params.id],
-  );
-  if (!recipe) return res.status(404).json({ error: "Recipe not found" });
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
-  }
-
-  const client = new Anthropic({ apiKey });
-
-  try {
-    const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      system: `You are a cooking assistant. Given a recipe name, suggest a typical ingredient list for a family of 4. Return ONLY a JSON array of ingredients with this structure:
-[
-  { "name": "ingredient name", "quantity": 1.5, "unit": "lb", "category": "protein" }
-]
-
-Valid categories: "produce", "dairy", "pantry", "protein", "spices", "grains", "frozen", "other".
-Valid units: "lb", "oz", "cup", "cups", "tbsp", "tsp", "count", "cloves", "can", "bag", "bunch".
-Return ONLY valid JSON, no markdown fences, no explanation.`,
-      messages: [
-        { role: "user", content: `Suggest ingredients for: "${recipe.name}"` },
-      ],
-    });
-
-    const content = message.content[0];
-    if (content.type !== "text") {
-      return res.status(500).json({ error: "Unexpected response from Claude" });
-    }
-
-    const rawText = content.text
-      .replace(/^```(?:json)?\s*\n?/, "")
-      .replace(/\n?```\s*$/, "")
-      .trim();
-    const ingredients = JSON.parse(rawText);
-
-    res.json(ingredients);
-  } catch (error: any) {
-    console.error("Suggest ingredients error:", error);
-    if (error instanceof SyntaxError) {
-      return res.status(500).json({ error: "Sorry Chef, that search didn't work out! Give it another try or tweak your search terms." });
-    }
-    res.status(500).json({ error: error.message || "Failed to suggest ingredients" });
-  }
-});
-
 // POST /api/recipes/import-from-url — extract full recipe details from a URL
 router.post("/import-from-url", optionalAuth, async (req: Request, res: Response) => {
   const { url } = req.body;
@@ -759,7 +706,7 @@ router.post("/import-from-url", optionalAuth, async (req: Request, res: Response
       tools: [
         { type: "web_search_20250305", name: "web_search", max_uses: 5 } as any,
       ],
-      system: `You are a recipe extraction assistant. Given a recipe URL, fetch the page and extract ALL recipe details.
+      system: `You are a recipe extraction assistant. Given a recipe URL, fetch the page and extract the recipe metadata.
 
 Return ONLY a JSON object with this exact structure:
 {
@@ -774,10 +721,7 @@ Return ONLY a JSON object with this exact structure:
   "makes_leftovers": false,
   "allergens": [],
   "tags": [],
-  "image_url": "URL of the recipe's main photo (from JSON-LD schema.org/Recipe 'image' field, og:image meta tag, or primary article image)",
-  "ingredients": [
-    { "name": "ingredient name", "quantity": 1.5, "unit": "lb", "category": "protein" }
-  ]
+  "image_url": "URL of the recipe's main photo (from JSON-LD schema.org/Recipe 'image' field, og:image meta tag, or primary article image)"
 }
 
 Constraints:
@@ -785,11 +729,6 @@ Constraints:
 - difficulty must be one of: ${VALID_DIFFICULTIES.join(", ")}
 - protein_type should be null for vegetarian dishes
 - cook_minutes should be total time (prep + cook)
-- Extract the ACTUAL ingredients from the recipe page exactly as specified
-- Valid ingredient units: lb, oz, cup, cups, tbsp, tsp, count, cloves, can, bag, bunch, inch, box, slices, head, pint
-- Valid ingredient categories: produce, dairy, pantry, protein, spices, grains, frozen, other
-- For items counted by number (e.g. "3 eggs"), use unit "count"
-- For items like "salt and pepper to taste", use quantity 1 and unit "tsp"
 - Return ONLY valid JSON, no markdown fences, no explanation.`,
       messages: [
         { role: "user", content: `Extract the full recipe details and ingredients from this URL: ${url.trim()}` },
@@ -825,44 +764,9 @@ Constraints:
     const cuisine = VALID_CUISINES.includes(parsed.cuisine) ? parsed.cuisine : "american";
     const difficulty = VALID_DIFFICULTIES.includes(parsed.difficulty) ? parsed.difficulty : "medium";
 
-    const VALID_UNITS = new Set([
-      "lb", "oz", "cup", "cups", "tbsp", "tsp", "count", "cloves", "can",
-      "bag", "bunch", "inch", "box", "slices", "head", "pint",
-    ]);
-    const VALID_CATEGORIES = new Set([
-      "produce", "dairy", "pantry", "protein", "spices", "grains", "frozen", "other",
-    ]);
+    const ingredients: any[] = [];
 
-    let ingredients = (parsed.ingredients || []).filter((ing: any) => {
-      if (!ing || typeof ing !== "object") return false;
-      if (typeof ing.name !== "string" || !ing.name.trim()) return false;
-      if (typeof ing.quantity !== "number" || ing.quantity <= 0) return false;
-      if (!VALID_UNITS.has(ing.unit)) return false;
-      if (!VALID_CATEGORIES.has(ing.category)) return false;
-      return true;
-    }).map((ing: any) => ({
-      name: ing.name.trim(),
-      quantity: ing.quantity,
-      unit: ing.unit,
-      category: ing.category,
-    }));
-
-    // Fallback: if inline extraction yielded 0 valid ingredients, use the dedicated extractor
-    if (ingredients.length === 0) {
-      console.log(`[import-from-url] Inline extraction yielded 0 ingredients for "${parsed.title}", falling back to extractIngredientsFromUrl`);
-      const fallbackIngredients = await extractIngredientsFromUrl(
-        parsed.title || "Untitled Recipe",
-        url.trim(),
-      );
-      if (fallbackIngredients.length > 0) {
-        ingredients = fallbackIngredients;
-        console.log(`[import-from-url] Fallback extracted ${ingredients.length} ingredients`);
-      } else {
-        console.warn(`[import-from-url] Fallback also yielded 0 ingredients for "${parsed.title}"`);
-      }
-    }
-
-    // Create the recipe
+    // Create the recipe (ingredients extracted later at lock time)
     const row = await queryOne(`
       INSERT INTO recipes (name, cuisine, vegetarian, protein_type, cook_minutes,
         allergens, kid_friendly, makes_leftovers, ingredients, tags,
@@ -893,19 +797,7 @@ Constraints:
       parsed.image_url || null,
     ]);
 
-    const recipeId = row.id;
-
-    // Insert recipe_ingredients
-    if (ingredients.length > 0) {
-      for (const ing of ingredients) {
-        await query(
-          "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
-          [recipeId, ing.name, ing.quantity, ing.unit, ing.category],
-        );
-      }
-    }
-
-    console.log(`[import-from-url] Created recipe ${recipeId}: "${row.name}" with ${ingredients.length} ingredients`);
+    console.log(`[import-from-url] Created recipe ${row.id}: "${row.name}" (ingredients deferred to lock time)`);
 
     res.status(201).json({ recipe: rowToRecipe(row), alreadyExists: false, paywall_warning: paywallWarning });
   } catch (error: any) {
@@ -938,7 +830,7 @@ router.post("/backfill-ingredients", async (_req: Request, res: Response) => {
 
     const results = await Promise.all(
       emptyRecipes.map(async (recipe) => {
-        const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url);
+        const { ingredients: extracted, method } = await extractIngredientsForRecipe(recipe.name, recipe.source_url);
         if (extracted.length > 0) {
           await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
             JSON.stringify(extracted),
@@ -950,9 +842,9 @@ router.post("/backfill-ingredients", async (_req: Request, res: Response) => {
               [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
             );
           }
-          console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extracted ${extracted.length} ingredients`);
+          console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extracted ${extracted.length} ingredients via ${method}`);
         } else {
-          console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extraction still failed`);
+          console.log(`[backfill] Recipe ${recipe.id} "${recipe.name}": extraction failed`);
         }
         return { id: recipe.id, name: recipe.name, ingredientCount: extracted.length };
       })

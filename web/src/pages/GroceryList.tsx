@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import type { GroceryItem, GroceryList as GroceryListType, Ingredient } from "@shared/types";
-import { getGroceryList, suggestIngredients } from "../api";
+import type { GroceryItem, GroceryList as GroceryListType } from "@shared/types";
+import { getGroceryList } from "../api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -75,12 +75,6 @@ export default function GroceryList() {
   const [newItemInline, setNewItemInline] = useState("");
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
-
-  // Suggest ingredients state
-  const [suggestingFor, setSuggestingFor] = useState<number | null>(null);
-  const [suggestedIngredients, setSuggestedIngredients] = useState<Record<number, Ingredient[]>>({});
-  const [selectedSuggestions, setSelectedSuggestions] = useState<Record<number, Set<number>>>({});
-  const [dismissedRecipes, setDismissedRecipes] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!planId) {
@@ -219,50 +213,6 @@ export default function GroceryList() {
     }
   };
 
-  const handleSuggest = async (recipeId: number) => {
-    setSuggestingFor(recipeId);
-    try {
-      const ingredients = await suggestIngredients(recipeId);
-      setSuggestedIngredients((prev) => ({ ...prev, [recipeId]: ingredients }));
-      setSelectedSuggestions((prev) => ({
-        ...prev,
-        [recipeId]: new Set(ingredients.map((_, i) => i)),
-      }));
-    } catch (err) {
-      console.error("Failed to suggest ingredients:", err);
-    } finally {
-      setSuggestingFor(null);
-    }
-  };
-
-  const toggleSuggestion = (recipeId: number, index: number) => {
-    setSelectedSuggestions((prev) => {
-      const current = prev[recipeId] || new Set();
-      const next = new Set(current);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return { ...prev, [recipeId]: next };
-    });
-  };
-
-  const addSuggestedToList = (recipeId: number) => {
-    const ingredients = suggestedIngredients[recipeId] || [];
-    const selected = selectedSuggestions[recipeId] || new Set();
-    const items: CustomItem[] = [];
-    ingredients.forEach((ing, i) => {
-      if (selected.has(i)) {
-        items.push({ name: `${ing.quantity} ${ing.unit} ${ing.name}`, category: ing.category });
-      }
-    });
-    addCustomItems(items);
-    setDismissedRecipes((prev) => new Set(prev).add(recipeId));
-    setSuggestedIngredients((prev) => {
-      const next = { ...prev };
-      delete next[recipeId];
-      return next;
-    });
-  };
-
   // --- Loading state ---
   if (loading) {
     return (
@@ -301,10 +251,6 @@ export default function GroceryList() {
   const checkedCount = checked.size;
   const progress = totalCount > 0 ? (checkedCount / totalCount) * 100 : 0;
   const remainingCount = totalCount - checkedCount;
-
-  const missingRecipes = (groceries.missing_recipes || []).filter(
-    (r) => !dismissedRecipes.has(r.recipe_id),
-  );
 
   return (
     <div className="min-h-screen bg-chef-cream">
@@ -424,82 +370,14 @@ export default function GroceryList() {
           </button>
         </div>
 
-        {/* Missing recipes section */}
-        {missingRecipes.length > 0 && (
-          <div className="rounded-2xl p-4 space-y-3 mb-4 bg-amber-50/80 border border-amber-200">
-            <h3 className="text-sm font-bold text-amber-800 flex items-center gap-2">
-              {"\u{1F373}"} Manual Shopping Needed
-            </h3>
+        {/* Extraction warnings */}
+        {(groceries.extraction_warnings || []).length > 0 && (
+          <div className="rounded-xl p-3 mb-4 bg-amber-50/60 border border-amber-200/50">
             <p className="text-xs text-amber-700">
-              These recipes don't have ingredient lists yet. You can ask AI to suggest ingredients or add them manually.
+              <span className="font-semibold">Heads up:</span> Ingredients for{' '}
+              {groceries.extraction_warnings.map(r => r.name).join(', ')}{' '}
+              couldn't be determined. You may want to add them manually.
             </p>
-            <div className="space-y-2">
-              {missingRecipes.map((recipe) => (
-                <div key={recipe.recipe_id} className="bg-white rounded-xl border border-amber-200 p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-stone-900 text-sm">{recipe.name}</span>
-                    {!suggestedIngredients[recipe.recipe_id] && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleSuggest(recipe.recipe_id)}
-                        disabled={suggestingFor === recipe.recipe_id}
-                        className="text-xs bg-amber-100 text-amber-800 hover:bg-amber-200"
-                      >
-                        {suggestingFor === recipe.recipe_id ? "Thinking..." : "Suggest Ingredients"}
-                      </Button>
-                    )}
-                  </div>
-
-                  {suggestedIngredients[recipe.recipe_id] && (
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs text-stone-500 font-medium">Review suggested ingredients:</p>
-                      <div className="space-y-1">
-                        {suggestedIngredients[recipe.recipe_id].map((ing, i) => {
-                          const isSelected = selectedSuggestions[recipe.recipe_id]?.has(i) ?? false;
-                          return (
-                            <label
-                              key={i}
-                              className="flex items-center gap-2 text-sm cursor-pointer hover:bg-stone-50 rounded px-2 py-1"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleSuggestion(recipe.recipe_id, i)}
-                                className="accent-orange-500 w-3.5 h-3.5"
-                              />
-                              <span className={isSelected ? "text-stone-900" : "text-stone-400 line-through"}>
-                                {ing.quantity} {ing.unit} {ing.name}
-                              </span>
-                              <span className="text-xs text-stone-400 ml-auto">
-                                {CATEGORY_CONFIG[ing.category]?.label || ing.category}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                      <div className="flex gap-2 pt-1">
-                        <Button
-                          size="sm"
-                          className="text-xs"
-                          onClick={() => addSuggestedToList(recipe.recipe_id)}
-                        >
-                          Add Selected to List
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs"
-                          onClick={() => setDismissedRecipes((prev) => new Set(prev).add(recipe.recipe_id))}
-                        >
-                          Dismiss
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
           </div>
         )}
 

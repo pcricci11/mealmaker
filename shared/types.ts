@@ -162,6 +162,7 @@ export interface MealPlan {
   created_at: string;
   settings_snapshot: any | null;
   items: MealPlanItemV3[];
+  extraction_warnings?: { recipe_id: number; name: string }[];
 }
 
 // ── Plan Generation ──
@@ -339,5 +340,5 @@ export interface GroceryItem {
 export interface GroceryList {
   meal_plan_id: number;
   items: GroceryItem[];
-  missing_recipes: { recipe_id: number; name: string }[];
+  extraction_warnings: { recipe_id: number; name: string }[];
 }

@@ -1,5 +1,5 @@
 // services/ingredientExtractor.ts
-// Shared ingredient extraction via Claude web_search
+// 2-tier ingredient extraction: JSON-LD parsing → Haiku fallback
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createWithRetry } from "./claudeRetry";
@@ -14,13 +14,89 @@ const VALID_CATEGORIES = new Set([
 ]);
 
 /**
- * Fetch a recipe URL via Claude web_search and extract a structured ingredient list.
- * Falls back to a name-only search if URL extraction fails (e.g. bot blocking).
- * Returns [] on any failure so callers are never blocked.
+ * Tier 1: Fetch a recipe URL and extract recipeIngredient from JSON-LD markup.
+ * Returns raw ingredient strings or null if not found.
  */
-export async function extractIngredientsFromUrl(
+async function fetchJsonLdIngredients(sourceUrl: string): Promise<string[] | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(sourceUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return null;
+
+    const html = await response.text();
+
+    // Extract all <script type="application/ld+json"> blocks
+    const scriptRegex = /<script[^>]+type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    let match;
+    while ((match = scriptRegex.exec(html)) !== null) {
+      try {
+        const data = JSON.parse(match[1]);
+        const ingredients = findRecipeIngredients(data);
+        if (ingredients && ingredients.length > 0) {
+          console.log(`[fetchJsonLdIngredients] Found ${ingredients.length} ingredients from JSON-LD for ${sourceUrl}`);
+          return ingredients;
+        }
+      } catch {
+        // Invalid JSON in this block, try next
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.warn(`[fetchJsonLdIngredients] Failed for ${sourceUrl}:`, (error as Error).message);
+    return null;
+  }
+}
+
+/** Recursively find recipeIngredient in JSON-LD data (handles @graph arrays) */
+function findRecipeIngredients(data: any): string[] | null {
+  if (!data || typeof data !== "object") return null;
+
+  // Direct Recipe object
+  if (data["@type"] === "Recipe" && Array.isArray(data.recipeIngredient)) {
+    return data.recipeIngredient.filter((s: any) => typeof s === "string" && s.trim());
+  }
+
+  // @type can be an array like ["Recipe"]
+  if (Array.isArray(data["@type"]) && data["@type"].includes("Recipe") && Array.isArray(data.recipeIngredient)) {
+    return data.recipeIngredient.filter((s: any) => typeof s === "string" && s.trim());
+  }
+
+  // Check @graph array
+  if (Array.isArray(data["@graph"])) {
+    for (const item of data["@graph"]) {
+      const result = findRecipeIngredients(item);
+      if (result) return result;
+    }
+  }
+
+  // Check if data is an array (some sites wrap in array)
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      const result = findRecipeIngredients(item);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Structure raw ingredient strings into our Ingredient format using Haiku.
+ */
+async function structureIngredientsWithHaiku(
+  rawIngredients: string[],
   recipeName: string,
-  sourceUrl: string,
   servings?: number,
 ): Promise<Ingredient[]> {
   try {
@@ -34,20 +110,17 @@ export async function extractIngredientsFromUrl(
       : "";
 
     const message = await createWithRetry(client, {
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 2048,
-      tools: [
-        { type: "web_search_20250305", name: "web_search", max_uses: 3 } as any,
-      ],
-      system: `You are a recipe ingredient extractor. Given a recipe name and URL, fetch the page and extract the REAL ingredient list exactly as the recipe specifies.
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      system: `You are a recipe ingredient parser. Given raw ingredient strings from a recipe, parse them into structured JSON.
 
 Return ONLY a JSON array of ingredients with this structure:
 [
-  { "name": "ingredient name", "quantity": 1.5, "unit": "lb", "category": "protein" }
+  { "name": "ingredient name", "quantity": 1.5, "unit": "lb", "category": "produce" }
 ]
 
 Rules:
-- Extract the ACTUAL ingredients from the recipe page, do not guess or make up ingredients
+- Parse the ACTUAL ingredient strings provided — do not add or remove ingredients
 - quantity must be a positive number${servingsInstruction}
 - Valid units: lb, oz, cup, cups, tbsp, tsp, count, cloves, can, bag, bunch, inch, box, slices, head, pint
 - Valid categories: produce, dairy, pantry, protein, spices, grains, frozen, other
@@ -57,39 +130,49 @@ Rules:
       messages: [
         {
           role: "user",
-          content: `Extract the ingredient list from this recipe:\nName: "${recipeName}"\nURL: ${sourceUrl}`,
+          content: `Parse these ingredient strings for "${recipeName}":\n${rawIngredients.map((s, i) => `${i + 1}. ${s}`).join("\n")}`,
         },
       ],
     });
 
-    const ingredients = parseIngredientsFromResponse(message.content);
+    return parseIngredientsFromResponse(message.content);
+  } catch (error) {
+    console.error(`[structureIngredientsWithHaiku] Failed for "${recipeName}" (non-fatal):`, error);
+    return [];
+  }
+}
 
-    if (ingredients.length > 0) {
-      return ingredients;
-    }
+/**
+ * Tier 2: Estimate typical ingredients for a recipe using Haiku (no web search).
+ * Returns [] on any failure so callers are never blocked.
+ */
+async function estimateRecipeIngredientsWithHaiku(
+  recipeName: string,
+  servings?: number,
+): Promise<Ingredient[]> {
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return [];
 
-    // Diagnostic: log what we got back when extraction produced nothing
-    console.warn(`[extractIngredients] URL-based extraction returned 0 ingredients for "${recipeName}"`);
-    console.warn(`[extractIngredients] Response blocks:`, message.content.map((b: any) => ({ type: b.type, text: b.type === "text" ? b.text.slice(0, 200) : undefined })));
+    const client = new Anthropic({ apiKey });
 
-    // Fallback: retry with a name-only search (bypasses URL-specific bot blocking)
-    console.log(`[extractIngredients] Retrying with name-only search for "${recipeName}"`);
-    const fallbackMessage = await createWithRetry(client, {
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 2048,
-      tools: [
-        { type: "web_search_20250305", name: "web_search", max_uses: 3 } as any,
-      ],
-      system: `You are a recipe ingredient extractor. Search the web for the given recipe and extract its REAL ingredient list.
+    const servingsInstruction = servings
+      ? `Scale all quantities to serve ${servings} people.`
+      : "Assume serving 4 people.";
+
+    const message = await createWithRetry(client, {
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      system: `You are a grocery list assistant. Given a recipe name, return the typical ingredients needed to make it.
 
 Return ONLY a JSON array of ingredients with this structure:
 [
-  { "name": "ingredient name", "quantity": 1.5, "unit": "lb", "category": "protein" }
+  { "name": "ingredient name", "quantity": 1.5, "unit": "lb", "category": "produce" }
 ]
 
 Rules:
-- Extract the ACTUAL ingredients from a real recipe, do not guess or make up ingredients
-- quantity must be a positive number
+- List the real, typical ingredients for this recipe
+- quantity must be a positive number. ${servingsInstruction}
 - Valid units: lb, oz, cup, cups, tbsp, tsp, count, cloves, can, bag, bunch, inch, box, slices, head, pint
 - Valid categories: produce, dairy, pantry, protein, spices, grains, frozen, other
 - For items like "salt and pepper to taste", use quantity 1 and unit "tsp"
@@ -98,24 +181,50 @@ Rules:
       messages: [
         {
           role: "user",
-          content: `Search the web for the recipe "${recipeName}" and extract its ingredients.`,
+          content: `What ingredients are typically needed for "${recipeName}"?`,
         },
       ],
     });
 
-    const fallbackIngredients = parseIngredientsFromResponse(fallbackMessage.content);
-    if (fallbackIngredients.length === 0) {
-      console.warn(`[extractIngredients] Fallback also returned 0 ingredients for "${recipeName}"`);
-      console.warn(`[extractIngredients] Fallback blocks:`, fallbackMessage.content.map((b: any) => ({ type: b.type, text: b.type === "text" ? b.text.slice(0, 200) : undefined })));
+    const ingredients = parseIngredientsFromResponse(message.content);
+
+    if (ingredients.length === 0) {
+      console.warn(`[estimateRecipeIngredientsWithHaiku] Got 0 ingredients for "${recipeName}"`);
     } else {
-      console.log(`[extractIngredients] Fallback extracted ${fallbackIngredients.length} ingredients for "${recipeName}"`);
+      console.log(`[estimateRecipeIngredientsWithHaiku] Estimated ${ingredients.length} ingredients for "${recipeName}"`);
     }
 
-    return fallbackIngredients;
+    return ingredients;
   } catch (error) {
-    console.error("extractIngredientsFromUrl failed (non-fatal):", error);
+    console.error(`[estimateRecipeIngredientsWithHaiku] Failed for "${recipeName}" (non-fatal):`, error);
     return [];
   }
+}
+
+/**
+ * Main extraction entry point: 2-tier strategy.
+ * Tier 1: JSON-LD from source URL → structure with Haiku
+ * Tier 2: Haiku estimation from recipe name
+ */
+export async function extractIngredientsForRecipe(
+  recipeName: string,
+  sourceUrl: string | null,
+  servings?: number,
+): Promise<{ ingredients: Ingredient[]; method: "json_ld" | "haiku_estimate" | "failed" }> {
+  // Tier 1: JSON-LD from source URL
+  if (sourceUrl) {
+    const rawStrings = await fetchJsonLdIngredients(sourceUrl);
+    if (rawStrings && rawStrings.length > 0) {
+      const structured = await structureIngredientsWithHaiku(rawStrings, recipeName, servings);
+      if (structured.length > 0) return { ingredients: structured, method: "json_ld" };
+    }
+  }
+
+  // Tier 2: Haiku estimation from recipe name
+  const estimated = await estimateRecipeIngredientsWithHaiku(recipeName, servings);
+  if (estimated.length > 0) return { ingredients: estimated, method: "haiku_estimate" };
+
+  return { ingredients: [], method: "failed" };
 }
 
 /** Parse ingredient JSON from Claude response content blocks */

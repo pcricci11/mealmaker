@@ -3,7 +3,7 @@ import type {
   FamilyMemberV3, FamilyMemberInputV3,
   FamilyFavoriteChef, FamilyFavoriteMeal, FamilyFavoriteSide, FamilyFavoriteWebsite,
   WeeklyCookingSchedule, WeeklyLunchNeed, GeneratePlanRequestV3,
-  Recipe, RecipeInput, Ingredient, MealPlan, GroceryList, DayOfWeek,
+  Recipe, RecipeInput, MealPlan, GroceryList, DayOfWeek,
   GeneratePlanResponse, WebSearchRecipeResult,
 } from "@shared/types";
 
@@ -385,12 +385,6 @@ export async function addMealToDay(
 }
 
 // ── Grocery List ──
-export async function suggestIngredients(recipeId: number): Promise<Ingredient[]> {
-  return json(
-    await authFetch(`${BASE}/recipes/${recipeId}/suggest-ingredients`, { method: "POST" }),
-  );
-}
-
 export async function getGroceryList(planId: number): Promise<GroceryList> {
   return json(await authFetch(`${BASE}/meal-plans/${planId}/grocery-list`));
 }

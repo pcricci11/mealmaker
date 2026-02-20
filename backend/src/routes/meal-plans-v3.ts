@@ -3,7 +3,7 @@
 
 import { Router, Request, Response } from "express";
 import { generateMealPlanV3 } from "../services/mealPlanGeneratorV3";
-import { extractIngredientsFromUrl } from "../services/ingredientExtractor";
+import { extractIngredientsForRecipe } from "../services/ingredientExtractor";
 import { query, queryOne, queryRaw } from "../db";
 import { requireAuth, verifyFamilyAccess } from "../middleware/auth";
 
@@ -111,12 +111,11 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
 
     // Fire-and-forget: extract ingredients in background for recipes that have none
     (async () => {
-      const assignedRecipes = await query<{ id: number; name: string; source_url: string; ingredients: string }>(`
+      const assignedRecipes = await query<{ id: number; name: string; source_url: string | null; ingredients: string }>(`
         SELECT DISTINCT r.id, r.name, r.source_url, r.ingredients
         FROM meal_plan_items mpi
         JOIN recipes r ON r.id = mpi.recipe_id
         WHERE mpi.meal_plan_id = $1
-          AND r.source_url IS NOT NULL
           AND (r.ingredients IS NULL OR r.ingredients = '[]' OR r.ingredients = '')
       `, [mealPlan.id]);
 
@@ -128,9 +127,9 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
         const servings = Math.round((famRow?.serving_multiplier ?? 1.0) * 4);
 
         console.log(`[generate-v3] Background backfill: ${assignedRecipes.length} recipes need ingredients (${servings} servings)`);
-        for (const recipe of assignedRecipes) {
+        await Promise.all(assignedRecipes.map(async (recipe) => {
           console.log(`[generate-v3] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
-          const extracted = await extractIngredientsFromUrl(recipe.name, recipe.source_url, servings);
+          const { ingredients: extracted, method } = await extractIngredientsForRecipe(recipe.name, recipe.source_url, servings);
           if (extracted.length > 0) {
             await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
               JSON.stringify(extracted),
@@ -142,11 +141,11 @@ router.post("/generate-v3", async (req: Request, res: Response) => {
                 [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
               );
             }
-            console.log(`[generate-v3] Extracted ${extracted.length} ingredients for #${recipe.id} "${recipe.name}"`);
+            console.log(`[generate-v3] Extracted ${extracted.length} ingredients for #${recipe.id} "${recipe.name}" via ${method}`);
           } else {
             console.warn(`[generate-v3] Failed to extract ingredients for #${recipe.id} "${recipe.name}"`);
           }
-        }
+        }));
       }
     })().catch((err) => {
       console.error("[generate-v3] Background ingredient extraction failed:", err);
@@ -594,6 +593,8 @@ router.post("/lock", async (req: Request, res: Response) => {
         AND (r.ingredients IS NULL OR r.ingredients = '[]' OR r.ingredients = '')
     `, [mealPlanId]);
 
+    const extractionWarnings: { recipe_id: number; name: string }[] = [];
+
     if (recipesNeedingIngredients.length > 0) {
       const famRow = await queryOne<{ serving_multiplier: number }>(
         "SELECT serving_multiplier FROM families WHERE id = $1",
@@ -602,17 +603,16 @@ router.post("/lock", async (req: Request, res: Response) => {
       const servings = Math.round((famRow?.serving_multiplier ?? 1.0) * 4);
 
       console.log(`[lock] Filling ingredient gaps for ${recipesNeedingIngredients.length} recipes (${servings} servings)`);
-      for (const recipe of recipesNeedingIngredients) {
+      await Promise.all(recipesNeedingIngredients.map(async (recipe) => {
         console.log(`[lock] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
-        const extracted = recipe.source_url
-          ? await extractIngredientsFromUrl(recipe.name, recipe.source_url, servings)
-          : await extractIngredientsFromUrl(recipe.name, "", servings); // name-only search fallback
+        const { ingredients: extracted, method } = await extractIngredientsForRecipe(
+          recipe.name, recipe.source_url, servings,
+        );
         if (extracted.length > 0) {
           await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
             JSON.stringify(extracted),
             recipe.id,
           ]);
-          // Clear stale recipe_ingredients first, then insert fresh
           await query("DELETE FROM recipe_ingredients WHERE recipe_id = $1", [recipe.id]);
           for (const ing of extracted) {
             await query(
@@ -620,11 +620,12 @@ router.post("/lock", async (req: Request, res: Response) => {
               [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
             );
           }
-          console.log(`[lock] Extracted ${extracted.length} ingredients for #${recipe.id}`);
+          console.log(`[lock] Extracted ${extracted.length} ingredients for #${recipe.id} via ${method}`);
         } else {
           console.warn(`[lock] Could not extract ingredients for #${recipe.id} "${recipe.name}"`);
+          extractionWarnings.push({ recipe_id: recipe.id, name: recipe.name });
         }
-      }
+      }));
     }
 
     console.log(`[lock] === Lock Plan END === planId=${mealPlanId}, items=${savedItems.length}`);
@@ -634,6 +635,7 @@ router.post("/lock", async (req: Request, res: Response) => {
       family_id,
       week_start,
       variant: 0,
+      extraction_warnings: extractionWarnings,
       items: savedItems.map((row: any) => ({
         id: row.id,
         day: row.day,

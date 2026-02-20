@@ -629,7 +629,7 @@ export default function Plan() {
         }))
       );
 
-      const progressTimer1 = setTimeout(() => setLockProgress("Saving your selections..."), 4000);
+      const progressTimer1 = setTimeout(() => setLockProgress("Gathering ingredients..."), 3000);
       const progressTimer2 = setTimeout(() => setLockProgress("Almost done..."), 8000);
       lockTimersRef.current = [progressTimer1, progressTimer2];
 

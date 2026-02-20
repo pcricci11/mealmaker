@@ -4,7 +4,7 @@ import { rowToRecipe } from "../helpers";
 import { generatePlan, normalizeToMonday, deriveSeed } from "../planner/index";
 import type { PlannerContext } from "../planner/types";
 import { validateGeneratePlanRequest, validateSwapRequest } from "../validation";
-import { estimateSideIngredients, extractIngredientsFromUrl } from "../services/ingredientExtractor";
+import { estimateSideIngredients } from "../services/ingredientExtractor";
 import { requireAuth, verifyFamilyAccess } from "../middleware/auth";
 import type { Family, FamilyMember, DayOfWeek, ReasonCodeValue, GroceryItem, GroceryCategory } from "../../../shared/types";
 import { VALID_DAYS } from "../../../shared/types";
@@ -514,79 +514,8 @@ router.get("/:id/grocery-list", async (req: Request, res: Response) => {
       return a.name.localeCompare(b.name);
     });
 
-    // Safety net: actively fill ingredient gaps for any recipes still missing them
-    const recipesWithNoIngredients = await query<{ id: number; name: string; source_url: string | null }>(`
-      SELECT DISTINCT r.id, r.name, r.source_url
-      FROM meal_plan_items mpi
-      JOIN recipes r ON r.id = mpi.recipe_id
-      LEFT JOIN recipe_ingredients ri ON ri.recipe_id = mpi.recipe_id
-      WHERE mpi.meal_plan_id = $1 AND ri.id IS NULL AND mpi.recipe_id IS NOT NULL
-    `, [req.params.id]);
-
-    if (recipesWithNoIngredients.length > 0) {
-      const servings = Math.round(multiplier * 4);
-      console.log(`[grocery-list] Safety net: ${recipesWithNoIngredients.length} recipes missing ingredients, extracting (${servings} servings)`);
-
-      for (const recipe of recipesWithNoIngredients) {
-        console.log(`[grocery-list] Extracting ingredients for #${recipe.id} "${recipe.name}"...`);
-        const extracted = recipe.source_url
-          ? await extractIngredientsFromUrl(recipe.name, recipe.source_url, servings)
-          : await extractIngredientsFromUrl(recipe.name, "", servings);
-
-        if (extracted.length > 0) {
-          await query("UPDATE recipes SET ingredients = $1 WHERE id = $2", [
-            JSON.stringify(extracted),
-            recipe.id,
-          ]);
-          await query("DELETE FROM recipe_ingredients WHERE recipe_id = $1", [recipe.id]);
-          for (const ing of extracted) {
-            await query(
-              "INSERT INTO recipe_ingredients (recipe_id, item, quantity, unit, category) VALUES ($1, $2, $3, $4, $5)",
-              [recipe.id, ing.name, ing.quantity, ing.unit, ing.category],
-            );
-          }
-          console.log(`[grocery-list] Extracted ${extracted.length} ingredients for #${recipe.id}`);
-
-          // Add these ingredients to the consolidated grocery list
-          for (const ing of extracted) {
-            const scaledQty = ing.quantity * multiplier;
-            const key = `${ing.name.toLowerCase()}|${ing.unit}`;
-            const existing = consolidated.get(key);
-            if (existing) {
-              existing.total_quantity += scaledQty;
-            } else {
-              consolidated.set(key, {
-                total_quantity: scaledQty,
-                unit: ing.unit,
-                category: ing.category as GroceryCategory,
-              });
-            }
-          }
-        } else {
-          console.warn(`[grocery-list] Could not extract ingredients for #${recipe.id} "${recipe.name}"`);
-        }
-      }
-
-      // Rebuild grocery list after extraction
-      groceryItems.length = 0;
-      for (const [key, val] of consolidated) {
-        const name = key.split("|")[0];
-        groceryItems.push({
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          total_quantity: Math.round(val.total_quantity * 100) / 100,
-          unit: val.unit,
-          category: val.category,
-          checked: false,
-        });
-      }
-      groceryItems.sort((a, b) => {
-        if (a.category !== b.category) return a.category.localeCompare(b.category);
-        return a.name.localeCompare(b.name);
-      });
-    }
-
-    // Find recipes that STILL have no ingredients after extraction attempts
-    const missingRecipes = await query<{ recipe_id: number; name: string }>(`
+    // Find recipes that have no ingredients (extraction happens at lock time)
+    const extractionWarnings = await query<{ recipe_id: number; name: string }>(`
       SELECT DISTINCT mpi.recipe_id, r.name
       FROM meal_plan_items mpi
       JOIN recipes r ON r.id = mpi.recipe_id
@@ -597,7 +526,7 @@ router.get("/:id/grocery-list", async (req: Request, res: Response) => {
     res.json({
       meal_plan_id: Number(req.params.id),
       items: groceryItems,
-      missing_recipes: missingRecipes,
+      extraction_warnings: extractionWarnings,
     });
   } catch (error: any) {
     console.error("[grocery-list] Error:", error);
