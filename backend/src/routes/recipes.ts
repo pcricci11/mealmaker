@@ -49,7 +49,7 @@ async function buildSourceConstraint(familyId: number): Promise<string> {
 
 // POST /api/recipes/search — web search for recipes (Spoonacular tier 2, Claude tier 3)
 router.post("/search", optionalAuth, async (req: Request, res: Response) => {
-  const { query: searchQuery, family_id } = req.body;
+  const { query: searchQuery, family_id, skip_spoonacular } = req.body;
   if (!searchQuery || typeof searchQuery !== "string" || !searchQuery.trim()) {
     return res.status(400).json({ error: "query is required" });
   }
@@ -57,8 +57,8 @@ router.post("/search", optionalAuth, async (req: Request, res: Response) => {
   const sourceConstraint = family_id ? await buildSourceConstraint(family_id) : "";
   const hasSourcePreferences = sourceConstraint.length > 0;
 
-  // Tier 2: Try Spoonacular first (if no source preferences)
-  if (!hasSourcePreferences) {
+  // Tier 2: Try Spoonacular first (if no source preferences and not explicitly skipped)
+  if (!hasSourcePreferences && !skip_spoonacular) {
     try {
       const spoonResults = await searchSpoonacular(searchQuery.trim());
       if (spoonResults.length >= 3) {

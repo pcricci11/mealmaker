@@ -225,12 +225,12 @@ export async function aiMatchRecipe(query: string, familyId: number, signal?: Ab
   return data;
 }
 
-export async function searchRecipesWeb(query: string, signal?: AbortSignal, familyId?: number): Promise<WebSearchRecipeResult[]> {
+export async function searchRecipesWeb(query: string, signal?: AbortSignal, familyId?: number, options?: { skipSpoonacular?: boolean }): Promise<WebSearchRecipeResult[]> {
   const data = await json<{ results: WebSearchRecipeResult[] }>(
     await authFetch(`${BASE}/recipes/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, family_id: familyId }),
+      body: JSON.stringify({ query, family_id: familyId, skip_spoonacular: options?.skipSpoonacular }),
       signal,
     }),
   );

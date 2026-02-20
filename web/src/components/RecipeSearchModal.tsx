@@ -32,6 +32,8 @@ export default function RecipeSearchModal({
   const hasPrefetched = !!(prefetchedResults && prefetchedResults.length > 0);
   const [results, setResults] = useState<WebSearchRecipeResult[]>(hasPrefetched ? prefetchedResults : []);
   const [searching, setSearching] = useState(false);
+  const [searchingWeb, setSearchingWeb] = useState(false);
+  const [didWebSearch, setDidWebSearch] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingPhase, setSavingPhase] = useState<"adding" | "ingredients" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +68,7 @@ export default function RecipeSearchModal({
     setSearching(true);
     setError(null);
     setResults([]);
+    setDidWebSearch(false);
 
     try {
       const data = await searchRecipesWeb(trimmed, controller.signal);
@@ -78,6 +81,34 @@ export default function RecipeSearchModal({
       setError("Sorry Chef, that search didn't work out! Give it another try or tweak your search terms.");
     } finally {
       setSearching(false);
+    }
+  };
+
+  const handleWebSearch = async () => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setSearchingWeb(true);
+    setError(null);
+
+    try {
+      const data = await searchRecipesWeb(trimmed, controller.signal, undefined, { skipSpoonacular: true });
+      // Append web results, deduplicating by source_url
+      setResults((prev) => {
+        const existingUrls = new Set(prev.map((r) => r.source_url));
+        const newResults = data.filter((r) => !existingUrls.has(r.source_url));
+        return [...prev, ...newResults];
+      });
+      setDidWebSearch(true);
+    } catch (err: any) {
+      if (isAbortError(err)) return;
+      setError("Web search didn't work out. Give it another try.");
+    } finally {
+      setSearchingWeb(false);
     }
   };
 
@@ -187,7 +218,7 @@ export default function RecipeSearchModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4">
-          {searching ? (
+          {searching || (searchingWeb && results.length === 0) ? (
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-orange-200 border-t-orange-500 mb-3" />
               <p className="text-gray-500 text-sm">
@@ -263,7 +294,7 @@ export default function RecipeSearchModal({
                       <button
                         key={i}
                         onClick={() => handleSelect(result)}
-                        disabled={saving}
+                        disabled={saving || searchingWeb}
                         className="w-full border border-gray-200 rounded-lg p-4 hover:border-orange-500 hover:bg-orange-50 transition-colors text-left disabled:opacity-50"
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -325,6 +356,24 @@ export default function RecipeSearchModal({
                       </button>
                     );
                   })}
+
+                  {/* Web search CTA / spinner */}
+                  {searchingWeb ? (
+                    <div className="text-center py-6">
+                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-3 border-orange-200 border-t-orange-500 mb-2" />
+                      <p className="text-gray-500 text-sm">Searching the web for more...</p>
+                    </div>
+                  ) : !didWebSearch ? (
+                    <button
+                      onClick={handleWebSearch}
+                      className="w-full mt-1 py-3 rounded-lg text-sm font-medium text-gray-500 hover:text-orange-600 hover:bg-orange-50 border border-dashed border-gray-200 hover:border-orange-300 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      Can't find it? Search the web for more
+                    </button>
+                  ) : null}
                 </div>
               ) : !searching && !initialQuery ? (
                 <div className="text-center py-8 text-gray-400 text-sm">
