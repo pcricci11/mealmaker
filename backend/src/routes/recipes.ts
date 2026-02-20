@@ -891,14 +891,36 @@ router.post("/backfill-images", async (_req: Request, res: Response) => {
           }
         }
 
-        // Tier 2: Spoonacular search by name
-        const results = await searchSpoonacular(recipe.name, { number: 1 });
-        if (results.length > 0 && results[0].image_url) {
-          await query("UPDATE recipes SET image_url = $1 WHERE id = $2", [results[0].image_url, recipe.id]);
-          backfilled++;
-          details.push({ id: recipe.id, name: recipe.name, method: "spoonacular" });
-          console.log(`[backfill-images] Recipe ${recipe.id} "${recipe.name}": image from Spoonacular`);
-        } else {
+        // Tier 2: Spoonacular search by name (try full name, then simplified)
+        const searchNames = [recipe.name];
+        // Strip common chef/source prefixes for a simplified search
+        const simplified = recipe.name
+          .replace(/\b(Ina Garten|Bobby Flay|Alton Brown|Geoffrey Zakarian|Gordon Ramsay|Marcella Hazan|Julia Child|Chrissy Teigen|Food Network|David Lieberman)('s)?\b/gi, "")
+          .replace(/\s*\(.*?\)\s*/g, "")
+          .replace(/\b(Perfect|Classic|Best|Ultimate)\b/gi, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (simplified && simplified !== recipe.name) searchNames.push(simplified);
+        // Even more simplified: just the core dish name
+        const core = simplified
+          .replace(/\bwith\b.*/i, "")
+          .replace(/\bMarinated\b/gi, "")
+          .trim();
+        if (core && core !== simplified && core.length > 3) searchNames.push(core);
+
+        let found = false;
+        for (const searchName of searchNames) {
+          const results = await searchSpoonacular(searchName, { number: 1 });
+          if (results.length > 0 && results[0].image_url) {
+            await query("UPDATE recipes SET image_url = $1 WHERE id = $2", [results[0].image_url, recipe.id]);
+            backfilled++;
+            details.push({ id: recipe.id, name: recipe.name, method: "spoonacular" });
+            console.log(`[backfill-images] Recipe ${recipe.id} "${recipe.name}": image from Spoonacular (searched: "${searchName}")`);
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
           details.push({ id: recipe.id, name: recipe.name, method: "failed" });
         }
       } catch (err: any) {
