@@ -72,7 +72,7 @@ async function buildHouseholdContext(familyId: number): Promise<string> {
 
 // POST /api/recipes/search — web search for recipes (Spoonacular tier 2, Claude tier 3)
 router.post("/search", optionalAuth, async (req: Request, res: Response) => {
-  const { query: searchQuery, family_id, skip_spoonacular } = req.body;
+  const { query: searchQuery, family_id, skip_spoonacular, spoonacular_only } = req.body;
   if (!searchQuery || typeof searchQuery !== "string" || !searchQuery.trim()) {
     return res.status(400).json({ error: "query is required" });
   }
@@ -81,10 +81,16 @@ router.post("/search", optionalAuth, async (req: Request, res: Response) => {
   const householdContext = family_id ? await buildHouseholdContext(family_id) : "";
   const hasSourcePreferences = sourceConstraint.length > 0;
 
-  // Tier 2: Try Spoonacular first (if no source preferences and not explicitly skipped)
-  if (!hasSourcePreferences && !skip_spoonacular) {
+  // Tier 2: Try Spoonacular first
+  // spoonacular_only: always call Spoonacular (ignore source prefs), return directly, no Claude fallthrough
+  // default: only if no source preferences and not skipped, fall through to Claude if < 3 results
+  if (spoonacular_only || (!hasSourcePreferences && !skip_spoonacular)) {
     try {
       const spoonResults = await searchSpoonacular(searchQuery.trim());
+      if (spoonacular_only) {
+        console.log(`[search] Spoonacular-only returned ${spoonResults.length} results for "${searchQuery.trim()}"`);
+        return res.json({ results: spoonResults });
+      }
       if (spoonResults.length >= 3) {
         console.log(`[search] Spoonacular returned ${spoonResults.length} results for "${searchQuery.trim()}"`);
         return res.json({ results: spoonResults });
@@ -93,6 +99,10 @@ router.post("/search", optionalAuth, async (req: Request, res: Response) => {
         console.log(`[search] Spoonacular returned only ${spoonResults.length} results for "${searchQuery.trim()}", falling through to Claude`);
       }
     } catch (err: any) {
+      if (spoonacular_only) {
+        console.error("[search] Spoonacular-only error, returning empty:", err.message || err);
+        return res.json({ results: [] });
+      }
       console.error("[search] Spoonacular error, falling through to Claude:", err.message || err);
     }
   }

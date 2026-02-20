@@ -7,6 +7,8 @@ import type {
   GeneratePlanResponse, WebSearchRecipeResult,
 } from "@shared/types";
 
+import { formatApiError } from "./utils/errorFormatter";
+
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 // ── Auth token injection ──
@@ -30,7 +32,7 @@ async function authFetch(url: string, options?: RequestInit): Promise<Response> 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(body.error || res.statusText);
+    throw new Error(formatApiError(body.error || res.statusText));
   }
   return res.json();
 }
@@ -112,14 +114,14 @@ export async function deleteMember(familyId: number, memberId: number): Promise<
   const res = await authFetch(`${BASE}/members/${memberId}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(body.error || res.statusText);
+    throw new Error(formatApiError(body.error || res.statusText));
   }
 }
 export async function deleteFamilyMember(id: number): Promise<void> {
   const res = await authFetch(`${BASE}/members/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(body.error || res.statusText);
+    throw new Error(formatApiError(body.error || res.statusText));
   }
 }
 
@@ -171,7 +173,7 @@ export async function deleteRecipe(id: number): Promise<void> {
   const res = await authFetch(`${BASE}/recipes/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Failed to delete recipe");
+    throw new Error(formatApiError(body.error || "Failed to delete recipe"));
   }
 }
 
@@ -225,12 +227,12 @@ export async function aiMatchRecipe(query: string, familyId: number, signal?: Ab
   return data;
 }
 
-export async function searchRecipesWeb(query: string, signal?: AbortSignal, familyId?: number, options?: { skipSpoonacular?: boolean }): Promise<WebSearchRecipeResult[]> {
+export async function searchRecipesWeb(query: string, signal?: AbortSignal, familyId?: number, options?: { skipSpoonacular?: boolean; spoonacularOnly?: boolean }): Promise<WebSearchRecipeResult[]> {
   const data = await json<{ results: WebSearchRecipeResult[] }>(
     await authFetch(`${BASE}/recipes/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, family_id: familyId, skip_spoonacular: options?.skipSpoonacular }),
+      body: JSON.stringify({ query, family_id: familyId, skip_spoonacular: options?.skipSpoonacular, spoonacular_only: options?.spoonacularOnly }),
       signal,
     }),
   );
@@ -389,6 +391,41 @@ export async function getGroceryList(planId: number): Promise<GroceryList> {
   return json(await authFetch(`${BASE}/meal-plans/${planId}/grocery-list`));
 }
 
+export async function toggleGroceryCheck(
+  planId: number,
+  itemName: string,
+  unit: string,
+  checked: boolean,
+): Promise<void> {
+  const res = await authFetch(`${BASE}/meal-plans/${planId}/grocery-list/check`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ item_name: itemName, unit, checked }),
+  });
+  if (!res.ok) throw new Error("Failed to update check state");
+}
+
+export async function addCustomGroceryItem(
+  planId: number,
+  name: string,
+  category: string,
+): Promise<{ id: number; name: string; category: string }> {
+  return json(
+    await authFetch(`${BASE}/meal-plans/${planId}/grocery-list/custom`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, category }),
+    }),
+  );
+}
+
+export async function removeCustomGroceryItem(planId: number, itemId: number): Promise<void> {
+  const res = await authFetch(`${BASE}/meal-plans/${planId}/grocery-list/custom/${itemId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete custom item");
+}
+
 // ── Favorite Chefs ──
 export async function getFavoriteChefs(familyId: number): Promise<FamilyFavoriteChef[]> {
   return json(await authFetch(`${BASE}/favorites/chefs?family_id=${familyId}`));
@@ -528,6 +565,7 @@ export async function generateMealPlanV3(request: GeneratePlanRequestV3): Promis
   );
 }
 
+/** @deprecated Use lockPlan(planId) instead */
 export async function lockMealPlan(request: {
   family_id: number;
   week_start: string;
@@ -539,6 +577,38 @@ export async function lockMealPlan(request: {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(request),
       signal,
+    }),
+  );
+}
+
+export async function getActivePlan(familyId: number, weekStart: string): Promise<MealPlan> {
+  return json(await authFetch(`${BASE}/meal-plans/active?family_id=${familyId}&week_start=${weekStart}`));
+}
+
+export async function lockPlan(planId: number, signal?: AbortSignal): Promise<MealPlan> {
+  return json(
+    await authFetch(`${BASE}/meal-plans/${planId}/lock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal,
+    }),
+  );
+}
+
+export async function unlockPlan(planId: number): Promise<MealPlan> {
+  return json(
+    await authFetch(`${BASE}/meal-plans/${planId}/unlock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
+}
+
+export async function startFreshPlan(planId: number): Promise<MealPlan> {
+  return json(
+    await authFetch(`${BASE}/meal-plans/${planId}/start-fresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
     }),
   );
 }
