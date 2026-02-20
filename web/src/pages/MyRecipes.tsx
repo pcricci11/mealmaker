@@ -801,7 +801,7 @@ export default function MyRecipes() {
             </div>
           ) : viewMode === "grid" ? (
             /* ── Grid View ── */
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1 md:gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1 md:gap-3 px-[5%] md:px-0">
               {filteredRecipes.map((r) => {
                 const cuisineColor = LIGHT_CUISINE_COLORS[r.cuisine] || LIGHT_CUISINE_COLORS.american;
                 const isLoved = lovedNames.has(r.title.toLowerCase());
