@@ -42,16 +42,8 @@ export default function RecipeSearchModal({
   const [savingPhase, setSavingPhase] = useState<"adding" | "ingredients" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const didAutoSearch = useRef(false);
   const savingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-
-  // Abort on unmount
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-    };
-  }, []);
 
   // Collect source_urls from My Recipe matches for dedup
   const myRecipeUrls = useRef(new Set<string>());
@@ -160,14 +152,15 @@ export default function RecipeSearchModal({
     }
   }, [query, familyId, deduplicateWebResults, markTierCompleted]);
 
-  // Auto-search on mount
+  // Auto-search on mount (cleanup aborts on unmount / strict-mode remount)
   useEffect(() => {
-    if (didAutoSearch.current) return;
     if (initialQuery) {
-      didAutoSearch.current = true;
       handleSearchMyRecipes(initialQuery);
     }
-  }, [initialQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Selection handlers ──
 
