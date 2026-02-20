@@ -654,7 +654,7 @@ export default function MyRecipes() {
             <h1 className="font-display text-xl md:text-2xl font-bold text-stone-800">My Recipes</h1>
             <p className="text-stone-400 text-xs md:text-sm font-body">{recipes.length} recipes</p>
           </div>
-          <div className="hidden md:flex items-center gap-1 bg-white rounded-lg border border-stone-200 p-0.5">
+          <div className="flex items-center gap-1 bg-white rounded-lg border border-stone-200 p-0.5">
             <button
               onClick={() => setViewMode("grid")}
               className={cn(
@@ -726,12 +726,12 @@ export default function MyRecipes() {
               </span>
             )}
           </button>
-          {/* Desktop: Add buttons */}
-          <div className="hidden md:flex items-center gap-2 shrink-0">
+          {/* Add buttons */}
+          <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
             <Button
               variant="outline"
               size="sm"
-              className="text-sm font-medium text-chef-orange border-chef-orange/30 hover:bg-orange-50 rounded-xl"
+              className="text-xs md:text-sm font-medium text-chef-orange border-chef-orange/30 hover:bg-orange-50 rounded-xl px-2 md:px-3"
               onClick={() => setShowAddModal(true)}
             >
               + Personal
@@ -739,7 +739,7 @@ export default function MyRecipes() {
             <Button
               variant="outline"
               size="sm"
-              className="text-sm font-medium text-chef-orange border-chef-orange/30 hover:bg-orange-50 rounded-xl"
+              className="text-xs md:text-sm font-medium text-chef-orange border-chef-orange/30 hover:bg-orange-50 rounded-xl px-2 md:px-3"
               onClick={() => setShowUrlModal(true)}
             >
               + URL
