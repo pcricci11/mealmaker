@@ -146,6 +146,12 @@ export default function Plan() {
   } | null>(null);
   const [mainModalSearchQuery, setMainModalSearchQuery] = useState("");
   const [showBuildFromRecipes, setShowBuildFromRecipes] = useState(false);
+  const [draftAddModal, setDraftAddModal] = useState<{
+    step: 'choose-source' | 'pick-day' | 'web-search-query' | 'web-search';
+    day?: DayOfWeek;
+    searchQuery?: string;
+  } | null>(null);
+  const [draftAddSearchQuery, setDraftAddSearchQuery] = useState("");
   const [draftRecipes, setDraftRecipes] = useState<Map<DayOfWeek, Recipe[]>>(new Map());
   const [draftSides, setDraftSides] = useState<Map<string, string[]>>(new Map());
   const [quickDinnerOpen, setQuickDinnerOpen] = useState(false);
@@ -1009,7 +1015,7 @@ export default function Plan() {
                 {!hasPlan && hasDrafts && (
                   <>
                     <button
-                      onClick={() => setShowBuildFromRecipes(true)}
+                      onClick={() => setDraftAddModal({ step: 'choose-source' })}
                       className="text-xs text-chef-orange hover:text-orange-600 font-medium transition-colors"
                     >
                       + Add Recipes
@@ -1425,6 +1431,113 @@ export default function Plan() {
           familyId={family.id}
           onSelect={handleRecipesSelected}
           onClose={() => setShowBuildFromRecipes(false)}
+        />
+      )}
+
+      {/* Draft Add Recipes — Step 1: Choose Source */}
+      {draftAddModal?.step === 'choose-source' && (
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setDraftAddModal(null); }}>
+          <DialogContent fullScreenMobile={false}>
+            <DialogHeader>
+              <DialogTitle>Add Recipes</DialogTitle>
+            </DialogHeader>
+            <div className="px-6 pb-6 space-y-3">
+              <button
+                onClick={() => { setDraftAddModal(null); setShowBuildFromRecipes(true); }}
+                className="w-full border border-gray-200 rounded-lg p-4 hover:border-orange-500 hover:bg-orange-50 transition-colors text-left"
+              >
+                <div className="font-medium text-gray-900">Browse My Recipes</div>
+                <p className="text-sm text-gray-500 mt-1">Choose from your saved recipe collection</p>
+              </button>
+              <button
+                onClick={() => setDraftAddModal({ step: 'pick-day' })}
+                className="w-full border border-gray-200 rounded-lg p-4 hover:border-orange-500 hover:bg-orange-50 transition-colors text-left"
+              >
+                <div className="font-medium text-gray-900">Search for New Recipes</div>
+                <p className="text-sm text-gray-500 mt-1">Find a new recipe online</p>
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Draft Add Recipes — Step 2: Pick Day */}
+      {draftAddModal?.step === 'pick-day' && (
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setDraftAddModal(null); }}>
+          <DialogContent fullScreenMobile={false}>
+            <DialogHeader>
+              <DialogTitle>Which day?</DialogTitle>
+            </DialogHeader>
+            <div className="px-6 pb-6">
+              <div className="grid grid-cols-4 gap-2">
+                {DAYS.map((d) => (
+                  <button
+                    key={d.key}
+                    onClick={() => setDraftAddModal({ step: 'web-search-query', day: d.key })}
+                    className="border border-gray-200 rounded-lg py-3 text-sm font-medium text-gray-700 hover:border-orange-500 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Draft Add Recipes — Step 3: Search Query */}
+      {draftAddModal?.step === 'web-search-query' && (
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setDraftAddModal(null); }}>
+          <DialogContent fullScreenMobile={false}>
+            <DialogHeader>
+              <DialogTitle>
+                Search for a Recipe — {DAYS.find(d => d.key === draftAddModal.day)?.fullLabel}
+              </DialogTitle>
+            </DialogHeader>
+            <form
+              className="px-6 pb-6 space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const val = draftAddSearchQuery.trim();
+                if (val) {
+                  setDraftAddModal({ ...draftAddModal, step: 'web-search', searchQuery: val });
+                  setDraftAddSearchQuery("");
+                }
+              }}
+            >
+              <label className="text-sm font-medium text-gray-700">What are you looking for?</label>
+              <Input
+                name="q"
+                autoFocus
+                value={draftAddSearchQuery}
+                onChange={(e) => setDraftAddSearchQuery(e.target.value)}
+                placeholder='e.g. "Bobby Flay burger"'
+              />
+              <Button type="submit" className="w-full" disabled={!draftAddSearchQuery.trim()}>
+                Search
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Draft Add Recipes — Step 4: RecipeSearchModal */}
+      {draftAddModal?.step === 'web-search' && draftAddModal.searchQuery && (
+        <RecipeSearchModal
+          initialQuery={draftAddModal.searchQuery}
+          dayLabel={DAYS.find(d => d.key === draftAddModal.day)?.fullLabel}
+          onRecipeSelected={(recipe) => {
+            const day = draftAddModal.day!;
+            setDraftRecipes(prev => {
+              const next = new Map(prev);
+              const existing = next.get(day) || [];
+              existing.push(recipe);
+              next.set(day, existing);
+              return next;
+            });
+            setDraftAddModal(null);
+          }}
+          onClose={() => setDraftAddModal(null)}
         />
       )}
 

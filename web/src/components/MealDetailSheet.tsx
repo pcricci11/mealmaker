@@ -124,29 +124,40 @@ export default function MealDetailSheet({
           )}
         </div>
 
-        {/* Sides section (draft) */}
+        {/* Sides & Extras section (draft) */}
         {!isLocked && onAddDraftSide && (
           <div className="px-5 pt-4">
+            {/* Dotted separator */}
+            <div className="border-t border-dashed border-stone-200 mb-3" />
+            <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">
+              Sides & Extras
+            </span>
+
+            {/* Chips display */}
             {draftSideNames && draftSideNames.length > 0 && (
-              <div className="space-y-2">
-                <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">Sides</span>
+              <div className="flex flex-wrap gap-2 mt-2">
                 {draftSideNames.map((name, i) => (
-                  <div key={i} className="flex items-center justify-between bg-stone-50 rounded-lg px-3 py-2">
-                    <span className="text-sm text-stone-700">{name}</span>
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-stone-100 text-stone-700 rounded-full text-sm"
+                  >
+                    {name}
                     {onRemoveDraftSide && (
                       <button
                         onClick={() => onRemoveDraftSide(i)}
-                        className="text-stone-400 hover:text-red-500 transition-colors"
+                        className="text-stone-400 hover:text-red-500 ml-0.5 transition-colors"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
                     )}
-                  </div>
+                  </span>
                 ))}
               </div>
             )}
+
+            {/* Input */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -155,22 +166,15 @@ export default function MealDetailSheet({
                 onAddDraftSide(trimmed);
                 setNewSideName("");
               }}
-              className="mt-2 flex gap-2"
+              className="mt-2"
             >
               <input
                 type="text"
                 value={newSideName}
                 onChange={(e) => setNewSideName(e.target.value)}
-                placeholder="e.g., roasted broccoli"
-                className="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-chef-orange/40 focus:border-chef-orange"
+                placeholder="Add a side... (e.g. garlic bread, roasted veggies)"
+                className="w-full border border-dashed border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-chef-orange/40 focus:border-chef-orange transition-colors"
               />
-              <button
-                type="submit"
-                disabled={!newSideName.trim()}
-                className="px-3 py-2 rounded-lg text-sm font-medium text-chef-orange border border-chef-orange hover:bg-orange-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                + Add
-              </button>
             </form>
           </div>
         )}
